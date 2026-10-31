@@ -14,6 +14,20 @@ CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, phone TEXT UNIQUE NOT NULL
 CREATE TABLE IF NOT EXISTS categories(id TEXT PRIMARY KEY, slug TEXT UNIQUE, name_bn TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS products(id TEXT PRIMARY KEY, category_id TEXT, name_bn TEXT NOT NULL, name_en TEXT NOT NULL, price_paisa INTEGER NOT NULL, stock INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS orders(id TEXT PRIMARY KEY, user_id TEXT NOT NULL, total_paisa INTEGER NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL);\nCREATE TABLE IF NOT EXISTS order_items(id TEXT PRIMARY KEY, order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE, product_id TEXT NOT NULL, product_name_bn TEXT NOT NULL, quantity INTEGER NOT NULL, unit_price_paisa INTEGER NOT NULL);`);
+const orderItemColumns = db.prepare('PRAGMA table_info(order_items)').all().map(row => row.name);
+if (!orderItemColumns.includes('seller_id')) db.exec('ALTER TABLE order_items ADD COLUMN seller_id TEXT');
+if (!orderItemColumns.includes('seller_order_id')) db.exec('ALTER TABLE order_items ADD COLUMN seller_order_id TEXT');
+db.exec(`CREATE TABLE IF NOT EXISTS seller_orders (
+  id TEXT PRIMARY KEY,
+  order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  seller_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'CONFIRMED',
+  subtotal_paisa INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(order_id, seller_id)
+)`);
+db.exec("CREATE INDEX IF NOT EXISTS idx_seller_orders_seller_created ON seller_orders(seller_id, created_at)");
+
 const orderColumns = db.prepare('PRAGMA table_info(orders)').all().map(row => row.name);
 for (const [name, definition] of [['delivery_name', "TEXT NOT NULL DEFAULT ''"], ['delivery_phone', "TEXT NOT NULL DEFAULT ''"], ['delivery_address', "TEXT NOT NULL DEFAULT ''"], ['delivery_area', "TEXT NOT NULL DEFAULT ''"], ['customer_note', "TEXT NOT NULL DEFAULT ''"]]) {
   if (!orderColumns.includes(name)) db.exec('ALTER TABLE orders ADD COLUMN ' + name + ' ' + definition);
@@ -106,6 +120,55 @@ const server = http.createServer(async (req, res) => {
       const token = randomUUID();
       sessions.set(token, user.id);
       return send(res, 200, { token, data: { id: user.id, name: user.name, role: user.role } });
+    }
+
+    if (req.method === 'GET' && path === '/api/v1/seller/orders') {
+      const user = sessionFor(req);
+      if (!requireRole(user, 'SELLER', res)) return;
+      const orders = q(`SELECT so.id,so.order_id,so.status,so.subtotal_paisa,so.created_at,
+        o.delivery_name,o.delivery_phone,o.delivery_address,o.delivery_area,o.customer_note,
+        u.name customer_name,u.phone customer_phone
+        FROM seller_orders so JOIN orders o ON o.id=so.order_id
+        JOIN users u ON u.id=o.user_id WHERE so.seller_id=?
+        ORDER BY so.created_at DESC LIMIT 200`).all(user.id);
+      return send(res, 200, { data: orders.map(order => ({
+        id: order.id, orderNumber: 'BD-' + order.order_id.slice(0, 8).toUpperCase(),
+        status: order.status, subtotal_bdt: order.subtotal_paisa / 100, created_at: order.created_at,
+        customer: { name: order.customer_name, phone: order.customer_phone },
+        delivery: { name: order.delivery_name, phone: order.delivery_phone, address: order.delivery_address, area: order.delivery_area, note: order.customer_note },
+        items: q('SELECT product_name_bn,quantity,unit_price_paisa FROM order_items WHERE seller_order_id=?').all(order.id)
+          .map(item => ({ name_bn: item.product_name_bn, quantity: item.quantity, unit_price_bdt: item.unit_price_paisa / 100 }))
+      })) });
+    }
+
+    const sellerOrderStatusMatch = path.match(/^\\/api\\/v1\\/seller\\/orders\\/([0-9a-f-]{36})\\/status$/i);
+    if (req.method === 'POST' && sellerOrderStatusMatch) {
+      const user = sessionFor(req);
+      if (!requireRole(user, 'SELLER', res)) return;
+      const next = String((await read(req)).status || '');
+      if (!['PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'].includes(next)) return send(res, 400, { error: 'Invalid seller order status' });
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        const order = q('SELECT id,order_id,status FROM seller_orders WHERE id=? AND seller_id=?').get(sellerOrderStatusMatch[1], user.id);
+        if (!order) { db.exec('ROLLBACK'); return send(res, 404, { error: 'Seller order not found' }); }
+        const transitions = { CONFIRMED: ['PROCESSING', 'CANCELLED'], PROCESSING: ['SHIPPED', 'CANCELLED'], SHIPPED: ['DELIVERED'] };
+        if (!(transitions[order.status] || []).includes(next)) { db.exec('ROLLBACK'); return send(res, 409, { error: 'এই অর্ডারের বর্তমান অবস্থা থেকে এই পরিবর্তন করা যাবে না' }); }
+        if (next === 'CANCELLED') {
+          for (const item of q('SELECT product_id,quantity FROM order_items WHERE seller_order_id=?').all(order.id)) {
+            q('UPDATE products SET stock=stock+? WHERE id=?').run(item.quantity, item.product_id);
+          }
+        }
+        q('UPDATE seller_orders SET status=? WHERE id=? AND seller_id=?').run(next, order.id, user.id);
+        const statuses = q('SELECT status FROM seller_orders WHERE order_id=?').all(order.order_id).map(row => row.status);
+        let parent = 'CONFIRMED';
+        if (statuses.length && statuses.every(status => status === 'CANCELLED')) parent = 'CANCELLED';
+        else if (statuses.every(status => ['DELIVERED', 'CANCELLED'].includes(status))) parent = statuses.some(status => status === 'DELIVERED') ? 'DELIVERED' : 'CANCELLED';
+        else if (statuses.some(status => ['SHIPPED', 'DELIVERED'].includes(status))) parent = 'SHIPPED';
+        else if (statuses.some(status => status === 'PROCESSING')) parent = 'PROCESSING';
+        q('UPDATE orders SET status=? WHERE id=?').run(parent, order.order_id);
+        db.exec('COMMIT');
+        return send(res, 200, { data: { id: order.id, status: next, parent_status: parent } });
+      } catch (error) { db.exec('ROLLBACK'); throw error; }
     }
 
     if (req.method === 'GET' && path === '/api/v1/seller/products') {
@@ -236,7 +299,8 @@ const server = http.createServer(async (req, res) => {
         const product = q("SELECT * FROM products WHERE id=? AND active=1 AND status='ACTIVE'").get(productId);
         if (!product || product.stock < quantity) return send(res, 400, { error: 'Invalid item or insufficient stock' });
         total += product.price_paisa * quantity;
-        lines.push({ productId, quantity, name_bn: product.name_bn, unit_price_paisa: product.price_paisa });
+        if (!product.seller_id) return send(res, 400, { error: 'এই পণ্যটি কোনো বিক্রেতার সঙ্গে যুক্ত নয়' });
+        lines.push({ productId, quantity, name_bn: product.name_bn, unit_price_paisa: product.price_paisa, seller_id: product.seller_id });
       }
       if (!Number.isSafeInteger(total)) return send(res, 400, { error: 'Order total is too large' });
       const id = randomUUID();
@@ -247,8 +311,22 @@ const server = http.createServer(async (req, res) => {
           if (changed.changes !== 1) throw new Error('Stock changed; please refresh your cart');
         }
         q('INSERT INTO orders(id,user_id,total_paisa,status,created_at,delivery_name,delivery_phone,delivery_address,delivery_area,customer_note) VALUES(?,?,?,?,?,?,?,?,?,?)').run(id, user.id, total, 'CONFIRMED', new Date().toISOString(), delivery.name, delivery.phone, delivery.address, delivery.area, delivery.note);
+        const sellerGroups = new Map();
         for (const line of lines) {
-          q('INSERT INTO order_items VALUES(?,?,?,?,?,?)').run(randomUUID(), id, line.productId, line.name_bn, line.quantity, line.unit_price_paisa);
+          if (!sellerGroups.has(line.seller_id)) sellerGroups.set(line.seller_id, []);
+          sellerGroups.get(line.seller_id).push(line);
+        }
+        const sellerOrderIds = new Map();
+        for (const [sellerId, sellerLines] of sellerGroups) {
+          const sellerOrderId = randomUUID();
+          sellerOrderIds.set(sellerId, sellerOrderId);
+          const sellerSubtotal = sellerLines.reduce((sum, line) => sum + line.unit_price_paisa * line.quantity, 0);
+          q('INSERT INTO seller_orders(id,order_id,seller_id,status,subtotal_paisa,created_at) VALUES(?,?,?,?,?,?)')
+            .run(sellerOrderId, id, sellerId, 'CONFIRMED', sellerSubtotal, new Date().toISOString());
+        }
+        for (const line of lines) {
+          q('INSERT INTO order_items(id,order_id,product_id,product_name_bn,quantity,unit_price_paisa,seller_id,seller_order_id) VALUES(?,?,?,?,?,?,?,?)')
+            .run(randomUUID(), id, line.productId, line.name_bn, line.quantity, line.unit_price_paisa, line.seller_id, sellerOrderIds.get(line.seller_id));
         }
         db.exec('COMMIT');
       } catch (error) {
