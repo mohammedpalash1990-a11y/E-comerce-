@@ -16,6 +16,7 @@ services:
       dockerfile: Dockerfile.web
     environment:
       WEB_PORT: 3000
+      API_HOST: api
     ports: ["3000:3000"]
     depends_on: [api]
 volumes:
