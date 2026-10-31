@@ -9,7 +9,8 @@
 - Bengali-first customer storefront with product/category listing and client-side search
 - Development seed accounts and phone/password login
 - SQLite-backed category and product catalogue
-- COD checkout API with stock validation, transactional deduction, persisted order line items and customer order-history API
+- COD checkout API with delivery address capture, stock validation, transactional deduction, persisted order line items and customer order-history API
+- Admin order queue with delivery details and controlled order-status transitions; eligible cancellations restore stock
 - Web server proxies `/api/*` requests to the API service
 - Storefront automatically uses live catalogue and COD checkout when served alongside the API; GitHub Pages remains a static preview
 - Prisma PostgreSQL target schema, OpenAPI starter contract, Docker and CI scaffolding
