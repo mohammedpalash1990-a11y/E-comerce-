@@ -1,40 +1,42 @@
 # প্রকল্পের বর্তমান অবস্থা
 
-## GitHub-এ বর্তমানে যা আছে
-- বাংলা-প্রথম customer storefront: category ও product list, search
-- Node.js API: health, category/product list, development login, COD order creation
-- SQLite development database এবং demo seed account
-- Checkout-এ stock validation ও deduction
-- API proxy-সহ web server
-- PostgreSQL-এর প্রাথমিক Prisma schema, OpenAPI starter, Docker/CI scaffolding
+## বর্তমানে কাজ করছে (Development / Demo)
+- বাংলা-প্রথম customer storefront: ক্যাটাগরি, পণ্য তালিকা, সার্চ ও cart
+- Customer login এবং Cash on Delivery (COD) checkout
+- Checkout-এ নাম, বাংলাদেশি মোবাইল নম্বর, পূর্ণ ঠিকানা, এলাকা ও optional note সংরক্ষণ
+- Checkout-এর সময় stock validation, transaction-এর মধ্যে stock deduction এবং order item সংরক্ষণ
+- Customer order history: পণ্যের নাম, quantity, মূল্য ও delivery তথ্য
+- Seller login, নিজের product list এবং নতুন পণ্য জমা; নতুন পণ্য admin approval না পাওয়া পর্যন্ত storefront-এ প্রকাশ হয় না
+- Admin product moderation: pending product দেখা, approve / reject
+- Admin order queue: customer ও delivery তথ্য, line items, মোট মূল্য এবং status দেখা
+- Admin order status workflow: CONFIRMED → PROCESSING → SHIPPED → DELIVERED; নির্দিষ্ট পর্যায়ে CANCELLED
+- অনুমোদিত অবস্থায় order cancel হলে transaction-এর মধ্যে stock ফেরত যোগ
+- Node.js API, SQLite development database, demo seed account, API proxy এবং CI test workflow
 
-## এখনো তৈরি হয়নি
-1. পূর্ণ seller onboarding, product submission, inventory management ও seller order fulfilment
-2. Admin moderation, user management, finance, commission ও payout workflows
-3. এক অর্ডারকে seller-wise sub-order-এ ভাগ করা এবং settlement ledger
-4. Customer address book, order history, returns/refunds ও notifications
-5. bKash/Nagad/SSLCommerz/card payment gateway এবং courier API
-6. SQLite adapter থেকে production PostgreSQL adapter-এ migration; Prisma schema validate/migrate
-7. সম্পূর্ণ Android/iOS app
+## ডেমো অ্যাকাউন্ট
+- Customer: 01700000003 / Customer@12345
+- Seller: 01700000002 / Seller@12345
+- Admin: 01700000001 / Admin@12345
 
-## পরীক্ষা
-বর্তমান GitHub branch-এ একটি API smoke test রাখা হয়েছে। CI-তে Node.js 22 দিয়ে `npm run check` চলে। এই scaffold-এর সব deployment path এখনো বাস্তবে যাচাই করা হয়নি।
+## এখনো তৈরি হয়নি / production-এ নেওয়ার আগে প্রয়োজন
+1. Production PostgreSQL adapter, Prisma migration এবং deployment database
+2. Persistent secure session/token lifecycle, password reset, OTP verification এবং rate limiting
+3. Seller onboarding/KYC, product editing, inventory controls ও seller-wise fulfilment
+4. Multi-vendor cart থেকে seller-wise sub-order split এবং commission/settlement ledger
+5. Customer address book, returns/refunds, dispute handling ও notification system
+6. bKash/Nagad/SSLCommerz/card payment gateway এবং courier API integration
+7. Admin user management, finance, payout ও audit log
+8. Monitoring, automated backups, restore drill, privacy/legal review ও security testing
+9. সম্পূর্ণ Android/iOS customer ও seller app
 
-## Production blockers
-- SQLite development adapter; production PostgreSQL adapter ও migration প্রয়োজন
-- In-memory demo session; production-grade secure session/token lifecycle প্রয়োজন
-- COD ছাড়া payment method live নয়
-- Courier, tracking, returns/refunds এবং reconciliation নেই
-- Rate limiting, monitoring, backup/restore, privacy/legal review ও penetration test প্রয়োজন
+## পরীক্ষা ও deployment
+- GitHub Actions CI-তে Node.js 22 দিয়ে syntax checks, repository checks এবং API tests চলে।
+- API tests-এ role permissions, seller product submission, admin approval, COD checkout, customer order history, admin status transition এবং cancellation stock restoration যাচাই করা হয়।
+- GitHub Pages preview static frontend demo; এটি production API hosting নয়।
+- SQLite ও in-memory sessions development/demo ব্যবহারের জন্য; live customer data বা production transaction-এর জন্য নয়।
 
 ## পরবর্তী অগ্রাধিকার
-P0: PostgreSQL adapter, schema validation/migrations, robust authentication and role authorization.
-P1: Seller workflows, admin moderation, multi-seller orders, commissions and payout ledger.
-P2: Payment/courier sandbox integration, returns/refunds, notifications and mobile app.
-
-
-## অর্ডার পরিচালনা
-- কাস্টমার COD checkout-এ নাম, বাংলাদেশি মোবাইল, পূর্ণ ঠিকানা ও এলাকা বাধ্যতামূলক।
-- Admin Console-এ সাম্প্রতিক অর্ডার, গ্রাহক ও ডেলিভারি তথ্য দেখা যায়।
-- অর্ডারের অবস্থা নির্দিষ্ট ধাপে পরিবর্তন করা যায়; অনুমোদিত অবস্থায় বাতিল হলে স্টক ফেরত যোগ হয়।
-- Seller-wise fulfilment, multi-vendor order splitting ও settlement পরবর্তী কাজ।
+- P0: PostgreSQL schema/migrations, persistent authentication/session, API security hardening
+- P1: Seller fulfilment, multi-vendor sub-orders, commission এবং settlement
+- P2: Payment/courier sandbox integration, returns/refunds, notifications
+- P3: Production monitoring, backups, security review এবং mobile app
