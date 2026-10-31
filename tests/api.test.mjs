@@ -79,7 +79,7 @@ test('catalog, seller product submission and admin moderation work with role che
   assert.equal(customerLogin.status, 200);
   const checkout = await request('/api/v1/checkout', {
     method: 'POST', token: customerLogin.data.token,
-    body: { items: [{ productId: created.data.data.id, quantity: 2 }] }
+    body: { delivery: { name: 'Test Customer', phone: '01700000003', address: 'House 10, Road 2', area: 'Dhaka', note: 'Call on arrival' }, items: [{ productId: created.data.data.id, quantity: 2 }] }
   });
   assert.equal(checkout.status, 201);
   assert.equal(checkout.data.data.total_bdt, 1700);
@@ -90,4 +90,6 @@ test('catalog, seller product submission and admin moderation work with role che
   assert.equal(history.data.data[0].total_bdt, 1700);
   assert.equal(history.data.data[0].items[0].quantity, 2);
   assert.equal(history.data.data[0].items[0].name_bn, 'নতুন ব্যাগ');
+  assert.equal(history.data.data[0].delivery.address, 'House 10, Road 2');
+  assert.equal(history.data.data[0].delivery.area, 'Dhaka');
 });
