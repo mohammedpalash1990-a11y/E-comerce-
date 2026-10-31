@@ -83,6 +83,18 @@ test('catalog, seller product submission and admin moderation work with role che
   });
   assert.equal(checkout.status, 201);
   assert.equal(checkout.data.data.total_bdt, 1700);
+  const history = await request('/api/v1/customer/orders', { token: customerLogin.data.token });
+  const adminOrders = await request('/api/v1/admin/orders', { token: adminToken });
+  assert.equal(adminOrders.status, 200);
+  assert.equal(adminOrders.data.data[0].delivery.area, 'Dhaka');
+  assert.equal(adminOrders.data.data[0].delivery.note, 'Call on arrival');
+  const orderId = adminOrders.data.data[0].id;
+  const processing = await request('/api/v1/admin/orders/' + orderId + '/status', { method: 'POST', token: adminToken, body: { status: 'PROCESSING' } });
+  assert.equal(processing.status, 200);
+  const invalidTransition = await request('/api/v1/admin/orders/' + orderId + '/status', { method: 'POST', token: adminToken, body: { status: 'CONFIRMED' } });
+  assert.equal(invalidTransition.status, 409);
+  const malformedOrderRoute = await request('/api/v1/admin/orders/not-a-uuid/status', { method: 'POST', token: adminToken, body: { status: 'PROCESSING' } });
+
   const sellerOrders = await request('/api/v1/seller/orders', { token: sellerToken });
   assert.equal(sellerOrders.status, 200);
   assert.equal(sellerOrders.data.data.length, 1);
@@ -104,17 +116,6 @@ test('catalog, seller product submission and admin moderation work with role che
   assert.equal(sellerDelivered.status, 200);
   assert.equal(sellerDelivered.data.data.parent_status, 'DELIVERED');
   assert.match(checkout.data.data.orderNumber, /^BD-[A-F0-9]{8}$/);
-  const history = await request('/api/v1/customer/orders', { token: customerLogin.data.token });
-  const adminOrders = await request('/api/v1/admin/orders', { token: adminToken });
-  assert.equal(adminOrders.status, 200);
-  assert.equal(adminOrders.data.data[0].delivery.area, 'Dhaka');
-  assert.equal(adminOrders.data.data[0].delivery.note, 'Call on arrival');
-  const orderId = adminOrders.data.data[0].id;
-  const processing = await request('/api/v1/admin/orders/' + orderId + '/status', { method: 'POST', token: adminToken, body: { status: 'PROCESSING' } });
-  assert.equal(processing.status, 200);
-  const invalidTransition = await request('/api/v1/admin/orders/' + orderId + '/status', { method: 'POST', token: adminToken, body: { status: 'CONFIRMED' } });
-  assert.equal(invalidTransition.status, 409);
-  const malformedOrderRoute = await request('/api/v1/admin/orders/not-a-uuid/status', { method: 'POST', token: adminToken, body: { status: 'PROCESSING' } });
   assert.equal(malformedOrderRoute.status, 404);
 
   assert.equal(history.status, 200);
