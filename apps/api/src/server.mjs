@@ -13,11 +13,11 @@ PRAGMA foreign_keys=ON;
 CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, phone TEXT UNIQUE NOT NULL, name TEXT NOT NULL, password TEXT NOT NULL, role TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS categories(id TEXT PRIMARY KEY, slug TEXT UNIQUE, name_bn TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS products(id TEXT PRIMARY KEY, category_id TEXT, name_bn TEXT NOT NULL, name_en TEXT NOT NULL, price_paisa INTEGER NOT NULL, stock INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1);
-CREATE TABLE IF NOT EXISTS orders(id TEXT PRIMARY KEY, user_id TEXT NOT NULL, total_paisa INTEGER NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL);
-const orderColumns = columns => db.prepare('PRAGMA table_info(' + table + ')').all().map(row => row.name);
+CREATE TABLE IF NOT EXISTS orders(id TEXT PRIMARY KEY, user_id TEXT NOT NULL, total_paisa INTEGER NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL);\nCREATE TABLE IF NOT EXISTS order_items(id TEXT PRIMARY KEY, order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE, product_id TEXT NOT NULL, product_name_bn TEXT NOT NULL, quantity INTEGER NOT NULL, unit_price_paisa INTEGER NOT NULL);`);
+const orderColumns = db.prepare('PRAGMA table_info(orders)').all().map(row => row.name);
 for (const [name, definition] of [['delivery_name', "TEXT NOT NULL DEFAULT ''"], ['delivery_phone', "TEXT NOT NULL DEFAULT ''"], ['delivery_address', "TEXT NOT NULL DEFAULT ''"], ['delivery_area', "TEXT NOT NULL DEFAULT ''"], ['customer_note', "TEXT NOT NULL DEFAULT ''"]]) {
-  if (!orderColumns('orders').includes(name)) db.exec('ALTER TABLE orders ADD COLUMN ' + name + ' ' + definition);
-}\nCREATE TABLE IF NOT EXISTS order_items(id TEXT PRIMARY KEY, order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE, product_id TEXT NOT NULL, product_name_bn TEXT NOT NULL, quantity INTEGER NOT NULL, unit_price_paisa INTEGER NOT NULL);`);
+  if (!orderColumns.includes(name)) db.exec('ALTER TABLE orders ADD COLUMN ' + name + ' ' + definition);
+}
 
 const q = sql => db.prepare(sql);
 const hash = password => {
