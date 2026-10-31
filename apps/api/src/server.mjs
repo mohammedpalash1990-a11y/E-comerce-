@@ -13,7 +13,7 @@ PRAGMA foreign_keys=ON;
 CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, phone TEXT UNIQUE NOT NULL, name TEXT NOT NULL, password TEXT NOT NULL, role TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS categories(id TEXT PRIMARY KEY, slug TEXT UNIQUE, name_bn TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS products(id TEXT PRIMARY KEY, category_id TEXT, name_bn TEXT NOT NULL, name_en TEXT NOT NULL, price_paisa INTEGER NOT NULL, stock INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1);
-CREATE TABLE IF NOT EXISTS orders(id TEXT PRIMARY KEY, user_id TEXT NOT NULL, total_paisa INTEGER NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL);`);
+CREATE TABLE IF NOT EXISTS orders(id TEXT PRIMARY KEY, user_id TEXT NOT NULL, total_paisa INTEGER NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL);\nCREATE TABLE IF NOT EXISTS order_items(id TEXT PRIMARY KEY, order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE, product_id TEXT NOT NULL, product_name_bn TEXT NOT NULL, quantity INTEGER NOT NULL, unit_price_paisa INTEGER NOT NULL);`);
 
 const q = sql => db.prepare(sql);
 const hash = password => {
@@ -151,6 +151,21 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { data: { id: product.id, status: approved ? 'ACTIVE' : 'REJECTED' } });
     }
 
+    if (req.method === 'GET' && path === '/api/v1/customer/orders') {
+      const user = sessionFor(req);
+      if (!requireRole(user, 'CUSTOMER', res)) return;
+      const orders = q('SELECT id,total_paisa,status,created_at FROM orders WHERE user_id=? ORDER BY created_at DESC').all(user.id);
+      const data = orders.map(order => ({
+        orderNumber: 'BD-' + order.id.slice(0, 8).toUpperCase(),
+        total_bdt: order.total_paisa / 100,
+        status: order.status,
+        created_at: order.created_at,
+        items: q('SELECT product_name_bn,quantity,unit_price_paisa FROM order_items WHERE order_id=?').all(order.id)
+          .map(item => ({ name_bn: item.product_name_bn, quantity: item.quantity, unit_price_bdt: item.unit_price_paisa / 100 }))
+      }));
+      return send(res, 200, { data });
+    }
+
     if (req.method === 'POST' && path === '/api/v1/checkout') {
       const user = sessionFor(req);
       if (!requireRole(user, 'CUSTOMER', res)) return;
@@ -172,7 +187,7 @@ const server = http.createServer(async (req, res) => {
         const product = q("SELECT * FROM products WHERE id=? AND active=1 AND status='ACTIVE'").get(productId);
         if (!product || product.stock < quantity) return send(res, 400, { error: 'Invalid item or insufficient stock' });
         total += product.price_paisa * quantity;
-        lines.push({ productId, quantity });
+        lines.push({ productId, quantity, name_bn: product.name_bn, unit_price_paisa: product.price_paisa });
       }
       if (!Number.isSafeInteger(total)) return send(res, 400, { error: 'Order total is too large' });
       const id = randomUUID();
@@ -182,7 +197,7 @@ const server = http.createServer(async (req, res) => {
           const changed = q("UPDATE products SET stock=stock-? WHERE id=? AND stock>=? AND active=1 AND status='ACTIVE'").run(line.quantity, line.productId, line.quantity);
           if (changed.changes !== 1) throw new Error('Stock changed; please refresh your cart');
         }
-        q('INSERT INTO orders VALUES(?,?,?,?,?)').run(id, user.id, total, 'CONFIRMED', new Date().toISOString());
+        q('INSERT INTO orders VALUES(?,?,?,?,?)').run(id, user.id, total, 'CONFIRMED', new Date().toISOString());\n        for (const line of lines) {\n          q('INSERT INTO order_items VALUES(?,?,?,?,?,?)').run(randomUUID(), id, line.productId, line.name_bn, line.quantity, line.unit_price_paisa);\n        }
         db.exec('COMMIT');
       } catch (error) {
         db.exec('ROLLBACK');
