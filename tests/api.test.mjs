@@ -111,7 +111,9 @@ test('catalog, seller product submission and admin moderation work with role che
   });
   assert.equal(secondCheckout.status, 201);
   const latestOrders = await request('/api/v1/admin/orders', { token: adminToken });
-  const cancelOrderId = latestOrders.data.data[0].id;
+  const cancelOrder = latestOrders.data.data.find(order => order.orderNumber === secondCheckout.data.data.orderNumber);
+  assert.ok(cancelOrder, 'second checkout should appear in admin order queue');
+  const cancelOrderId = cancelOrder.id;
   const cancelled = await request('/api/v1/admin/orders/' + cancelOrderId + '/status', {
     method: 'POST', token: adminToken, body: { status: 'CANCELLED' }
   });
