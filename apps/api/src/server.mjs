@@ -141,7 +141,7 @@ const server = http.createServer(async (req, res) => {
       })) });
     }
 
-    const sellerOrderStatusMatch = path.match(/^\\/api\\/v1\\/seller\\/orders\\/([0-9a-f-]{36})\\/status$/i);
+    const sellerOrderStatusMatch = path.match(/^\/api\/v1\/seller\/orders\/([0-9a-f-]{36})\/status$/i);
     if (req.method === 'POST' && sellerOrderStatusMatch) {
       const user = sessionFor(req);
       if (!requireRole(user, 'SELLER', res)) return;
