@@ -88,6 +88,7 @@ test('catalog, seller product submission and admin moderation work with role che
   const adminOrders = await request('/api/v1/admin/orders', { token: adminToken });
   assert.equal(adminOrders.status, 200);
   assert.equal(adminOrders.data.data[0].delivery.area, 'Dhaka');
+  assert.equal(adminOrders.data.data[0].delivery.note, 'Call on arrival');
   const orderId = adminOrders.data.data[0].id;
   const processing = await request('/api/v1/admin/orders/' + orderId + '/status', { method: 'POST', token: adminToken, body: { status: 'PROCESSING' } });
   assert.equal(processing.status, 200);
