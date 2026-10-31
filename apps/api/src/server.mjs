@@ -182,7 +182,7 @@ const server = http.createServer(async (req, res) => {
         area: String(body.delivery?.area || '').trim(),
         note: String(body.delivery?.note || '').trim()
       };
-      if (!delivery.name || delivery.name.length > 100 || !/^01[3-9]\\d{8}$/.test(delivery.phone) || !delivery.address || delivery.address.length > 500 || !delivery.area || delivery.area.length > 100 || delivery.note.length > 500) {
+      if (!delivery.name || delivery.name.length > 100 || !/^01[3-9]\d{8}$/.test(delivery.phone) || !delivery.address || delivery.address.length > 500 || !delivery.area || delivery.area.length > 100 || delivery.note.length > 500) {
         return send(res, 400, { error: 'নাম, সঠিক বাংলাদেশি মোবাইল, পূর্ণ ঠিকানা ও এলাকা দিতে হবে' });
       }
       if (!Array.isArray(body.items) || !body.items.length || body.items.length > 50) {
