@@ -143,6 +143,11 @@ test('catalog, seller product submission and admin moderation work with role che
   });
   assert.equal(cancelled.status, 200);
   assert.equal(cancelled.data.data.status, 'CANCELLED');
+  // A repeated cancellation must be rejected and must not restore stock twice.
+  const duplicateCancellation = await request('/api/v1/admin/orders/' + cancelOrderId + '/status', {
+    method: 'POST', token: adminToken, body: { status: 'CANCELLED' }
+  });
+  assert.equal(duplicateCancellation.status, 409);
   const stockAfterCancellation = await request('/api/v1/products?q=New%20Bag');
   assert.equal(stockAfterCancellation.data.data[0].stock, 5);
 });
