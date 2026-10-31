@@ -13,7 +13,11 @@ PRAGMA foreign_keys=ON;
 CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, phone TEXT UNIQUE NOT NULL, name TEXT NOT NULL, password TEXT NOT NULL, role TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS categories(id TEXT PRIMARY KEY, slug TEXT UNIQUE, name_bn TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS products(id TEXT PRIMARY KEY, category_id TEXT, name_bn TEXT NOT NULL, name_en TEXT NOT NULL, price_paisa INTEGER NOT NULL, stock INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1);
-CREATE TABLE IF NOT EXISTS orders(id TEXT PRIMARY KEY, user_id TEXT NOT NULL, total_paisa INTEGER NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL);\nCREATE TABLE IF NOT EXISTS order_items(id TEXT PRIMARY KEY, order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE, product_id TEXT NOT NULL, product_name_bn TEXT NOT NULL, quantity INTEGER NOT NULL, unit_price_paisa INTEGER NOT NULL);`);
+CREATE TABLE IF NOT EXISTS orders(id TEXT PRIMARY KEY, user_id TEXT NOT NULL, total_paisa INTEGER NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL);
+const orderColumns = columns => db.prepare('PRAGMA table_info(' + table + ')').all().map(row => row.name);
+for (const [name, definition] of [['delivery_name', "TEXT NOT NULL DEFAULT ''"], ['delivery_phone', "TEXT NOT NULL DEFAULT ''"], ['delivery_address', "TEXT NOT NULL DEFAULT ''"], ['delivery_area', "TEXT NOT NULL DEFAULT ''"], ['customer_note', "TEXT NOT NULL DEFAULT ''"]]) {
+  if (!orderColumns('orders').includes(name)) db.exec('ALTER TABLE orders ADD COLUMN ' + name + ' ' + definition);
+}\nCREATE TABLE IF NOT EXISTS order_items(id TEXT PRIMARY KEY, order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE, product_id TEXT NOT NULL, product_name_bn TEXT NOT NULL, quantity INTEGER NOT NULL, unit_price_paisa INTEGER NOT NULL);`);
 
 const q = sql => db.prepare(sql);
 const hash = password => {
@@ -154,12 +158,13 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && path === '/api/v1/customer/orders') {
       const user = sessionFor(req);
       if (!requireRole(user, 'CUSTOMER', res)) return;
-      const orders = q('SELECT id,total_paisa,status,created_at FROM orders WHERE user_id=? ORDER BY created_at DESC').all(user.id);
+      const orders = q('SELECT id,total_paisa,status,created_at,delivery_name,delivery_phone,delivery_address,delivery_area,customer_note FROM orders WHERE user_id=? ORDER BY created_at DESC').all(user.id);
       const data = orders.map(order => ({
         orderNumber: 'BD-' + order.id.slice(0, 8).toUpperCase(),
         total_bdt: order.total_paisa / 100,
         status: order.status,
         created_at: order.created_at,
+        delivery: { name: order.delivery_name, phone: order.delivery_phone, address: order.delivery_address, area: order.delivery_area, note: order.customer_note },
         items: q('SELECT product_name_bn,quantity,unit_price_paisa FROM order_items WHERE order_id=?').all(order.id)
           .map(item => ({ name_bn: item.product_name_bn, quantity: item.quantity, unit_price_bdt: item.unit_price_paisa / 100 }))
       }));
@@ -170,6 +175,16 @@ const server = http.createServer(async (req, res) => {
       const user = sessionFor(req);
       if (!requireRole(user, 'CUSTOMER', res)) return;
       const body = await read(req);
+      const delivery = {
+        name: String(body.delivery?.name || '').trim(),
+        phone: String(body.delivery?.phone || '').trim(),
+        address: String(body.delivery?.address || '').trim(),
+        area: String(body.delivery?.area || '').trim(),
+        note: String(body.delivery?.note || '').trim()
+      };
+      if (!delivery.name || delivery.name.length > 100 || !/^01[3-9]\\d{8}$/.test(delivery.phone) || !delivery.address || delivery.address.length > 500 || !delivery.area || delivery.area.length > 100 || delivery.note.length > 500) {
+        return send(res, 400, { error: 'নাম, সঠিক বাংলাদেশি মোবাইল, পূর্ণ ঠিকানা ও এলাকা দিতে হবে' });
+      }
       if (!Array.isArray(body.items) || !body.items.length || body.items.length > 50) {
         return send(res, 400, { error: 'Cart must contain between 1 and 50 items' });
       }
@@ -197,7 +212,7 @@ const server = http.createServer(async (req, res) => {
           const changed = q("UPDATE products SET stock=stock-? WHERE id=? AND stock>=? AND active=1 AND status='ACTIVE'").run(line.quantity, line.productId, line.quantity);
           if (changed.changes !== 1) throw new Error('Stock changed; please refresh your cart');
         }
-        q('INSERT INTO orders VALUES(?,?,?,?,?)').run(id, user.id, total, 'CONFIRMED', new Date().toISOString());
+        q('INSERT INTO orders(id,user_id,total_paisa,status,created_at,delivery_name,delivery_phone,delivery_address,delivery_area,customer_note) VALUES(?,?,?,?,?,?,?,?,?,?)').run(id, user.id, total, 'CONFIRMED', new Date().toISOString(), delivery.name, delivery.phone, delivery.address, delivery.area, delivery.note);
         for (const line of lines) {
           q('INSERT INTO order_items VALUES(?,?,?,?,?,?)').run(randomUUID(), id, line.productId, line.name_bn, line.quantity, line.unit_price_paisa);
         }
