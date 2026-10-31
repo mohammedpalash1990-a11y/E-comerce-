@@ -13,9 +13,9 @@
 <section class="banner"><div><b>আপনি কি বিক্রেতা?</b><div class="muted">HAAT-এ আপনার পণ্য বিক্রির জন্য Seller Workspace তৈরি হচ্ছে।</div></div><a href="seller.html">Seller Portal →</a></section>
 </main>
 <footer class="footer"><div><div class="brand">HAAT.</div><p class="note">বাংলাদেশের জন্য বাংলা-প্রথম মাল্টি-ভেন্ডর মার্কেটপ্লেস।</p></div><div><b>সহায়তা</b><p class="note">Customer care · Terms · Privacy</p><a href="admin.html">Admin Portal</a></div><div class="note">© 2026 HAAT. Development preview.</div></footer>
-<div class="drawer" id="drawer"><aside class="cart"><div class="carthead"><h2>আপনার কার্ট</h2><button id="closeCart">✕</button></div><div id="cartLines"></div><div class="cartline"><b>সর্বমোট</b><b id="cartTotal">৳0</b></div><button class="checkout" id="checkout">ডেমো অর্ডার কনফার্ম</button><p class="note">এটি বর্তমানে একটি প্রকাশ্য frontend preview। অর্ডার, পেমেন্ট বা ডেলিভারি এখনো বাস্তব সার্ভারে জমা হয় না।</p></aside></div><div class="toast" id="toast"></div>
+<div class="drawer" id="drawer"><aside class="cart"><div class="carthead"><h2>আপনার কার্ট</h2><button id="closeCart">✕</button></div><div id="cartLines"></div><div class="cartline"><b>সর্বমোট</b><b id="cartTotal">৳0</b></div><button class="checkout" id="checkout">ডেমো অর্ডার কনফার্ম</button><p class="note">ব্যাকএন্ড যুক্ত থাকলে COD অর্ডার জমা হবে। এই প্রকাশ্য GitHub Pages প্রিভিউতে ব্যাকএন্ড সংযুক্ত নেই; এখানে অর্ডার বাস্তবে জমা হবে না।</p></aside></div><div class="toast" id="toast"></div>
 <script>
-const products=[
+let products=[
 {id:'p1',bn:'ওয়্যারলেস ইয়ারবাড',en:'Wireless Earbuds',price:1890,stock:32,cat:'electronics',icon:'🎧'},
 {id:'p2',bn:'কটন পাঞ্জাবি',en:'Cotton Panjabi',price:1290,stock:18,cat:'fashion',icon:'🥻'},
 {id:'p3',bn:'ডেস্ক ল্যাম্প',en:'Desk Lamp',price:950,stock:12,cat:'home',icon:'💡'},
@@ -26,7 +26,7 @@ const products=[
 {id:'p8',bn:'ক্যানভাস ব্যাগ',en:'Canvas Tote Bag',price:490,stock:40,cat:'fashion',icon:'👜'}
 ];
 const cats=[['all','সব পণ্য'],['electronics','ইলেকট্রনিক্স'],['fashion','ফ্যাশন'],['home','ঘর ও জীবন']];
-let active='all',cart=JSON.parse(localStorage.getItem('haat_cart_demo')||'{}');
+let active='all',cart=JSON.parse(localStorage.getItem('haat_cart_demo')||'{}'),apiReady=false;
 const $=s=>document.querySelector(s),money=n=>'৳'+Number(n).toLocaleString('en-BD');
 function toast(t){$('#toast').textContent=t;$('#toast').classList.add('show');setTimeout(()=>$('#toast').classList.remove('show'),1800)}
 function drawCats(){$('#cats').innerHTML=cats.map(([id,name])=>'<button class="chip '+(id===active?'active':'')+'" data-cat="'+id+'">'+name+'</button>').join('')}
@@ -37,6 +37,37 @@ $('#cats').onclick=e=>{const b=e.target.closest('[data-cat]');if(b){active=b.dat
 $('#grid').onclick=e=>{const b=e.target.closest('[data-add]');if(b){cart[b.dataset.add]=(cart[b.dataset.add]||0)+1;save();toast('কার্টে যোগ হয়েছে ✓')}};
 $('#cartLines').onclick=e=>{const inc=e.target.closest('[data-inc]'),dec=e.target.closest('[data-dec]');if(inc)cart[inc.dataset.inc]=(cart[inc.dataset.inc]||0)+1;if(dec){cart[dec.dataset.dec]=Math.max(0,(cart[dec.dataset.dec]||0)-1);if(!cart[dec.dataset.dec])delete cart[dec.dataset.dec]}save()};
 $('#search').oninput=drawProducts;$('#searchBtn').onclick=drawProducts;$('#openCart').onclick=()=>$('#drawer').classList.add('open');$('#closeCart').onclick=()=>$('#drawer').classList.remove('open');$('#drawer').onclick=e=>{if(e.target.id==='drawer')$('#drawer').classList.remove('open')};
-$('#checkout').onclick=()=>{if(!Object.keys(cart).length){toast('কার্ট খালি আছে');return}toast('এটি শুধু ডেমো—লাইভ অর্ডার এখনো চালু হয়নি')};
-drawCats();drawProducts();drawCart();
+$('#checkout').onclick=async()=>{
+ if(!Object.keys(cart).length){toast('কার্ট খালি আছে');return}
+ if(!apiReady){toast('লাইভ অর্ডারের জন্য সার্ভার সংযোগ প্রয়োজন');return}
+ const phone=prompt('আপনার কাস্টমার মোবাইল নম্বর লিখুন');
+ if(!phone)return;
+ const password=prompt('আপনার পাসওয়ার্ড লিখুন');
+ if(!password)return;
+ const button=$('#checkout');button.disabled=true;button.textContent='অর্ডার জমা হচ্ছে...';
+ try{
+  const login=await fetch('/api/v1/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({phone,password})});
+  const auth=await login.json();if(!login.ok)throw Error(auth.error||'লগইন করা যায়নি');
+  if(auth.data.role!=='CUSTOMER')throw Error('কাস্টমার অ্যাকাউন্ট দিয়ে অর্ডার করুন');
+  const order=await fetch('/api/v1/checkout',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+auth.token},body:JSON.stringify({items:Object.entries(cart).map(([productId,quantity])=>({productId,quantity}))})});
+  const result=await order.json();if(!order.ok)throw Error(result.error||'অর্ডার জমা হয়নি');
+  cart={};save();$('#drawer').classList.remove('open');toast('অর্ডার সফল: '+result.data.orderNumber);
+ }catch(error){toast(error.message)}
+ finally{button.disabled=false;button.textContent='COD অর্ডার কনফার্ম'}
+};
+async function connectCatalog(){
+ try{
+  const response=await fetch('/api/v1/products',{headers:{accept:'application/json'}});
+  if(!response.ok)return;
+  const payload=await response.json();if(!Array.isArray(payload.data))return;
+  const icons={electronics:'🎧',fashion:'🛍️',home:'🏠'};
+  products=payload.data.map(p=>({id:p.id,bn:p.name_bn,en:p.name_en,price:p.price_bdt,stock:p.stock,cat:p.category_slug,icon:icons[p.category_slug]||'📦'}));
+  apiReady=true;
+  const valid=new Set(products.map(p=>p.id));cart=Object.fromEntries(Object.entries(cart).filter(([id])=>valid.has(id)));save();
+  $('#checkout').textContent='COD অর্ডার কনফার্ম';
+  $('.muted').textContent='সার্ভারের লাইভ পণ্য তালিকা';
+  drawCats();drawProducts();drawCart();
+ }catch{}
+}
+drawCats();drawProducts();drawCart();connectCatalog();
 </script></body></html>
