@@ -174,7 +174,7 @@ const server = http.createServer(async (req, res) => {
       const user = sessionFor(req);
       if (!requireRole(user, 'ADMIN', res)) return;
       const next = String((await read(req)).status || '');
-      if (!['PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'].includes(next)) return send(res, 400, { error: 'Invalid order status' });
+      if (!['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'].includes(next)) return send(res, 400, { error: 'Invalid order status' });
       const order = q('SELECT id,status FROM orders WHERE id=?').get(orderStatusRoute);
       if (!order) return send(res, 404, { error: 'Order not found' });
       const transitions = { CONFIRMED: ['PROCESSING', 'CANCELLED'], PROCESSING: ['SHIPPED', 'CANCELLED'], SHIPPED: ['DELIVERED'] };
