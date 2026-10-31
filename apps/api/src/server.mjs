@@ -155,6 +155,39 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { data: { id: product.id, status: approved ? 'ACTIVE' : 'REJECTED' } });
     }
 
+    if (req.method === 'GET' && path === '/api/v1/admin/orders') {
+      const user = sessionFor(req);
+      if (!requireRole(user, 'ADMIN', res)) return;
+      const orders = q('SELECT o.id,o.total_paisa,o.status,o.created_at,o.delivery_name,o.delivery_phone,o.delivery_address,o.delivery_area,o.customer_note,u.name customer_name,u.phone customer_phone FROM orders o JOIN users u ON u.id=o.user_id ORDER BY o.created_at DESC LIMIT 200').all();
+      return send(res, 200, { data: orders.map(order => ({
+        id: order.id, orderNumber: 'BD-' + order.id.slice(0, 8).toUpperCase(),
+        total_bdt: order.total_paisa / 100, status: order.status, created_at: order.created_at,
+        customer: { name: order.customer_name, phone: order.customer_phone },
+        delivery: { name: order.delivery_name, phone: order.delivery_phone, address: order.delivery_address, area: order.delivery_area, note: order.customer_note },
+        items: q('SELECT product_name_bn,quantity,unit_price_paisa FROM order_items WHERE order_id=?').all(order.id)
+          .map(item => ({ name_bn: item.product_name_bn, quantity: item.quantity, unit_price_bdt: item.unit_price_paisa / 100 }))
+      })) });
+    }
+
+    const orderStatusRoute = path.match(/^\\/api\\/v1\\/admin\\/orders\\/([A-Fa-f0-9-]+)\\/status$/);
+    if (req.method === 'POST' && orderStatusRoute) {
+      const user = sessionFor(req);
+      if (!requireRole(user, 'ADMIN', res)) return;
+      const next = String((await read(req)).status || '');
+      if (!['PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'].includes(next)) return send(res, 400, { error: 'Invalid order status' });
+      const order = q('SELECT id,status FROM orders WHERE id=?').get(orderStatusRoute[1]);
+      if (!order) return send(res, 404, { error: 'Order not found' });
+      const transitions = { CONFIRMED: ['PROCESSING', 'CANCELLED'], PROCESSING: ['SHIPPED', 'CANCELLED'], SHIPPED: ['DELIVERED'] };
+      if (!(transitions[order.status] || []).includes(next)) return send(res, 409, { error: 'এই অর্ডারের বর্তমান অবস্থা থেকে এই পরিবর্তন করা যাবে না' });
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        if (next === 'CANCELLED') for (const item of q('SELECT product_id,quantity FROM order_items WHERE order_id=?').all(order.id)) q('UPDATE products SET stock=stock+? WHERE id=?').run(item.quantity, item.product_id);
+        q('UPDATE orders SET status=? WHERE id=?').run(next, order.id);
+        db.exec('COMMIT');
+      } catch (error) { db.exec('ROLLBACK'); throw error; }
+      return send(res, 200, { data: { id: order.id, status: next } });
+    }
+
     if (req.method === 'GET' && path === '/api/v1/customer/orders') {
       const user = sessionFor(req);
       if (!requireRole(user, 'CUSTOMER', res)) return;
