@@ -93,6 +93,8 @@ test('catalog, seller product submission and admin moderation work with role che
   assert.equal(processing.status, 200);
   const invalidTransition = await request('/api/v1/admin/orders/' + orderId + '/status', { method: 'POST', token: adminToken, body: { status: 'CONFIRMED' } });
   assert.equal(invalidTransition.status, 409);
+  const malformedOrderRoute = await request('/api/v1/admin/orders/not-a-uuid/status', { method: 'POST', token: adminToken, body: { status: 'PROCESSING' } });
+  assert.equal(malformedOrderRoute.status, 404);
 
   assert.equal(history.status, 200);
   assert.equal(history.data.data.length, 1);
