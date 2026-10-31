@@ -169,8 +169,9 @@ const server = http.createServer(async (req, res) => {
       })) });
     }
 
-    const orderStatusRoute = path.startsWith('/api/v1/admin/orders/') && path.endsWith('/status') ? path.slice('/api/v1/admin/orders/'.length, -'/status'.length) : '';
-    if (req.method === 'POST' && orderStatusRoute) {
+    const orderStatusMatch = path.match(/^\/api\/v1\/admin\/orders\/([0-9a-f-]{36})\/status$/i);
+    if (req.method === 'POST' && orderStatusMatch) {
+      const orderStatusRoute = orderStatusMatch[1];
       const user = sessionFor(req);
       if (!requireRole(user, 'ADMIN', res)) return;
       const next = String((await read(req)).status || '');
