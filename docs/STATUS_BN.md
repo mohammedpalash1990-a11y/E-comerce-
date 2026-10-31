@@ -1,25 +1,33 @@
 # প্রকল্পের বর্তমান অবস্থা
 
-## MVP-তে আছে
-- কাস্টমার storefront, category filter, search, cart
-- customer registration/login এবং order history
-- seller product submission ও seller order view
-- admin seller/product moderation এবং audit log
-- COD checkout, seller-wise sub-order, commission calculation ও stock deduction
-- API integration tests, OpenAPI contract, Prisma target schema, Docker/CI scaffolding
+## GitHub-এ বর্তমানে যা আছে
+- বাংলা-প্রথম customer storefront: category ও product list, search
+- Node.js API: health, category/product list, development login, COD order creation
+- SQLite development database এবং demo seed account
+- Checkout-এ stock validation ও deduction
+- API proxy-সহ web server
+- PostgreSQL-এর প্রাথমিক Prisma schema, OpenAPI starter, Docker/CI scaffolding
 
-## পরীক্ষার অবস্থা
-বর্তমান development environment-এ API integration test suite-এর ৫টি test পাস করেছে। CI workflow-ও যুক্ত আছে।
+## এখনো তৈরি হয়নি
+1. পূর্ণ seller onboarding, product submission, inventory management ও seller order fulfilment
+2. Admin moderation, user management, finance, commission ও payout workflows
+3. এক অর্ডারকে seller-wise sub-order-এ ভাগ করা এবং settlement ledger
+4. Customer address book, order history, returns/refunds ও notifications
+5. bKash/Nagad/SSLCommerz/card payment gateway এবং courier API
+6. SQLite adapter থেকে production PostgreSQL adapter-এ migration; Prisma schema validate/migrate
+7. সম্পূর্ণ Android/iOS app
 
-## এখনো production-ready নয়
-1. API development adapter SQLite ব্যবহার করে; PostgreSQL production adapter ও migrations সম্পন্ন করতে হবে।
-2. bKash/Nagad/SSLCommerz বা card gateway live নয়; COD-ই একমাত্র enabled method।
-3. Courier API, tracking, label, COD remittance reconciliation live নয়।
-4. Mobile app scaffold আছে; সম্পূর্ণ Android/iOS app implementation নয়।
-5. Docker image/compose deployment বাস্তবে target hosting-এ যাচাই করতে হবে।
-6. Rate limiting, secrets rotation, backup/restore, observability, penetration test এবং privacy/legal review প্রয়োজন।
+## পরীক্ষা
+বর্তমান GitHub branch-এ একটি API smoke test রাখা হয়েছে। CI-তে Node.js 22 দিয়ে `npm run check` চলে। এই scaffold-এর সব deployment path এখনো বাস্তবে যাচাই করা হয়নি।
 
-## পরবর্তী কাজের অগ্রাধিকার
-P0: PostgreSQL adapter + migration + automated integration tests।
-P1: payment gateway sandbox integration, courier sandbox integration, refunds/returns।
-P2: mobile app, analytics, customer support, finance ledger and payout approvals।
+## Production blockers
+- SQLite development adapter; production PostgreSQL adapter ও migration প্রয়োজন
+- In-memory demo session; production-grade secure session/token lifecycle প্রয়োজন
+- COD ছাড়া payment method live নয়
+- Courier, tracking, returns/refunds এবং reconciliation নেই
+- Rate limiting, monitoring, backup/restore, privacy/legal review ও penetration test প্রয়োজন
+
+## পরবর্তী অগ্রাধিকার
+P0: PostgreSQL adapter, schema validation/migrations, robust authentication and role authorization.
+P1: Seller workflows, admin moderation, multi-seller orders, commissions and payout ledger.
+P2: Payment/courier sandbox integration, returns/refunds, notifications and mobile app.
