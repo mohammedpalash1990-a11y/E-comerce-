@@ -197,7 +197,10 @@ const server = http.createServer(async (req, res) => {
           const changed = q("UPDATE products SET stock=stock-? WHERE id=? AND stock>=? AND active=1 AND status='ACTIVE'").run(line.quantity, line.productId, line.quantity);
           if (changed.changes !== 1) throw new Error('Stock changed; please refresh your cart');
         }
-        q('INSERT INTO orders VALUES(?,?,?,?,?)').run(id, user.id, total, 'CONFIRMED', new Date().toISOString());\n        for (const line of lines) {\n          q('INSERT INTO order_items VALUES(?,?,?,?,?,?)').run(randomUUID(), id, line.productId, line.name_bn, line.quantity, line.unit_price_paisa);\n        }
+        q('INSERT INTO orders VALUES(?,?,?,?,?)').run(id, user.id, total, 'CONFIRMED', new Date().toISOString());
+        for (const line of lines) {
+          q('INSERT INTO order_items VALUES(?,?,?,?,?,?)').run(randomUUID(), id, line.productId, line.name_bn, line.quantity, line.unit_price_paisa);
+        }
         db.exec('COMMIT');
       } catch (error) {
         db.exec('ROLLBACK');
