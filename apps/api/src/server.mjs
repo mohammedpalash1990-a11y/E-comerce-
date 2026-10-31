@@ -239,12 +239,17 @@ const server = http.createServer(async (req, res) => {
       if (!requireRole(user, 'ADMIN', res)) return;
       const next = String((await read(req)).status || '');
       if (!['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'].includes(next)) return send(res, 400, { error: 'Invalid order status' });
-      const order = q('SELECT id,status FROM orders WHERE id=?').get(orderStatusRoute);
-      if (!order) return send(res, 404, { error: 'Order not found' });
-      const transitions = { CONFIRMED: ['PROCESSING', 'CANCELLED'], PROCESSING: ['SHIPPED', 'CANCELLED'], SHIPPED: ['DELIVERED'] };
-      if (!(transitions[order.status] || []).includes(next)) return send(res, 409, { error: 'এই অর্ডারের বর্তমান অবস্থা থেকে এই পরিবর্তন করা যাবে না' });
       db.exec('BEGIN IMMEDIATE');
       try {
+        // Re-read the order only after acquiring the write lock. This prevents
+        // concurrent cancellation requests from restoring the same stock twice.
+        const order = q('SELECT id,status FROM orders WHERE id=?').get(orderStatusRoute);
+        if (!order) { db.exec('ROLLBACK'); return send(res, 404, { error: 'Order not found' }); }
+        const transitions = { CONFIRMED: ['PROCESSING', 'CANCELLED'], PROCESSING: ['SHIPPED', 'CANCELLED'], SHIPPED: ['DELIVERED'] };
+        if (!(transitions[order.status] || []).includes(next)) {
+          db.exec('ROLLBACK');
+          return send(res, 409, { error: 'এই অর্ডারের বর্তমান অবস্থা থেকে এই পরিবর্তন করা যাবে না' });
+        }
         if (next === 'CANCELLED') {
           const sellerOrders = q('SELECT id,status FROM seller_orders WHERE order_id=?').all(order.id);
           if (sellerOrders.length) {
