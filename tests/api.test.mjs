@@ -101,4 +101,22 @@ test('catalog, seller product submission and admin moderation work with role che
   assert.equal(history.data.data[0].items[0].name_bn, 'নতুন ব্যাগ');
   assert.equal(history.data.data[0].delivery.address, 'House 10, Road 2');
   assert.equal(history.data.data[0].delivery.area, 'Dhaka');
+
+  const stockAfterFirstOrder = await request('/api/v1/products?q=New%20Bag');
+  assert.equal(stockAfterFirstOrder.data.data[0].stock, 5);
+
+  const secondCheckout = await request('/api/v1/checkout', {
+    method: 'POST', token: customerLogin.data.token,
+    body: { delivery: { name: 'Test Customer', phone: '01700000003', address: 'House 10, Road 2', area: 'Dhaka' }, items: [{ productId: created.data.data.id, quantity: 1 }] }
+  });
+  assert.equal(secondCheckout.status, 201);
+  const latestOrders = await request('/api/v1/admin/orders', { token: adminToken });
+  const cancelOrderId = latestOrders.data.data[0].id;
+  const cancelled = await request('/api/v1/admin/orders/' + cancelOrderId + '/status', {
+    method: 'POST', token: adminToken, body: { status: 'CANCELLED' }
+  });
+  assert.equal(cancelled.status, 200);
+  assert.equal(cancelled.data.data.status, 'CANCELLED');
+  const stockAfterCancellation = await request('/api/v1/products?q=New%20Bag');
+  assert.equal(stockAfterCancellation.data.data[0].stock, 5);
 });
