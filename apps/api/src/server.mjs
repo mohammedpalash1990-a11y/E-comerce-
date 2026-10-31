@@ -169,13 +169,13 @@ const server = http.createServer(async (req, res) => {
       })) });
     }
 
-    const orderStatusRoute = path.match(/^\\/api\\/v1\\/admin\\/orders\\/([A-Fa-f0-9-]+)\\/status$/);
+    const orderStatusRoute = path.startsWith('/api/v1/admin/orders/') && path.endsWith('/status') ? path.slice('/api/v1/admin/orders/'.length, -'/status'.length) : '';
     if (req.method === 'POST' && orderStatusRoute) {
       const user = sessionFor(req);
       if (!requireRole(user, 'ADMIN', res)) return;
       const next = String((await read(req)).status || '');
       if (!['PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'].includes(next)) return send(res, 400, { error: 'Invalid order status' });
-      const order = q('SELECT id,status FROM orders WHERE id=?').get(orderStatusRoute[1]);
+      const order = q('SELECT id,status FROM orders WHERE id=?').get(orderStatusRoute);
       if (!order) return send(res, 404, { error: 'Order not found' });
       const transitions = { CONFIRMED: ['PROCESSING', 'CANCELLED'], PROCESSING: ['SHIPPED', 'CANCELLED'], SHIPPED: ['DELIVERED'] };
       if (!(transitions[order.status] || []).includes(next)) return send(res, 409, { error: 'এই অর্ডারের বর্তমান অবস্থা থেকে এই পরিবর্তন করা যাবে না' });
