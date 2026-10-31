@@ -85,6 +85,15 @@ test('catalog, seller product submission and admin moderation work with role che
   assert.equal(checkout.data.data.total_bdt, 1700);
   assert.match(checkout.data.data.orderNumber, /^BD-[A-F0-9]{8}$/);
   const history = await request('/api/v1/customer/orders', { token: customerLogin.data.token });
+  const adminOrders = await request('/api/v1/admin/orders', { token: adminToken });
+  assert.equal(adminOrders.status, 200);
+  assert.equal(adminOrders.data.data[0].delivery.area, 'Dhaka');
+  const orderId = adminOrders.data.data[0].id;
+  const processing = await request('/api/v1/admin/orders/' + orderId + '/status', { method: 'POST', token: adminToken, body: { status: 'PROCESSING' } });
+  assert.equal(processing.status, 200);
+  const invalidTransition = await request('/api/v1/admin/orders/' + orderId + '/status', { method: 'POST', token: adminToken, body: { status: 'CONFIRMED' } });
+  assert.equal(invalidTransition.status, 409);
+
   assert.equal(history.status, 200);
   assert.equal(history.data.data.length, 1);
   assert.equal(history.data.data[0].total_bdt, 1700);
