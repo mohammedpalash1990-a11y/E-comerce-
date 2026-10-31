@@ -83,6 +83,26 @@ test('catalog, seller product submission and admin moderation work with role che
   });
   assert.equal(checkout.status, 201);
   assert.equal(checkout.data.data.total_bdt, 1700);
+  const sellerOrders = await request('/api/v1/seller/orders', { token: sellerToken });
+  assert.equal(sellerOrders.status, 200);
+  assert.equal(sellerOrders.data.data.length, 1);
+  assert.equal(sellerOrders.data.data[0].subtotal_bdt, 1700);
+  assert.equal(sellerOrders.data.data[0].items[0].quantity, 2);
+  const sellerOrderId = sellerOrders.data.data[0].id;
+  const sellerProcessing = await request('/api/v1/seller/orders/' + sellerOrderId + '/status', {
+    method: 'POST', token: sellerToken, body: { status: 'PROCESSING' }
+  });
+  assert.equal(sellerProcessing.status, 200);
+  assert.equal(sellerProcessing.data.data.parent_status, 'PROCESSING');
+  const sellerShipped = await request('/api/v1/seller/orders/' + sellerOrderId + '/status', {
+    method: 'POST', token: sellerToken, body: { status: 'SHIPPED' }
+  });
+  assert.equal(sellerShipped.status, 200);
+  const sellerDelivered = await request('/api/v1/seller/orders/' + sellerOrderId + '/status', {
+    method: 'POST', token: sellerToken, body: { status: 'DELIVERED' }
+  });
+  assert.equal(sellerDelivered.status, 200);
+  assert.equal(sellerDelivered.data.data.parent_status, 'DELIVERED');
   assert.match(checkout.data.data.orderNumber, /^BD-[A-F0-9]{8}$/);
   const history = await request('/api/v1/customer/orders', { token: customerLogin.data.token });
   const adminOrders = await request('/api/v1/admin/orders', { token: adminToken });
