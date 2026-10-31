@@ -40,16 +40,23 @@ $('#search').oninput=drawProducts;$('#searchBtn').onclick=drawProducts;$('#openC
 $('#checkout').onclick=async()=>{
  if(!Object.keys(cart).length){toast('কার্ট খালি আছে');return}
  if(!apiReady){toast('লাইভ অর্ডারের জন্য সার্ভার সংযোগ প্রয়োজন');return}
- const phone=prompt('আপনার কাস্টমার মোবাইল নম্বর লিখুন');
+ const name=prompt('ডেলিভারি গ্রহণকারীর নাম লিখুন');
+ if(!name)return;
+ const phone=prompt('অর্ডার ও ডেলিভারির জন্য বাংলাদেশি মোবাইল নম্বর লিখুন (01XXXXXXXXX)');
  if(!phone)return;
- const password=prompt('আপনার পাসওয়ার্ড লিখুন');
+ const address=prompt('বাসা/রোড/গ্রামসহ পূর্ণ ডেলিভারি ঠিকানা লিখুন');
+ if(!address)return;
+ const area=prompt('এলাকা / থানা / জেলা লিখুন');
+ if(!area)return;
+ const note=prompt('ডেলিভারি নোট (না থাকলে ফাঁকা রাখুন)')||'';
+ const password=prompt('আপনার কাস্টমার অ্যাকাউন্টের পাসওয়ার্ড লিখুন');
  if(!password)return;
  const button=$('#checkout');button.disabled=true;button.textContent='অর্ডার জমা হচ্ছে...';
  try{
   const login=await fetch('/api/v1/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({phone,password})});
   const auth=await login.json();if(!login.ok)throw Error(auth.error||'লগইন করা যায়নি');
   if(auth.data.role!=='CUSTOMER')throw Error('কাস্টমার অ্যাকাউন্ট দিয়ে অর্ডার করুন');
-  const order=await fetch('/api/v1/checkout',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+auth.token},body:JSON.stringify({items:Object.entries(cart).map(([productId,quantity])=>({productId,quantity}))})});
+  const order=await fetch('/api/v1/checkout',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+auth.token},body:JSON.stringify({delivery:{name,phone,address,area,note},items:Object.entries(cart).map(([productId,quantity])=>({productId,quantity}))})});
   const result=await order.json();if(!order.ok)throw Error(result.error||'অর্ডার জমা হয়নি');
   cart={};save();$('#drawer').classList.remove('open');toast('অর্ডার সফল: '+result.data.orderNumber);
  }catch(error){toast(error.message)}
