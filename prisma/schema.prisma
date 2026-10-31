@@ -1,0 +1,72 @@
+generator client { provider = "prisma-client-js" }
+datasource db { provider = "postgresql" url = env("DATABASE_URL") }
+enum Role { CUSTOMER SELLER ADMIN }
+enum ProductStatus { PENDING_REVIEW ACTIVE REJECTED ARCHIVED }
+enum OrderStatus { CONFIRMED PROCESSING SHIPPED DELIVERED CANCELLED }
+model User {
+ id String @id @default(cuid())
+ phone String @unique
+ email String? @unique
+ fullName String
+ passwordHash String
+ role Role @default(CUSTOMER)
+ createdAt DateTime @default(now())
+ orders Order[]
+ seller Seller?
+}
+model Seller {
+ id String @id @default(cuid())
+ userId String @unique
+ storeName String @unique
+ slug String @unique
+ status String @default("PENDING_REVIEW")
+ commissionBps Int @default(800)
+ user User @relation(fields:[userId],references:[id])
+ products Product[]
+}
+model Category {
+ id String @id @default(cuid())
+ nameBn String
+ nameEn String
+ slug String @unique
+ products Product[]
+}
+model Product {
+ id String @id @default(cuid())
+ sellerId String
+ categoryId String
+ nameBn String
+ nameEn String
+ slug String @unique
+ description String @default("") @db.Text
+ pricePaisa BigInt
+ stock Int @default(0)
+ status ProductStatus @default(PENDING_REVIEW)
+ seller Seller @relation(fields:[sellerId],references:[id])
+ category Category @relation(fields:[categoryId],references:[id])
+}
+model Order {
+ id String @id @default(cuid())
+ orderNumber String @unique
+ customerId String
+ status OrderStatus @default(CONFIRMED)
+ paymentMethod String @default("COD")
+ paymentStatus String @default("PENDING")
+ subtotalPaisa BigInt
+ shippingPaisa BigInt
+ totalPaisa BigInt
+ address Json
+ createdAt DateTime @default(now())
+ customer User @relation(fields:[customerId],references:[id])
+ items OrderItem[]
+}
+model OrderItem {
+ id String @id @default(cuid())
+ orderId String
+ productId String
+ productName String
+ unitPricePaisa BigInt
+ quantity Int
+ lineTotalPaisa BigInt
+ order Order @relation(fields:[orderId],references:[id])
+}
