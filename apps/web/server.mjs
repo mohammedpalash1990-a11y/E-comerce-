@@ -1,12 +1,19 @@
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { extname, join, normalize } from 'node:path';
+import { extname } from 'node:path';
 const root=new URL('./public/',import.meta.url);
-const port=Number(process.env.WEB_PORT||3000);
+const port=Number(process.env.WEB_PORT||3000),apiPort=Number(process.env.PORT||4000);
 const types={'.html':'text/html; charset=utf-8','.css':'text/css','.js':'text/javascript','.svg':'image/svg+xml'};
 http.createServer(async(req,res)=>{
  try{
-  const pathname=decodeURIComponent(new URL(req.url,'http://localhost').pathname);
+  const url=new URL(req.url,'http://localhost'),pathname=decodeURIComponent(url.pathname);
+  if(pathname.startsWith('/api/')){
+   const upstream=http.request({hostname:'127.0.0.1',port:apiPort,path:pathname+url.search,method:req.method,headers:{...req.headers,host:'127.0.0.1:'+apiPort}},response=>{
+    res.writeHead(response.statusCode||502,response.headers);response.pipe(res);
+   });
+   upstream.on('error',()=>{if(!res.headersSent){res.writeHead(502,{'content-type':'application/json'});res.end(JSON.stringify({error:'API unavailable'}));}});
+   req.pipe(upstream);return;
+  }
   const route=pathname==='/'?'index.html':pathname.slice(1);
   if(route.includes('..'))throw new Error('Invalid path');
   const file=await readFile(new URL(route,root));
