@@ -31,3 +31,10 @@
 P0: PostgreSQL adapter, schema validation/migrations, robust authentication and role authorization.
 P1: Seller workflows, admin moderation, multi-seller orders, commissions and payout ledger.
 P2: Payment/courier sandbox integration, returns/refunds, notifications and mobile app.
+
+
+## অর্ডার পরিচালনা
+- কাস্টমার COD checkout-এ নাম, বাংলাদেশি মোবাইল, পূর্ণ ঠিকানা ও এলাকা বাধ্যতামূলক।
+- Admin Console-এ সাম্প্রতিক অর্ডার, গ্রাহক ও ডেলিভারি তথ্য দেখা যায়।
+- অর্ডারের অবস্থা নির্দিষ্ট ধাপে পরিবর্তন করা যায়; অনুমোদিত অবস্থায় বাতিল হলে স্টক ফেরত যোগ হয়।
+- Seller-wise fulfilment, multi-vendor order splitting ও settlement পরবর্তী কাজ।
