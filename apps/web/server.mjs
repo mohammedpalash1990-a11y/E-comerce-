@@ -2,13 +2,13 @@ import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname } from 'node:path';
 const root=new URL('./public/',import.meta.url);
-const port=Number(process.env.WEB_PORT||3000),apiPort=Number(process.env.PORT||4000);
+const port=Number(process.env.WEB_PORT||3000),apiPort=Number(process.env.PORT||4000),apiHost=process.env.API_HOST||'127.0.0.1';
 const types={'.html':'text/html; charset=utf-8','.css':'text/css','.js':'text/javascript','.svg':'image/svg+xml'};
 http.createServer(async(req,res)=>{
  try{
   const url=new URL(req.url,'http://localhost'),pathname=decodeURIComponent(url.pathname);
   if(pathname.startsWith('/api/')){
-   const upstream=http.request({hostname:'127.0.0.1',port:apiPort,path:pathname+url.search,method:req.method,headers:{...req.headers,host:'127.0.0.1:'+apiPort}},response=>{
+   const upstream=http.request({hostname:apiHost,port:apiPort,path:pathname+url.search,method:req.method,headers:{...req.headers,host:apiHost+':'+apiPort}},response=>{
     res.writeHead(response.statusCode||502,response.headers);response.pipe(res);
    });
    upstream.on('error',()=>{if(!res.headersSent){res.writeHead(502,{'content-type':'application/json'});res.end(JSON.stringify({error:'API unavailable'}));}});
