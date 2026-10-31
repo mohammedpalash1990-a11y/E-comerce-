@@ -245,7 +245,20 @@ const server = http.createServer(async (req, res) => {
       if (!(transitions[order.status] || []).includes(next)) return send(res, 409, { error: 'এই অর্ডারের বর্তমান অবস্থা থেকে এই পরিবর্তন করা যাবে না' });
       db.exec('BEGIN IMMEDIATE');
       try {
-        if (next === 'CANCELLED') for (const item of q('SELECT product_id,quantity FROM order_items WHERE order_id=?').all(order.id)) q('UPDATE products SET stock=stock+? WHERE id=?').run(item.quantity, item.product_id);
+        if (next === 'CANCELLED') {
+          const sellerOrders = q('SELECT id,status FROM seller_orders WHERE order_id=?').all(order.id);
+          if (sellerOrders.length) {
+            for (const sellerOrder of sellerOrders) {
+              if (sellerOrder.status === 'CANCELLED') continue;
+              for (const item of q('SELECT product_id,quantity FROM order_items WHERE seller_order_id=?').all(sellerOrder.id)) {
+                q('UPDATE products SET stock=stock+? WHERE id=?').run(item.quantity, item.product_id);
+              }
+              q("UPDATE seller_orders SET status='CANCELLED' WHERE id=?").run(sellerOrder.id);
+            }
+          } else {
+            for (const item of q('SELECT product_id,quantity FROM order_items WHERE order_id=?').all(order.id)) q('UPDATE products SET stock=stock+? WHERE id=?').run(item.quantity, item.product_id);
+          }
+        }
         q('UPDATE orders SET status=? WHERE id=?').run(next, order.id);
         db.exec('COMMIT');
       } catch (error) { db.exec('ROLLBACK'); throw error; }
