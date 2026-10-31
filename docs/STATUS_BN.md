@@ -9,6 +9,7 @@
 - Seller login, নিজের product list এবং নতুন পণ্য জমা; নতুন পণ্য admin approval না পাওয়া পর্যন্ত storefront-এ প্রকাশ হয় না
 - Admin product moderation: pending product দেখা, approve / reject
 - Admin order queue: customer ও delivery তথ্য, line items, মোট মূল্য এবং status দেখা
+- Admin order queue-তে customer-এর optional delivery note-ও দেখা যায়; malformed order-status URL reject করা হয়
 - Admin order status workflow: CONFIRMED → PROCESSING → SHIPPED → DELIVERED; নির্দিষ্ট পর্যায়ে CANCELLED
 - অনুমোদিত অবস্থায় order cancel হলে transaction-এর মধ্যে stock ফেরত যোগ
 - Node.js API, SQLite development database, demo seed account, API proxy এবং CI test workflow
