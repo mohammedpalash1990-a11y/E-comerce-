@@ -83,4 +83,11 @@ test('catalog, seller product submission and admin moderation work with role che
   });
   assert.equal(checkout.status, 201);
   assert.equal(checkout.data.data.total_bdt, 1700);
+  assert.match(checkout.data.data.orderNumber, /^BD-[A-F0-9]{8}$/);
+  const history = await request('/api/v1/customer/orders', { token: customerLogin.data.token });
+  assert.equal(history.status, 200);
+  assert.equal(history.data.data.length, 1);
+  assert.equal(history.data.data[0].total_bdt, 1700);
+  assert.equal(history.data.data[0].items[0].quantity, 2);
+  assert.equal(history.data.data[0].items[0].name_bn, 'নতুন ব্যাগ');
 });
