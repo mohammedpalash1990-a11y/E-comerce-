@@ -105,3 +105,36 @@ test('duplicate payout request is rejected without inserting a second payout',as
   await assert.rejects(repo.requestPayout(sellerId,{amount_bdt:500,method:'BKASH',account:'01711111111'}),e=>e.status===409&&e.code==='DUPLICATE_PAYOUT');
   assert.equal(db.calls.some(x=>x.sql?.includes('INSERT INTO payouts')),false);
 });
+
+test('courier booking locks and scopes the seller order before creating a shipment',async()=>{
+  const db=fakeDatabase((method,sql)=>{if(sql.includes('FROM seller_profiles'))return{user_id:sellerId,status:'APPROVED'};if(sql.includes('FROM seller_orders so JOIN orders'))return{id:'so-1',order_id:'o-1',status:'PROCESSING',delivery_area:'Dhaka'};return undefined;});
+  const repo=createPostgresSellerRepository(db,{inventoryRepository:inventory,ordersRepository:{async transitionSellerOrder(){}} ,createId:(()=>{let n=0;return()=> 'ship-'+(++n);})()});
+  const result=await repo.bookSellerShipment(sellerId,'so-1','PATHAO');
+  assert.equal(result.status,'BOOKED');
+  assert.equal(result.provider,'PATHAO');
+  const orderRead=db.calls.find(x=>x.sql?.includes('FROM seller_orders so JOIN orders')));
+  assert.deepEqual(orderRead.values,['so-1',sellerId]);
+  assert.ok(db.calls.some(x=>x.sql?.includes('INSERT INTO shipments')));
+  assert.ok(db.calls.some(x=>x.sql?.includes('COURIER_BOOKED')));
+});
+
+test('shipment lookup cannot access a shipment owned by another seller',async()=>{
+  const db=fakeDatabase((method,sql)=>sql.includes('FROM seller_profiles')?{user_id:sellerId,status:'APPROVED'}:undefined);
+  const repo=createPostgresSellerRepository(db,{inventoryRepository:inventory});
+  await assert.rejects(repo.updateSellerShipment(sellerId,'foreign-shipment','IN_TRANSIT'),e=>e.status===404&&e.code==='SHIPMENT_NOT_FOUND');
+  const lookup=db.calls.find(x=>x.sql?.includes('FROM shipments sh JOIN seller_orders so')));
+  assert.deepEqual(lookup.values,['foreign-shipment',sellerId]);
+  assert.equal(db.calls.some(x=>x.sql?.includes('UPDATE shipments')),false);
+});
+
+test('delivery confirmation updates shipment and transitions the seller order in the same transaction',async()=>{
+  const db=fakeDatabase((method,sql)=>sql.includes('FROM seller_profiles')?{user_id:sellerId,status:'APPROVED'}:sql.includes('FROM shipments sh JOIN seller_orders')?{id:'ship-1',seller_order_id:'so-1',order_id:'o-1',seller_id:sellerId,seller_order_status:'SHIPPED',provider:'PATHAO',tracking_id:'PA-123',customer_id:'buyer-1'}:undefined);
+  let transition;
+  const repo=createPostgresSellerRepository(db,{inventoryRepository:inventory,ordersRepository:{async transitionSellerOrder(input){transition=input;return{id:'so-1',status:'DELIVERED'};}}});
+  const result=await repo.updateSellerShipment(sellerId,'ship-1','DELIVERED');
+  assert.deepEqual(result,{id:'ship-1',status:'DELIVERED'});
+  assert.equal(transition.sellerId,sellerId);
+  assert.equal(transition.sellerOrderId,'so-1');
+  assert.equal(transition.nextStatus,'DELIVERED');
+  assert.ok(db.calls.some(x=>x.sql?.includes('UPDATE shipments SET status')));
+});
