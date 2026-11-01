@@ -101,11 +101,8 @@ test('catalog, seller product submission and admin moderation work with role che
   assert.equal(sellerOrders.data.data[0].subtotal_bdt, 1700);
   assert.equal(sellerOrders.data.data[0].items[0].quantity, 2);
   const sellerOrderId = sellerOrders.data.data[0].id;
-  const sellerProcessing = await request('/api/v1/seller/orders/' + sellerOrderId + '/status', {
-    method: 'POST', token: sellerToken, body: { status: 'PROCESSING' }
-  });
-  assert.equal(sellerProcessing.status, 200);
-  assert.equal(sellerProcessing.data.data.parent_status, 'PROCESSING');
+  // Admin's parent-order transition also advances eligible seller sub-orders.
+  assert.equal(sellerOrders.data.data[0].status, 'PROCESSING');
   const sellerShipped = await request('/api/v1/seller/orders/' + sellerOrderId + '/status', {
     method: 'POST', token: sellerToken, body: { status: 'SHIPPED' }
   });
