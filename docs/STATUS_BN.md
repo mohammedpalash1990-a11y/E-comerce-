@@ -50,8 +50,14 @@
 - P2: Payment/courier sandbox integration, returns/refunds, notifications
 - P3: Production monitoring, backups, security review এবং mobile app
 
+## Storefront preview UX সংশোধন (২০২৬-১১-০১)
+- API offline থাকলে storefront আর hard-coded ৮টি নমুনা পণ্যকে live inventory হিসেবে দেখায় না; পরিষ্কার offline/preview বার্তা ও retry control দেখায়।
+- পণ্য ও category API থেকে একসঙ্গে লোড হয়; cart-এর localStorage key versioned করা হয়েছে।
+- Seller এবং Admin login পেজে `/health` endpoint দিয়ে API/database connection status দেখায়।
+- নতুন frontend regression test যোগ হয়েছে; CI pass করেছে।
+
 ## Neon PostgreSQL প্রস্তুতি (২০২৬-১১-০১)
 - Neon project `haat-bangladesh` তৈরি হয়েছে (PostgreSQL 17, Singapore region); database `haat`।
-- মূল `main` branch-এ PostgreSQL schema `001_init.sql` এবং index migration `002_indexes.sql` প্রয়োগ করা হয়েছে; ২৪টি application table এবং ৪৫টি index যাচাই করা হয়েছে।
+- মূল `main` branch-এ PostgreSQL schema `001_init.sql` এবং index migration `002_indexes.sql` প্রয়োগ করা হয়েছে; ২৪টি application table, ৪৫টি index ও ২টি migration record যাচাই করা হয়েছে। ৮টি প্রাথমিক marketplace category-ও seed করা হয়েছে।
 - আলাদা `haat-schema-validation` branch-এও schema যাচাইয়ের জন্য migration চালানো হয়েছে।
 - এটি কেবল database schema provisioning; API এখনো `node:sqlite` synchronous API ব্যবহার করে। PostgreSQL runtime adapter, route-level async conversion, seed compatibility ও end-to-end tests সম্পন্ন না হওয়া পর্যন্ত production API deploy করা যাবে না।
