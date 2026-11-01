@@ -1,0 +1,45 @@
+# PostgreSQL runtime adapter — developer notes
+
+The adapter in `apps/api/src/postgres-runtime.mjs` is an isolated, testable foundation. It is **not wired into `core.mjs` or the HTTP server**, and must not be treated as a production-ready database runtime.
+
+## Contract
+
+```js
+import pg from 'pg';
+import { createPostgresDatabase } from './postgres-runtime.mjs';
+
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const { q, tx } = createPostgresDatabase(pool);
+
+const product = await q('SELECT id FROM products WHERE id=?').get(productId);
+const rows = await q('SELECT id FROM products WHERE active=?').all(true);
+const result = await q('UPDATE products SET active=? WHERE id=?').run(false, productId);
+
+await tx(async () => {
+  await q('UPDATE inventory SET stock=stock-? WHERE product_id=?').run(1, productId);
+});
+```
+
+All methods are asynchronous. Every caller must use `await`; do not attempt to preserve the old synchronous `node:sqlite` API.
+
+## Transaction guarantees
+
+- Top-level transaction checks out one Pool client, starts `BEGIN`, routes all async-context queries to that client, then commits or rolls back.
+- Nested `tx` calls use uniquely named savepoints.
+- Client release occurs in `finally`, including failed transactions.
+- Concurrent async transactions are isolated using `AsyncLocalStorage`.
+- A failed savepoint rolls back to that savepoint and can be caught by the outer transaction.
+
+## Important constraints
+
+- This module expects a pg-compatible Pool supplied by its caller; it does not import `pg` or create a connection.
+- `run()` returns `changes` from PostgreSQL `rowCount`. Insert identifiers are available only when SQL explicitly includes `RETURNING id`.
+- The placeholder translator handles positional `?` parameters outside SQL strings, quoted identifiers, comments and dollar-quoted bodies. PostgreSQL operators that contain question marks (for example JSONB `?`, `?|`, `?&`) must be reviewed/escaped or expressed using named SQL alternatives before migration.
+- Do not share a transaction context with detached/background promises that outlive the transaction callback.
+- Configure pool limits, TLS, connection timeouts, shutdown handling and numeric type parsing at the application bootstrap layer.
+- Existing application modules are synchronous and are not compatible until all query/transaction callsites are converted to async/await.
+- Production startup guard remains mandatory until the complete API passes PostgreSQL integration and concurrency tests.
+
+## Tests
+
+`tests/postgres-runtime.test.mjs` uses a fake Pool to validate query parameterization, async result contracts, transaction pinning, rollback, nested savepoints, and concurrent transaction isolation without requiring a live database.
