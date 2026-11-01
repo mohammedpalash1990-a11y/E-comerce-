@@ -78,3 +78,18 @@
 - Fake Pool-ভিত্তিক test-এ query binding, transaction isolation, nested savepoint, rollback, migration ordering/idempotence/failure, এবং BIGINT parsing যাচাই করা হয়েছে। GitHub Actions-এর test ও build check সর্বশেষ যাচাইকৃত adapter commit-এ pass করেছে।
 - **সীমাবদ্ধতা:** এই adapter এখনো `core.mjs` বা API server-এ wired নয়; route-গুলোর ২৪৯টি synchronous query call pattern ও ২৬টি synchronous transaction call pattern async conversion চায়। তাই production guard অপরিবর্তিত এবং PostgreSQL production runtime এখনো চালু নয়।
 - বিস্তারিত: `docs/POSTGRES_MIGRATION_AUDIT_BN.md` এবং `docs/POSTGRES_RUNTIME_ADAPTER_BN.md`।
+
+
+## PostgreSQL Seller Workspace migration (2026-11-01)
+
+এই feature branch-এ Seller Workspace-এর PostgreSQL migration-এর প্রথম কার্যকর slice যোগ করা হয়েছে:
+
+- Seller profile ও dashboard aggregate PostgreSQL থেকে পড়া হয়।
+- Seller product list/detail/create/update/archive PostgreSQL repository ব্যবহার করে; প্রতিটি product read/write-এ authenticated seller ID দিয়ে ownership scope করা হয়।
+- নতুন product-এর stock সরাসরি products টেবিলে লেখা হয় না; shared PostgreSQL inventory repository দিয়ে stock movement ledger-এ record হয়।
+- Product submit/edit audit log-এ সংরক্ষিত হয় এবং moderation-এর জন্য `PENDING_REVIEW` হয়।
+- Finance summary, settlement history, payout history এবং payout request PostgreSQL থেকে চলে; অর্থ integer paisa-তে রাখা হয়।
+- Payout request seller profile row lock করে, approval state যাচাই করে, duplicate active request ও available balance পরীক্ষা করে।
+- PostgreSQL mode-এ legacy SQLite seller routes আর register হয় না; SQLite-only development mode অপরিবর্তিত থাকে।
+
+**এখনো বাকি:** PostgreSQL courier quote/booking ও shipment status routes; admin finance/payout moderation; real PostgreSQL integration test এবং পূর্ণ end-to-end validation। তাই এই branch production-ready নয়; merge/deploy করা হয়নি।
