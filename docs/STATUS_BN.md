@@ -90,6 +90,7 @@
 - Product submit/edit audit log-এ সংরক্ষিত হয় এবং moderation-এর জন্য `PENDING_REVIEW` হয়।
 - Finance summary, settlement history, payout history এবং payout request PostgreSQL থেকে চলে; অর্থ integer paisa-তে রাখা হয়।
 - Payout request seller profile row lock করে, approval state যাচাই করে, duplicate active request ও available balance পরীক্ষা করে।
+- Courier quote/booking ও shipment status PostgreSQL-এ চলে; shipment read/write-এ seller ownership যাচাই হয় এবং delivery confirmation existing PostgreSQL order transition repository ব্যবহার করে।
 - PostgreSQL mode-এ legacy SQLite seller routes আর register হয় না; SQLite-only development mode অপরিবর্তিত থাকে।
 
-**এখনো বাকি:** PostgreSQL courier quote/booking ও shipment status routes; admin finance/payout moderation; real PostgreSQL integration test এবং পূর্ণ end-to-end validation। তাই এই branch production-ready নয়; merge/deploy করা হয়নি।
+**এখনো বাকি:** admin management/finance/payout moderation; real PostgreSQL integration test এবং পূর্ণ end-to-end validation। তাই এই branch production-ready নয়; merge/deploy করা হয়নি।
