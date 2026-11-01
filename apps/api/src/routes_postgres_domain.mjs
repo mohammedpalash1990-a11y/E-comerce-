@@ -359,6 +359,12 @@ export default function registerPostgresDomain(route, ok, {
 
   // ----- PostgreSQL admin seller and product moderation -----
   if (admin) {
+    route('GET', '/api/v1/admin/customers', ['ADMIN'], invoke(ok, async ({ url }) => admin.listCustomers({ query: url.searchParams.get('q') || '', limit: Number(url.searchParams.get('limit') || 100) })));
+    route('GET', '/api/v1/admin/customers/:id', ['ADMIN'], invoke(ok, async ({ params }) => admin.getCustomer(params[0])));
+    route('GET', '/api/v1/admin/customers/:id/orders', ['ADMIN'], invoke(ok, async ({ params }) => admin.listCustomerOrders(params[0])));
+    route('PUT', '/api/v1/admin/customers/:id', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.updateCustomer({ customerId: params[0], actorId: user.id, body })));
+    route('POST', '/api/v1/admin/customers/:id/suspend', ['ADMIN'], invoke(ok, async ({ user, params }) => admin.setCustomerStatus({ customerId: params[0], actorId: user.id, status: 'SUSPENDED' })));
+    route('POST', '/api/v1/admin/customers/:id/activate', ['ADMIN'], invoke(ok, async ({ user, params }) => admin.setCustomerStatus({ customerId: params[0], actorId: user.id, status: 'ACTIVE' })));
     route('GET', '/api/v1/admin/sellers', ['ADMIN'], invoke(ok, async ({ url }) => admin.listSellers({ status: url.searchParams.get('status') || undefined, limit: Number(url.searchParams.get('limit') || 100) })));
     route('GET', '/api/v1/admin/sellers/:id', ['ADMIN'], invoke(ok, async ({ params }) => admin.getSellerOverview(params[0])));
     route('GET', '/api/v1/admin/sellers/:id/products', ['ADMIN'], invoke(ok, async ({ params }) => admin.listSellerProducts(params[0])));
