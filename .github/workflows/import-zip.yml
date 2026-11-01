@@ -26,7 +26,7 @@ jobs:
           unzip -q "$archive" -d /tmp/haat-zip
           source_dir="$(find /tmp/haat-zip -mindepth 1 -maxdepth 1 -type d | head -n 1)"
           test -n "$source_dir"
-          mkdir -p incoming/extracted incoming/conflicts
+          mkdir -p zip-import/extracted zip-import/conflicts
           while IFS= read -r -d '' src; do
             rel="${src#"$source_dir"/}"
             case "$rel" in
@@ -36,11 +36,11 @@ jobs:
               mkdir -p "$(dirname "$rel")"
               cp -a "$src" "$rel"
             else
-              mkdir -p "incoming/conflicts/$(dirname "$rel")"
-              cp -a "$src" "incoming/conflicts/$rel"
+              mkdir -p "zip-import/conflicts/$(dirname "$rel")"
+              cp -a "$src" "zip-import/conflicts/$rel"
             fi
           done < <(find "$source_dir" -type f -print0)
-          printf '%s\n' "ZIP extraction complete. Existing files were preserved; conflicts were saved under incoming/conflicts/." > incoming/IMPORT-REPORT.txt
+          printf '%s\n' "ZIP extraction complete. Existing files were preserved; conflicts were saved under zip-import/conflicts/." > zip-import/IMPORT-REPORT.txt
       - name: Commit extracted files
         run: |
           git config user.name "github-actions[bot]"
