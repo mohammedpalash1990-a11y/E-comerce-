@@ -34,6 +34,15 @@ test('storefront supports adding products to wishlist with login continuation', 
   assert.ok(storefront.includes('account.html?wishlist='));
 });
 
+test('storefront checkout transfers its local cart into the account checkout flow', () => {
+  assert.ok(storefront.includes('account.html?checkout=1'));
+  assert.ok(!storefront.includes('const name=prompt('));
+  assert.ok(!storefront.includes('const password=prompt('));
+  assert.ok(account.includes('syncStorefrontCart'));
+  assert.ok(account.includes("localStorage.getItem('haat_cart_v1')"));
+  assert.ok(account.includes("request('/customer/cart'"));
+});
+
 test('customer and storefront inline JavaScript parses without syntax errors', async () => {
   for (const [name, source] of [['account.html', account], ['index.html', storefront]]) {
     const scripts = source.split('<script').slice(1).map(part => {
