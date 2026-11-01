@@ -20,7 +20,12 @@ const hits = new Map();
 function allow(key, max, windowMs) {
   const t = Date.now(), arr = (hits.get(key) || []).filter(x => t - x < windowMs);
   if (arr.length >= max) { hits.set(key, arr); return false; }
-  arr.push(t);\n  if (!hits.has(key) && hits.size >= 10000) {\n    const oldest = hits.keys().next().value;\n    if (oldest !== undefined) hits.delete(oldest);\n  }\n  hits.set(key, arr); return true;
+  arr.push(t);
+  if (!hits.has(key) && hits.size >= 10000) {
+    const oldest = hits.keys().next().value;
+    if (oldest !== undefined) hits.delete(oldest);
+  }
+  hits.set(key, arr); return true;
 }
 setInterval(() => { const t = Date.now(); for (const [k, v] of hits) if (!v.some(x => t - x < 900000)) hits.delete(k); }, 60000).unref();
 setInterval(() => { try { q('DELETE FROM sessions WHERE expires_at<?').run(now()); } catch {} }, 600000).unref();
