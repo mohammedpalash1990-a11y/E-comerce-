@@ -346,6 +346,22 @@ export function createPostgresAdminRepository(database,{createId=randomUUID,cloc
     });
   }
 
+  async function setShippingCharge({orderId,actorId,shippingBdt}) {
+    const amount=Number(shippingBdt),shipping=Math.round(amount*100);
+    if(!Number.isFinite(amount)||!Number.isSafeInteger(shipping)||shipping<0||shipping>1e7||Math.abs(amount*100-shipping)>1e-7) throw fail(400,'INVALID_SHIPPING_CHARGE','ডেলিভারি চার্জ সঠিক নয়');
+    return database.tx(async()=>{
+      const order=await query('SELECT id,subtotal_paisa,shipping_paisa,discount_paisa,total_paisa,payment_status,status FROM orders WHERE id=? FOR UPDATE').get(String(orderId));
+      if(!order) throw fail(404,'ORDER_NOT_FOUND','অর্ডার পাওয়া যায়নি');
+      if(order.payment_status!=='PENDING'||!['AWAITING_PAYMENT','CONFIRMED','PROCESSING'].includes(order.status)) throw fail(409,'ORDER_SHIPPING_LOCKED','এই অর্ডারে ডেলিভারি চার্জ পরিবর্তন করা যাবে না');
+      const total=integer(order.subtotal_paisa,'subtotal_paisa')+shipping-integer(order.discount_paisa,'discount_paisa');
+      if(total<0) throw fail(409,'INVALID_ORDER_TOTAL','অর্ডারের মোট মূল্য ঋণাত্মক হতে পারে না');
+      await query('UPDATE orders SET shipping_paisa=?,total_paisa=? WHERE id=?').run(shipping,total,String(orderId));
+      await query("UPDATE payments SET amount_paisa=? WHERE order_id=? AND status IN ('PENDING','INITIATED')").run(total,String(orderId));
+      await query('INSERT INTO audit_logs(id,actor_id,action,entity,entity_id,detail,created_at) VALUES(?,?,?,?,?,?,?)').run(makeId(),String(actorId),'SHIPPING_CHARGE_SET','order',String(orderId),JSON.stringify({from:order.shipping_paisa,to:shipping}),stamp());
+      return {id:String(orderId),shipping_bdt:money(shipping),total_bdt:money(total)};
+    });
+  }
+
   async function listRefunds({limit:pageSize=200}={}) {
     const rows=await query('SELECT id,order_id,amount_paisa,reason,status,created_at,decided_at FROM refunds ORDER BY created_at DESC,id DESC LIMIT ?').all(limit(pageSize,200));
     return rows.map(row=>({...row,orderNumber:'BD-'+String(row.order_id).slice(0,8).toUpperCase(),amount_bdt:money(row.amount_paisa)}));
@@ -398,5 +414,5 @@ export function createPostgresAdminRepository(database,{createId=randomUUID,cloc
     return {total_revenue_bdt:money(row.revenue),total_orders:integer(row.orders,'orders'),total_customers:integer(row.customers,'customers'),total_sellers:integer(row.sellers,'sellers'),pending_seller_applications:integer(row.pending_sellers,'pending_sellers'),pending_product_approvals:integer(row.pending_products,'pending_products'),total_products:integer(row.products,'products'),active_products:integer(row.active_products,'active_products'),cancelled_orders:integer(row.cancelled_orders,'cancelled_orders'),pending_payouts:integer(row.pending_payouts,'pending_payouts'),pending_payout_amount_bdt:money(row.pending_payout_amount),platform_commission_bdt:money(row.commission)};
   }
 
-  return Object.freeze({listPayouts,decidePayout,listCustomers,getCustomer,updateCustomer,setCustomerStatus,listCustomerOrders,listSellers,getSeller,getSellerOverview,listSellerProducts,listSellerOrders,listProducts,decideSeller,setCommission,listCategories,createCategory,updateCategory,deleteCategory,listBrands,createBrand,deleteBrand,listCoupons,createCoupon,toggleCoupon,listPendingProducts,moderateProduct,listRefunds,createRefund,approveRefund,rejectRefund,financeSummary,listTransactions,financeReport,listAuditLogs,dashboard});
+  return Object.freeze({listPayouts,decidePayout,listCustomers,getCustomer,updateCustomer,setCustomerStatus,listCustomerOrders,listSellers,getSeller,getSellerOverview,listSellerProducts,listSellerOrders,listProducts,decideSeller,setCommission,listCategories,createCategory,updateCategory,deleteCategory,listBrands,createBrand,deleteBrand,listCoupons,createCoupon,toggleCoupon,listPendingProducts,moderateProduct,setShippingCharge,listRefunds,createRefund,approveRefund,rejectRefund,financeSummary,listTransactions,financeReport,listAuditLogs,dashboard});
 }
