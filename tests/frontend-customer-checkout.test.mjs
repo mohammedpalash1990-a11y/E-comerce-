@@ -5,6 +5,8 @@ import vm from 'node:vm';
 
 const account = await readFile(new URL('../apps/web/public/account.html', import.meta.url), 'utf8');
 const storefront = await readFile(new URL('../apps/web/public/index.html', import.meta.url), 'utf8');
+const seller = await readFile(new URL('../apps/web/public/seller.html', import.meta.url), 'utf8');
+const admin = await readFile(new URL('../apps/web/public/admin.html', import.meta.url), 'utf8');
 
 test('customer forms access reserved name and id controls through form elements', () => {
   assert.ok(account.includes("elements.namedItem('name').value"));
@@ -137,4 +139,40 @@ test('storefront cart sync rejects malformed data and invalid quantities without
     assert.equal(requestCount, 0);
     assert.equal(storage.get('haat_cart_v1'), raw);
   }
+});
+
+
+test('all portals escape HTML metacharacters before rendering API data', () => {
+  for (const [name, source] of Object.entries({ storefront, account, seller, admin })) {
+    assert.ok(source.includes('replace(/[&<>'), name + ' must define an HTML escaping helper');
+    assert.ok(source.includes("]'/g,c=>({"), name + ' must escape quote and tag delimiters');
+    for (const entity of ['&amp;', '&lt;', '&gt;', '&quot;', '&#39;']) {
+      assert.ok(source.includes(entity), name + ' must escape ' + entity);
+    }
+  }
+});
+
+test('customer, seller, admin and storefront render API-provided content through escaping helpers', () => {
+  assert.match(account, /innerHTML=.*esc\(/);
+  assert.match(seller, /innerHTML=.*esc\(/);
+  assert.match(admin, /innerHTML=.*esc\(/);
+  assert.match(storefront, /innerHTML=.*escHtml\(/);
+});
+
+test('customer checkout keeps browser-side required validation on delivery fields', () => {
+  const form = account.match(/<form id="checkoutForm"[\s\S]*?<\/form>/)?.[0] || '';
+  assert.ok(form, 'checkout form exists');
+  for (const field of ['name', 'phone', 'area', 'address']) {
+    assert.match(form, new RegExp('name="' + field + '"[^>]*required'), field + ' must be required');
+  }
+  assert.match(form, /maxlength="100"/);
+  assert.match(form, /maxlength="500"/);
+  assert.match(form, /role="status"/);
+});
+
+test('seller and admin logout both attempt server-side session revocation', () => {
+  assert.match(seller, /call\('\/auth\/logout'/);
+  assert.match(admin, /call\('\/auth\/logout'/);
+  assert.ok(seller.includes("localStorage.removeItem('haat_seller_token')"));
+  assert.ok(admin.includes("localStorage.removeItem('haat_admin_token')"));
 });
