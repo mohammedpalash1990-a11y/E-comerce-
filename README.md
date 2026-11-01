@@ -3,7 +3,7 @@
 বাংলাদেশের জন্য বাংলা-প্রথম multi-vendor e-commerce platform-এর development repository। BDT pricing, customer storefront, seller/admin workspace এবং COD checkout লক্ষ্য করে তৈরি।
 
 ## Current GitHub branch status
-**Active MVP development — public storefront preview is deployed; the backend is still a development service and is not yet hosted publicly. Not production-ready.**
+**Active MVP development — public storefront preview is deployed; the API is not yet publicly hosted and the live catalog/order flows are unavailable on GitHub Pages. Not production-ready.**
 
 ### Implemented in this branch
 - Bengali-first customer storefront with product/category listing and client-side search
@@ -12,6 +12,9 @@
 - COD checkout API with delivery address capture, stock validation, transactional deduction, persisted order line items and customer order-history API
 - Admin order queue with delivery details and controlled order-status transitions; eligible cancellations restore stock
 - Web server proxies `/api/*` requests to the API service
+- Storefront loads only API-backed products; if the API is offline it clearly reports preview/offline status instead of silently showing hard-coded sample products
+- Seller and admin pages show whether the API and database health endpoint is reachable
+- Storefront has a manual API retry control; customer cart persists under a versioned local-storage key
 - Storefront automatically uses live catalogue and COD checkout when served alongside the API; GitHub Pages remains a static preview
 - Prisma PostgreSQL target schema, OpenAPI starter contract, Docker and CI scaffolding
 
@@ -87,4 +90,4 @@ Demo credentials (development only):
 - Seller: `01700000002` / `Seller@12345`
 - Admin: `01700000001` / `Admin@12345`
 
-GitHub Pages is static hosting, so these portal pages cannot reach the API there yet. Run the web and API services together (or deploy the API and web server to a supported host) to exercise login, seller submission, moderation and COD checkout. Never use the demo credentials in a production deployment.
+GitHub Pages is static hosting, so these portal pages cannot reach the API there yet. The storefront now intentionally hides the old hard-coded sample products when the API is offline and displays a clear connection status; it will show only products returned by the live API. Run the web and API services together (or deploy the API and web server to a supported host) to exercise login, seller submission, moderation and COD checkout. Never use the demo credentials in a production deployment.
