@@ -353,6 +353,22 @@ export default function registerPostgresDomain(route, ok, {
     route('GET', '/api/v1/admin/audit-logs', ['ADMIN'], invoke(ok, async ({ url }) => admin.listAuditLogs({ limit: Number(url.searchParams.get('limit') || 200) })));
   }
 
+  // ----- PostgreSQL admin seller and product moderation -----
+  if (admin) {
+    route('GET', '/api/v1/admin/sellers', ['ADMIN'], invoke(ok, async ({ url }) => admin.listSellers({ status: url.searchParams.get('status') || undefined, limit: Number(url.searchParams.get('limit') || 100) })));
+    route('GET', '/api/v1/admin/sellers/:id', ['ADMIN'], invoke(ok, async ({ params }) => admin.getSeller(params[0])));
+    route('POST', '/api/v1/admin/sellers/:id/approve', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.decideSeller({ sellerId: params[0], actorId: user.id, decision: 'APPROVE', reason: body.reason })));
+    route('POST', '/api/v1/admin/sellers/:id/reject', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.decideSeller({ sellerId: params[0], actorId: user.id, decision: 'REJECT', reason: body.reason })));
+    route('POST', '/api/v1/admin/sellers/:id/suspend', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.decideSeller({ sellerId: params[0], actorId: user.id, decision: 'SUSPEND', reason: body.reason })));
+    route('POST', '/api/v1/admin/sellers/:id/activate', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.decideSeller({ sellerId: params[0], actorId: user.id, decision: 'ACTIVATE', reason: body.reason })));
+    route('PATCH', '/api/v1/admin/sellers/:id/commission', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.setCommission({ sellerId: params[0], actorId: user.id, commissionBps: body.commission_bps })));
+    route('GET', '/api/v1/admin/products/pending', ['ADMIN'], invoke(ok, async () => admin.listPendingProducts()));
+    route('POST', '/api/v1/admin/products/:id/approve', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.moderateProduct({ productId: params[0], actorId: user.id, decision: 'APPROVE', reason: body.reason })));
+    route('POST', '/api/v1/admin/products/:id/reject', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.moderateProduct({ productId: params[0], actorId: user.id, decision: 'REJECT', reason: body.reason })));
+    route('POST', '/api/v1/admin/products/:id/suspend', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.moderateProduct({ productId: params[0], actorId: user.id, decision: 'SUSPEND', reason: body.reason })));
+    route('POST', '/api/v1/admin/products/:id/unsuspend', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.moderateProduct({ productId: params[0], actorId: user.id, decision: 'UNSUSPEND', reason: body.reason })));
+  }
+
   // ----- payment lifecycle -----
   route('POST', '/api/v1/payments/callback/:gateway', null, invoke(ok, async ({ params, body }) => {
     const method = String(params[0] || '').toUpperCase();
