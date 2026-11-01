@@ -68,8 +68,9 @@ export function createPostgresAdminRepository(database,{createId=randomUUID,cloc
     if(!current) throw fail(404,'CUSTOMER_NOT_FOUND','কাস্টমার পাওয়া যায়নি');
     const name=String(body.name??current.name).trim().slice(0,100),phone=normalizePhone(body.phone??current.phone),email=String(body.email??current.email??'').trim().toLowerCase()||null;
     if(!name||!validPhone(phone)||(email&&!validEmail(email))) throw fail(400,'INVALID_CUSTOMER_DETAILS','মোবাইল, ইমেইল বা নাম সঠিক নয়');
-    const duplicate=await query("SELECT id FROM users WHERE id<>? AND (phone=? OR (? IS NOT NULL AND lower(email)=?)) LIMIT 1").get(String(customerId),phone,email,email);
-    if(duplicate) throw fail(409,'CUSTOMER_CONTACT_IN_USE','মোবাইল বা ইমেইল অন্য অ্যাকাউন্টে ব্যবহৃত');
+    const duplicatePhone=await query('SELECT id FROM users WHERE id<>? AND phone=? LIMIT 1').get(String(customerId),phone);
+    const duplicateEmail=email?await query('SELECT id FROM users WHERE id<>? AND lower(email)=? LIMIT 1').get(String(customerId),email):null;
+    if(duplicatePhone||duplicateEmail) throw fail(409,'CUSTOMER_CONTACT_IN_USE','মোবাইল বা ইমেইল অন্য অ্যাকাউন্টে ব্যবহৃত');
     await database.tx(async()=>{
       await query('UPDATE users SET name=?,phone=?,email=? WHERE id=? AND role=\'CUSTOMER\'').run(name,phone,email,String(customerId));
       await query('INSERT INTO audit_logs(id,actor_id,action,entity,entity_id,detail,created_at) VALUES(?,?,?,?,?,?,?)').run(makeId(),String(actorId),'CUSTOMER_EDIT','user',String(customerId),JSON.stringify({name,phone,email}),stamp());
