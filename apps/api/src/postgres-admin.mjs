@@ -178,7 +178,7 @@ export function createPostgresAdminRepository(database,{createId=randomUUID,cloc
 
   async function createCategory({actorId,nameBn,nameEn='',slug=''}) {
     const bn=String(nameBn??'').trim().slice(0,80),en=String(nameEn??'').trim().slice(0,80);
-    const key=String(slug||en||bn).trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,80);
+    const key=String(slug||en||bn).trim().toLowerCase().replace(/[^a-z0-9\u0980-\u09ff]+/g,'-').replace(/^-|-$/g,'').slice(0,80);
     if(!bn||!key) throw fail(400,'INVALID_CATEGORY','ক্যাটাগরির নাম ও slug সঠিক নয়');
     const id=makeId();
     await database.tx(async()=>{
@@ -274,7 +274,7 @@ export function createPostgresAdminRepository(database,{createId=randomUUID,cloc
       const product=await query('SELECT id,seller_id,status FROM products WHERE id=? FOR UPDATE').get(String(productId));
       if(!product||!selected.from.includes(product.status)) throw fail(409,'PRODUCT_NOT_MODERATABLE','পণ্যটি এই সিদ্ধান্তের জন্য উপযুক্ত নয়');
       if(selected.to==='ACTIVE') {
-        const seller=await query('SELECT status FROM seller_profiles WHERE user_id=?').get(product.seller_id);
+        const seller=await query('SELECT status FROM seller_profiles WHERE user_id=? FOR UPDATE').get(product.seller_id);
         if(seller?.status!=='APPROVED') throw fail(409,'SELLER_NOT_APPROVED','আগে বিক্রেতাকে অনুমোদন দিতে হবে');
       }
       await query('UPDATE products SET status=?,active=?,updated_at=? WHERE id=?').run(selected.to,selected.to==='ACTIVE'?1:0,at,String(productId));
