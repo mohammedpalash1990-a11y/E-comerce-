@@ -30,7 +30,7 @@ test('seller product list is strictly scoped to the authenticated seller',async(
   const rows=await repo.listProducts(sellerId);
   assert.equal(rows[0].sale_price_bdt,200);
   const call=db.calls.find(x=>x.sql.includes('FROM products p JOIN categories'));
-  assert.match(call.sql,/WHERE p\.seller_id=\$1/);
+  assert.match(call.sql,/WHERE p\.seller_id=\?/);
   assert.deepEqual(call.values,[sellerId]);
 });
 
@@ -39,7 +39,7 @@ test('seller cannot read another seller product by ID',async()=>{
   const repo=createPostgresSellerRepository(db,{inventoryRepository:inventory});
   assert.equal(await repo.getProduct(sellerId,'foreign-product'),null);
   assert.deepEqual(db.calls[0].values,['foreign-product',sellerId]);
-  assert.match(db.calls[0].sql,/p\.seller_id=\$2/);
+  assert.match(db.calls[0].sql,/p\.seller_id=\?/);
 });
 
 test('product creation uses pending moderation and the append-only inventory ledger',async()=>{
@@ -69,7 +69,7 @@ test('product update uses seller ownership predicate and does not bypass stock l
   await repo.updateProduct(sellerId,'p1',{name_bn:'নতুন নাম',stock:99,images:[]});
   const lock=db.calls.find(x=>x.sql?.includes('SELECT id FROM products'));
   assert.deepEqual(lock.values,['p1',sellerId]);
-  assert.match(lock.sql,/seller_id=\$2/);
+  assert.match(lock.sql,/seller_id=\?/);
   assert.equal(db.calls.some(x=>x.sql?.includes('UPDATE products SET stock=')),false);
   assert.ok(db.calls.some(x=>x.sql?.includes("status='PENDING_REVIEW'")));
 });
