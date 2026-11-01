@@ -98,3 +98,10 @@
 **Admin API route coverage:** পুরোনো `routes_admin.mjs`-এর ৪৫টি route-এর সবগুলো PostgreSQL domain registration-এ কভার করা হয়েছে (customer/seller/product/category/brand/coupon/order/refund/payout/finance/courier/inventory/audit)।
 
 **এখনো বাকি:** live PostgreSQL database integration, full API runtime composition/production readiness, migration + data import rehearsal এবং end-to-end browser validation। এই PR-এর adapter-level tests real PostgreSQL server-এর বিকল্প নয়। তাই এই branch production-ready নয়; merge/deploy করা হয়নি।
+
+
+## PostgreSQL workspace query-index migration (২০২৬-১১-০২)
+- `004_workspace_query_indexes.sql` যোগ করা হয়েছে; payout/refund queue, seller finance, order lifecycle, shipment, catalog filter, customer address, notification, review, audit এবং cart lookup-এর জন্য ১৮টি targeted index যুক্ত।
+- Migration-টি `CREATE INDEX IF NOT EXISTS` ব্যবহার করে, তাই আগে থেকে provision করা Neon database-এ 001–003-এর পর incremental ভাবে প্রয়োগ করা যাবে।
+- `tests/postgres-schema-indexes.test.mjs` migration-এ প্রত্যাশিত ১৮টি index উপস্থিত আছে কি না regression guard দেয়।
+- Index migration schema/query access path উন্নত করে; এটি PostgreSQL API runtime wiring বা live integration test-এর বিকল্প নয়।
