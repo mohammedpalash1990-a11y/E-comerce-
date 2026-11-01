@@ -24,6 +24,11 @@
 - Seller: 01700000002 / Seller@12345
 - Admin: 01700000001 / Admin@12345
 
+## Production safety gate
+- বর্তমান API SQLite runtime ব্যবহার করে; `NODE_ENV=production` দিলে API ইচ্ছাকৃতভাবে startup বন্ধ করে।
+- `DATABASE_URL` এখনো runtime-এ ব্যবহৃত হয় না; PostgreSQL adapter ও migration না হওয়া পর্যন্ত production deployment করা যাবে না।
+- GitHub Pages শুধু static frontend; API hosting আলাদা প্রয়োজন।
+
 ## এখনো তৈরি হয়নি / production-এ নেওয়ার আগে প্রয়োজন
 1. Production PostgreSQL runtime adapter ও verified migration execution (বর্তমান API SQLite development runtime ব্যবহার করে)
 2. Persistent secure session/token lifecycle, password reset ও OTP verification provider
