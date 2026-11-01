@@ -26,11 +26,11 @@
 - Multi-vendor checkout with seller sub-orders and commission ledger entries
 - Customer order history, address and account endpoints, notifications
 - Sandbox payment and courier adapters only
-- PostgreSQL repositories for catalog, authentication, customer addresses/wishlist/reviews, inventory, checkout and order/payment domains
+- PostgreSQL repositories for catalog, authentication, customer addresses/wishlist/reviews, seller product/dashboard/finance/payout domains, inventory, checkout and order/payment domains
 - PostgreSQL connection-pool factory and an advisory-lock migration bootstrap command
 
 ## Still required before production
-- PostgreSQL implementations for remaining seller product/finance and admin management/finance routes
+- PostgreSQL implementations for remaining seller courier/shipment and admin management/finance routes
 - PostgreSQL API composition that does not import or execute SQLite-backed routes or seed data
 - Real Neon/PostgreSQL integration tests and full browser E2E coverage
 - Public Node.js API hosting, persistent production database, secrets and monitoring
@@ -63,7 +63,7 @@ npm run db:migrate:postgres
 
 The command verifies the database connection, applies ordered SQL files from `apps/api/migrations/postgres`, and uses a PostgreSQL advisory lock so concurrent deploy jobs do not apply the same migration simultaneously. It prints migration names but never prints the connection URL or password.
 
-**Important:** this command only prepares/checks the PostgreSQL schema. It does not switch the API to PostgreSQL. Production API startup remains blocked intentionally because some customer, seller and admin routes still use SQLite. Do not point a live API at a PostgreSQL database until that remaining route migration and end-to-end validation are complete.
+**Important:** this command only prepares/checks the PostgreSQL schema. It does not switch the API to PostgreSQL. Production API startup remains blocked intentionally because seller courier/shipment and admin management/finance routes still require migration and the full domain integration suite is not yet complete. Do not point a live API at a PostgreSQL database until that remaining route migration and end-to-end validation are complete.
 
 ## Development demo accounts
 | Role | Phone | Password |
