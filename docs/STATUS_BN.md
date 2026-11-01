@@ -66,6 +66,15 @@
 
 ## Neon PostgreSQL প্রস্তুতি (২০২৬-১১-০১)
 - Neon project `haat-bangladesh` তৈরি হয়েছে (PostgreSQL 17, Singapore region); database `haat`।
-- মূল `main` branch-এ PostgreSQL schema `001_init.sql`, index migration `002_indexes.sql` ও category seed migration `003_seed_categories.sql` প্রয়োগ করা হয়েছে; ২৪টি application table, ৪৫টি index ও ২টি migration record যাচাই করা হয়েছে। ৮টি প্রাথমিক marketplace category-ও idempotent migration দিয়ে seed করা হয়েছে।
+- মূল `main` branch-এ PostgreSQL schema `001_init.sql`, index migration `002_indexes.sql` ও category seed migration `003_seed_categories.sql` প্রয়োগ করা হয়েছে; ২৪টি application table, ৪৫টি index ও ৩টি migration record যাচাই করা হয়েছে। ৮টি প্রাথমিক marketplace category-ও idempotent migration দিয়ে seed করা হয়েছে।
 - আলাদা `haat-schema-validation` branch-এও schema যাচাইয়ের জন্য migration চালানো হয়েছে।
 - এটি কেবল database schema provisioning; API এখনো `node:sqlite` synchronous API ব্যবহার করে। PostgreSQL runtime adapter, route-level async conversion, seed compatibility ও end-to-end tests সম্পন্ন না হওয়া পর্যন্ত production API deploy করা যাবে না।
+
+
+## PostgreSQL async adapter groundwork (২০২৬-১১-০১)
+- `apps/api/src/postgres-runtime.mjs`-এ pg-compatible Pool-এর জন্য async `q().get/all/run` facade, transaction-scoped client routing, nested savepoint এবং rollback/release handling যোগ হয়েছে।
+- `apps/api/src/postgres-migrations.mjs`-এ session advisory lock-সহ ordered, versioned migration runner যোগ হয়েছে; বিদ্যমান Neon `schema_migrations.applied_at TEXT` schema-র সঙ্গে সামঞ্জস্য রাখতে explicit ISO timestamp লেখা হয়।
+- `apps/api/src/postgres-types.mjs`-এ PostgreSQL BIGINT-কে JavaScript safe-integer সীমার মধ্যে parse করার helper যোগ হয়েছে; overflow হলে error দেয়।
+- Fake Pool-ভিত্তিক test-এ query binding, transaction isolation, nested savepoint, rollback, migration ordering/idempotence/failure, এবং BIGINT parsing যাচাই করা হয়েছে। GitHub Actions-এর test ও build check সর্বশেষ যাচাইকৃত adapter commit-এ pass করেছে।
+- **সীমাবদ্ধতা:** এই adapter এখনো `core.mjs` বা API server-এ wired নয়; route-গুলোর ২৪৯টি synchronous query call pattern ও ২৬টি synchronous transaction call pattern async conversion চায়। তাই production guard অপরিবর্তিত এবং PostgreSQL production runtime এখনো চালু নয়।
+- বিস্তারিত: `docs/POSTGRES_MIGRATION_AUDIT_BN.md` এবং `docs/POSTGRES_RUNTIME_ADAPTER_BN.md`।
