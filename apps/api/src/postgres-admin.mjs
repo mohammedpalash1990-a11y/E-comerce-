@@ -1,12 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { productFields, parseImages } from './routes_seller.mjs';
+import { courierBook, COURIERS, SHIPMENT_STATUSES } from './gateways.mjs';
 
 function fail(status, code, message) { const error = new Error(message); error.status=status; error.code=code; return error; }
 function integer(value,label) { const n=typeof value==='number'?value:Number(value); if(!Number.isSafeInteger(n)) throw fail(500,'INVALID_DATABASE_VALUE',label+' is not a safe integer'); return n; }
 function limit(value, fallback=100) { const n=Number(value??fallback); return Number.isInteger(n)?Math.min(Math.max(n,1),500):fallback; }
 function money(value) { return integer(value??0,'money')/100; }
 
-export function createPostgresAdminRepository(database,{createId=randomUUID,clock=()=>new Date().toISOString(),inventoryRepository}={}) {
+export function createPostgresAdminRepository(database,{createId=randomUUID,clock=()=>new Date().toISOString(),inventoryRepository,ordersRepository}={}) {
   if(!database||typeof database.q!=='function'||typeof database.tx!=='function') throw new TypeError('A PostgreSQL database adapter with q() and tx() is required');
   const query=sql=>database.q(sql), stamp=()=>clock(), makeId=()=>createId();
 
@@ -396,6 +397,44 @@ export function createPostgresAdminRepository(database,{createId=randomUUID,cloc
     });
   }
 
+  async function bookSellerShipment({sellerOrderId,actorId,provider}) {
+    const selected=String(provider||'').toUpperCase();
+    if(!COURIERS.includes(selected)) throw fail(400,'INVALID_COURIER','অজানা কুরিয়ার');
+    const shipmentId=makeId(),at=stamp();
+    return database.tx(async()=>{
+      const sellerOrder=await query('SELECT so.id,so.order_id,so.seller_id,so.status,o.delivery_area FROM seller_orders so JOIN orders o ON o.id=so.order_id WHERE so.id=? FOR UPDATE').get(String(sellerOrderId));
+      if(!sellerOrder) throw fail(404,'SELLER_ORDER_NOT_FOUND','Seller order not found');
+      if(!['PROCESSING','SHIPPED'].includes(sellerOrder.status)) throw fail(409,'ORDER_NOT_READY','অর্ডার PROCESSING বা SHIPPED অবস্থায় থাকতে হবে');
+      const active=await query("SELECT id FROM shipments WHERE seller_order_id=? AND status NOT IN ('FAILED_DELIVERY','RETURNED') LIMIT 1 FOR UPDATE").get(sellerOrder.id);
+      if(active) throw fail(409,'SHIPMENT_ALREADY_BOOKED','ইতিমধ্যে কুরিয়ার বুক করা আছে');
+      const booking=courierBook(selected,sellerOrder.delivery_area);
+      await query('INSERT INTO shipments(id,seller_order_id,provider,tracking_id,status,charge_paisa,mode,created_at) VALUES(?,?,?,?,?,?,?,?)').run(shipmentId,sellerOrder.id,selected,booking.trackingId,'BOOKED',booking.charge,'sandbox',at);
+      await query('INSERT INTO order_events(id,order_id,seller_order_id,status,note,actor_id,created_at) VALUES(?,?,?,?,?,?,?)').run(makeId(),sellerOrder.order_id,sellerOrder.id,'COURIER_BOOKED',selected+' '+booking.trackingId,String(actorId),at);
+      await query('INSERT INTO audit_logs(id,actor_id,action,entity,entity_id,detail,created_at) VALUES(?,?,?,?,?,?,?)').run(makeId(),String(actorId),'COURIER_BOOKED','shipment',shipmentId,JSON.stringify({seller_order_id:sellerOrder.id,provider:selected,tracking_id:booking.trackingId}),at);
+      return {id:shipmentId,provider:selected,tracking_id:booking.trackingId,status:'BOOKED',charge_bdt:money(booking.charge)};
+    });
+  }
+
+  async function updateShipment({shipmentId,actorId,status}) {
+    const next=String(status||'').toUpperCase();
+    if(!SHIPMENT_STATUSES.includes(next)) throw fail(400,'INVALID_SHIPMENT_STATUS','কুরিয়ার স্ট্যাটাস সঠিক নয়');
+    const result=await database.tx(async()=>{
+      const shipment=await query('SELECT sh.*,so.order_id,so.seller_id,so.status seller_order_status,o.user_id customer_id FROM shipments sh JOIN seller_orders so ON so.id=sh.seller_order_id JOIN orders o ON o.id=so.order_id WHERE sh.id=? FOR UPDATE').get(String(shipmentId));
+      if(!shipment) throw fail(404,'SHIPMENT_NOT_FOUND','Shipment not found');
+      await query('UPDATE shipments SET status=? WHERE id=? AND seller_order_id=?').run(next,String(shipmentId),shipment.seller_order_id);
+      const at=stamp();
+      await query('INSERT INTO order_events(id,order_id,seller_order_id,status,note,actor_id,created_at) VALUES(?,?,?,?,?,?,?)').run(makeId(),shipment.order_id,shipment.seller_order_id,'COURIER_'+next,shipment.provider+' '+shipment.tracking_id,String(actorId),at);
+      await query('INSERT INTO audit_logs(id,actor_id,action,entity,entity_id,detail,created_at) VALUES(?,?,?,?,?,?,?)').run(makeId(),String(actorId),'SHIPMENT_'+next,'shipment',String(shipmentId),JSON.stringify({seller_order_id:shipment.seller_order_id}),at);
+      if(next==='FAILED_DELIVERY'||next==='RETURNED') await query('INSERT INTO notifications(id,user_id,title,body,read,created_at) VALUES(?,?,?,?,0,?)').run(makeId(),shipment.customer_id,'ডেলিভারি আপডেট',next,at);
+      return {id:String(shipmentId),status:next,orderId:shipment.order_id,sellerId:shipment.seller_id,sellerOrderId:shipment.seller_order_id,sellerOrderStatus:shipment.seller_order_status};
+    });
+    if(next==='DELIVERED'&&result.sellerOrderStatus==='SHIPPED') {
+      if(!ordersRepository?.transitionSellerOrder) throw fail(503,'ORDER_REPOSITORY_UNAVAILABLE','Order status update is unavailable');
+      await ordersRepository.transitionSellerOrder({sellerId:result.sellerId,sellerOrderId:result.sellerOrderId,nextStatus:'DELIVERED',actorId:String(actorId),note:'কুরিয়ার ডেলিভারি নিশ্চিত'});
+    }
+    return {id:result.id,status:result.status};
+  }
+
   async function setShippingCharge({orderId,actorId,shippingBdt}) {
     const amount=Number(shippingBdt),shipping=Math.round(amount*100);
     if(!Number.isFinite(amount)||!Number.isSafeInteger(shipping)||shipping<0||shipping>1e7||Math.abs(amount*100-shipping)>1e-7) throw fail(400,'INVALID_SHIPPING_CHARGE','ডেলিভারি চার্জ সঠিক নয়');
@@ -464,5 +503,5 @@ export function createPostgresAdminRepository(database,{createId=randomUUID,cloc
     return {total_revenue_bdt:money(row.revenue),total_orders:integer(row.orders,'orders'),total_customers:integer(row.customers,'customers'),total_sellers:integer(row.sellers,'sellers'),pending_seller_applications:integer(row.pending_sellers,'pending_sellers'),pending_product_approvals:integer(row.pending_products,'pending_products'),total_products:integer(row.products,'products'),active_products:integer(row.active_products,'active_products'),cancelled_orders:integer(row.cancelled_orders,'cancelled_orders'),pending_payouts:integer(row.pending_payouts,'pending_payouts'),pending_payout_amount_bdt:money(row.pending_payout_amount),platform_commission_bdt:money(row.commission)};
   }
 
-  return Object.freeze({listPayouts,decidePayout,listCustomers,getCustomer,updateCustomer,setCustomerStatus,listCustomerOrders,listSellers,getSeller,getSellerOverview,listSellerProducts,listSellerOrders,listProducts,decideSeller,setCommission,listCategories,createCategory,updateCategory,deleteCategory,listBrands,createBrand,deleteBrand,listCoupons,createCoupon,toggleCoupon,listPendingProducts,moderateProduct,setShippingCharge,listRefunds,createRefund,approveRefund,rejectRefund,financeSummary,listTransactions,financeReport,listAuditLogs,dashboard});
+  return Object.freeze({listPayouts,decidePayout,listCustomers,getCustomer,updateCustomer,setCustomerStatus,listCustomerOrders,listSellers,getSeller,getSellerOverview,listSellerProducts,listSellerOrders,listProducts,decideSeller,setCommission,listCategories,createCategory,updateCategory,deleteCategory,listBrands,createBrand,deleteBrand,listCoupons,createCoupon,toggleCoupon,listPendingProducts,moderateProduct,bookSellerShipment,updateShipment,setShippingCharge,listRefunds,createRefund,approveRefund,rejectRefund,financeSummary,listTransactions,financeReport,listAuditLogs,dashboard});
 }
