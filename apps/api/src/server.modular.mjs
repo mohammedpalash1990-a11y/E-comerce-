@@ -41,7 +41,9 @@ export function createApiApp(options = {}) {
         checkoutOptions: options.checkoutOptions,
         ordersOptions: options.ordersOptions,
         sellerRepository: options.sellerRepository,
-        sellerOptions: options.sellerOptions
+        sellerOptions: options.sellerOptions,
+        adminRepository: options.adminRepository,
+        adminOptions: options.adminOptions
       })
     : null);
   registerPublic(route, ok, { catalogRepository, authRepository });
