@@ -52,10 +52,15 @@ export function createApiApp(options = {}) {
     gatewaySign: options.gatewaySign,
     paymentMode: options.paymentMode || config.paymentMode
   });
-  registerCustomer(route, ok);
-  if (!domainRepositories) registerSeller(route, ok);
-  registerAdmin(route, ok);
-  registerPayments(route, ok);
+  if (!domainRepositories) {
+    registerCustomer(route, ok);
+    registerSeller(route, ok);
+    registerAdmin(route, ok);
+    registerPayments(route, ok);
+  }
+  // In PostgreSQL mode, never fall through to legacy SQLite customer, seller,
+  // admin or payment handlers. Unmigrated endpoints remain unavailable until
+  // their PostgreSQL repositories are implemented.
 
   return { routes, catalogRepository, authRepository, domainRepositories };
 }
