@@ -43,7 +43,7 @@ test('migrations run in filename order, record versions and ignore non-migration
     assert.ok(pool.calls.some(x => x.sql.includes('pg_advisory_unlock')));
     const ledgerInsert = pool.calls.find(x => x.sql.startsWith('INSERT INTO schema_migrations'));
     assert.equal(ledgerInsert.values[0], '001_init.sql');
-    assert.match(ledgerInsert.values[1], /^\\d{4}-\\d{2}-\\d{2}T/);
+    assert.match(ledgerInsert.values[1], /^\d{4}-\d{2}-\d{2}T/);
     assert.equal(pool.calls.at(-1).sql, 'RELEASE');
   });
 });
