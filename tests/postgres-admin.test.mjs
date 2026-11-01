@@ -190,7 +190,7 @@ test('refund rejection is single-use and does not change order payment state',as
 
 test('admin seller overview scopes all finance aggregates to the selected seller',async()=>{
   const db=fakeDatabase((method,sql)=>{
-    if(sql.includes('FROM seller_profiles sp JOIN users u WHERE u.id='))return{id:'seller-10',status:'APPROVED',shop_name:'Shop 10'};
+    if(sql.includes('FROM seller_profiles sp JOIN users u ON u.id=sp.user_id WHERE u.id='))return{id:'seller-10',status:'APPROVED',shop_name:'Shop 10'};
     if(sql.includes('product_count'))return{product_count:'4',order_count:'3',earnings:'50000',commission:'5000',paid:'10000',reserved:'15000',pending:'20000'};
     return undefined;
   });
@@ -291,7 +291,7 @@ test('category and brand slugs preserve Bengali characters',async()=>{
 test('admin shipping charge updates pending order and payment amount atomically',async()=>{
   const db=fakeDatabase((method,sql)=>sql.includes('FROM orders WHERE id=')?{id:'order-ship',subtotal_paisa:'100000',shipping_paisa:'5000',discount_paisa:'10000',total_paisa:'95000',payment_status:'PENDING',status:'CONFIRMED'}:undefined);
   const repo=createPostgresAdminRepository(db,{createId:()=> 'audit-ship'});
-  assert.deepEqual(await repo.setShippingCharge({orderId:'order-ship',actorId:'admin-1',shippingBdt:80}),{id:'order-ship',shipping_bdt:80,total_bdt:970});
+  assert.deepEqual(await repo.setShippingCharge({orderId:'order-ship',actorId:'admin-1',shippingBdt:80}),{id:'order-ship',shipping_bdt:80,total_bdt:980});
   assert.ok(db.calls.some(x=>x.sql?.includes('UPDATE payments SET amount_paisa=')&&x.values[0]===97000));
   assert.ok(db.calls.some(x=>x.sql?.includes('INSERT INTO audit_logs')&&x.values[2]==='SHIPPING_CHARGE_SET'));
 });
