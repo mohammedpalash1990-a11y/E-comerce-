@@ -263,7 +263,7 @@ test('admin: dashboard, customers, sellers, shipping charge, notes, finance, aud
   const logs = (await R('/api/v1/admin/audit-logs?limit=500', { token: state.admin })).data.data.map(l => l.action);
   for (const a of ['CHECKOUT', 'PAYOUT_APPROVED', 'SELLER_APPROVED', 'PRODUCT_ACTIVE', 'REFUND_APPROVED', 'PAYMENT_PAID']) assert.ok(logs.includes(a), 'audit has ' + a);
   // category/brand management
-  assert.equal((await R('/api/v1/admin/categories', { method: 'POST', token: state.admin, body: { name_bn: 'বই', name_en: 'Books' } })).status, 201);
+  assert.equal((await R('/api/v1/admin/categories', { method: 'POST', token: state.admin, body: { name_bn: 'খেলনা', name_en: 'Toys' } })).status, 201);
   assert.equal((await R('/api/v1/admin/brands', { method: 'POST', token: state.admin, body: { name: 'Acme' } })).status, 201);
   // suspend customer -> login blocked, live session dead
   assert.equal((await R('/api/v1/admin/customers/' + cid + '/suspend', { method: 'POST', token: state.admin })).status, 200);
