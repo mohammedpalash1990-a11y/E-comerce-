@@ -36,7 +36,7 @@ export default function register(route, ok) {
     const phone = normPhone(b.phone); if (!validPhone(phone)) throw bad('সঠিক মোবাইল নম্বর দিন');
     return [text(b.label, 40, 'লেবেল', { required: false }), text(b.name || u.name, 100, 'নাম'), phone, text(b.address, 500, 'ঠিকানা'), text(b.area, 100, 'এলাকা')];
   };
-  route('GET', '/api/v1/customer/addresses', C, ({ user }) => ok(q('SELECT id,label,name,phone,address,area,is_default FROM addresses WHERE user_id=? ORDER BY is_default DESC,rowid').all(user.id)));
+  route('GET', '/api/v1/customer/addresses', C, ({ user }) => ok(q('SELECT id,label,name,phone,address,area,is_default FROM addresses WHERE user_id=? ORDER BY is_default DESC,id').all(user.id)));
   route('POST', '/api/v1/customer/addresses', C, ({ user, body }) => {
     const a = addrBody(body, user), n = q('SELECT COUNT(*) n FROM addresses WHERE user_id=?').get(user.id).n;
     if (n >= 10) throw bad('সর্বোচ্চ ১০টি ঠিকানা সংরক্ষণ করা যায়');
@@ -129,7 +129,7 @@ export default function register(route, ok) {
   });
 
   // ----- orders -----
-  route('GET', '/api/v1/customer/orders', C, ({ user }) => ok(q('SELECT * FROM orders WHERE user_id=? ORDER BY created_at DESC,rowid DESC').all(user.id).map(o => orderView(o))));
+  route('GET', '/api/v1/customer/orders', C, ({ user }) => ok(q('SELECT * FROM orders WHERE user_id=? ORDER BY created_at DESC,id DESC').all(user.id).map(o => orderView(o))));
   const mine = (oid, uid) => { const o = q('SELECT * FROM orders WHERE id=? AND user_id=?').get(oid, uid); if (!o) throw new HttpError(404, 'Order not found'); return o; };
   route('GET', '/api/v1/customer/orders/:id', C, ({ user, params }) => {
     const o = mine(params[0], user.id);
@@ -138,7 +138,7 @@ export default function register(route, ok) {
   });
   route('GET', '/api/v1/customer/orders/:id/tracking', C, ({ user, params }) => {
     const o = mine(params[0], user.id);
-    return ok({ orderNumber: orderNo(o.id), status: o.status, events: q('SELECT status,note,created_at,seller_order_id FROM order_events WHERE order_id=? ORDER BY created_at,rowid').all(o.id),
+    return ok({ orderNumber: orderNo(o.id), status: o.status, events: q('SELECT status,note,created_at,seller_order_id FROM order_events WHERE order_id=? ORDER BY created_at,id').all(o.id),
       shipments: q('SELECT s.provider,s.tracking_id,s.status FROM shipments s JOIN seller_orders so ON so.id=s.seller_order_id WHERE so.order_id=?').all(o.id) });
   });
   route('POST', '/api/v1/customer/orders/:id/cancel', C, ({ user, params, body }) => {
