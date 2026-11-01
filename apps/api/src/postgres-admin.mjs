@@ -23,6 +23,8 @@ export function createPostgresAdminRepository(database,{createId=randomUUID,cloc
     return database.tx(async()=>{
       const payout=await query("SELECT id,seller_id,amount_paisa,status FROM payouts WHERE id=? FOR UPDATE").get(String(payoutId));
       if(!payout||payout.status!=='REQUESTED') throw fail(409,'PAYOUT_NOT_PENDING','পেআউট অনুরোধটি আর pending নেই');
+      const seller=await query('SELECT user_id FROM seller_profiles WHERE user_id=? FOR UPDATE').get(payout.seller_id);
+      if(!seller) throw fail(404,'SELLER_NOT_FOUND','বিক্রেতা পাওয়া যায়নি');
       if(action==='APPROVE') {
         const totals=await query("SELECT COALESCE(SUM(amount_paisa),0) reserved FROM payouts WHERE seller_id=? AND id<>? AND status IN ('REQUESTED','APPROVED')").get(payout.seller_id,String(payoutId));
         const earnings=await query("SELECT COALESCE(SUM(amount_paisa),0) earned FROM transactions WHERE seller_id=? AND kind IN ('SELLER_EARNING','SELLER_REVERSAL')").get(payout.seller_id);
