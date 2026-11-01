@@ -4,6 +4,7 @@ import { createPostgresInventoryRepository } from './postgres-inventory.mjs';
 import { createPostgresCheckoutRepository } from './postgres-checkout.mjs';
 import { createPostgresOrdersPaymentsRepository } from './postgres-orders-payments.mjs';
 import { createPostgresCustomerRepository } from './postgres-customer.mjs';
+import { createPostgresSellerRepository } from './postgres-seller.mjs';
 
 function toHttpError(error) {
   if (error instanceof HttpError) return error;
@@ -66,7 +67,8 @@ export function createPostgresDomainRepositories(database, options = {}) {
       ...(options.checkoutOptions || {})
     }),
     orders: options.ordersRepository || createPostgresOrdersPaymentsRepository(database, options.ordersOptions),
-    customer: options.customerRepository || createPostgresCustomerRepository(database)
+    customer: options.customerRepository || createPostgresCustomerRepository(database),
+    seller: options.sellerRepository || createPostgresSellerRepository(database, { inventoryRepository: options.inventoryRepository || createPostgresInventoryRepository(database, options.inventoryOptions), ...(options.sellerOptions || {}) })
   });
 }
 
@@ -80,8 +82,9 @@ export default function registerPostgresDomain(route, ok, {
   if (!repositories?.inventory || !repositories?.checkout || !repositories?.orders) {
     throw new TypeError('PostgreSQL domain repositories are required');
   }
-  const { inventory, checkout, orders, customer } = repositories;
+  const { inventory, checkout, orders, customer, seller } = repositories;
   if (!customer) throw new TypeError('PostgreSQL customer repository is required');
+  if (!seller) throw new TypeError('PostgreSQL seller repository is required');
 
   // ----- customer addresses, wishlist and verified-purchase reviews -----
   route('GET', '/api/v1/customer/addresses', ['CUSTOMER'], invoke(ok, async ({ user }) => customer.listAddresses(user.id)));
@@ -93,6 +96,16 @@ export default function registerPostgresDomain(route, ok, {
   route('DELETE', '/api/v1/customer/wishlist/:pid', ['CUSTOMER'], invoke(ok, async ({ user, params }) => customer.removeWishlist(user.id, params[0])));
   route('POST', '/api/v1/customer/products/:id/reviews', ['CUSTOMER'], invoke(ok, async ({ user, params, body }) => customer.saveReview({ userId: user.id, productId: params[0], body }), 201));
 
+  // ----- seller profile, dashboard and product management -----
+  route('GET', '/api/v1/seller/profile', ['SELLER'], invoke(ok, async ({ user }) => seller.getProfile(user.id)));
+  route('GET', '/api/v1/seller/dashboard', ['SELLER'], invoke(ok, async ({ user }) => seller.getDashboard(user.id)));
+  route('GET', '/api/v1/seller/products', ['SELLER'], invoke(ok, async ({ user }) => seller.listProducts(user.id)));
+  route('GET', '/api/v1/seller/products/:id', ['SELLER'], invoke(ok, async ({ user, params }) => { const product = await seller.getProduct(user.id, params[0]); if (!product) throw new HttpError(404, 'Product not found'); return product; }));
+  route('POST', '/api/v1/seller/products', ['SELLER'], invoke(ok, async ({ user, body }) => seller.createProduct(user.id, body), 201));
+  route('PUT', '/api/v1/seller/products/:id', ['SELLER'], invoke(ok, async ({ user, params, body }) => seller.updateProduct(user.id, params[0], body)));
+  route('DELETE', '/api/v1/seller/products/:id', ['SELLER'], invoke(ok, async ({ user, params }) => seller.archiveProduct(user.id, params[0])));
+  route('GET', '/api/v1/seller/finance', ['SELLER'], invoke(ok, async ({ user }) => seller.getFinance(user.id)));
+  route('POST', '/api/v1/seller/payouts', ['SELLER'], invoke(ok, async ({ user, body }) => seller.requestPayout(user.id, body), 201));
   // ----- shared stock ledger / seller inventory -----
   route('GET', '/api/v1/seller/products/:id/inventory', ['SELLER'], invoke(ok, async ({ user, params }) => {
     const stock = await inventory.getStock(params[0]);
@@ -100,6 +113,7 @@ export default function registerPostgresDomain(route, ok, {
     return stock;
   }));
   route('PATCH', '/api/v1/seller/products/:id/stock', ['SELLER'], invoke(ok, async ({ user, params, body }) => {
+    await seller.assertWritable(user.id, { allowPending: false });
     const current = await inventory.getStock(params[0]);
     if (!current || current.seller_id !== user.id) throw new HttpError(404, 'Product not found');
     const result = await inventory.setStock({
