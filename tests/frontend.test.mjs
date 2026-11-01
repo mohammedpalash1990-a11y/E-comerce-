@@ -44,3 +44,17 @@ test('seller and admin portals visibly report backend connectivity', async () =>
     assert.match(html, /\/health/);
   }
 });
+
+test('seller can submit product description and HTTPS image URL', async () => {
+  const html = await read('apps/web/public/seller.html');
+  assert.match(html, /name="image_url"/);
+  assert.match(html, /name="description"/);
+  assert.match(html, /images:imageUrl\?\[imageUrl\]:\[\]/);
+  assert.match(html, /p\.image/);
+});
+
+test('storefront renders live product images safely when provided by API', async () => {
+  const html = await read('apps/web/public/index.html');
+  assert.match(html, /p\.image\?'<img class="product-image"/);
+  assert.match(html, /referrerpolicy="no-referrer"/);
+});
