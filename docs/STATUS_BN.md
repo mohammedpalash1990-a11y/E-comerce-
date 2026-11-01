@@ -49,3 +49,9 @@
 - P1: Seller fulfilment, multi-vendor sub-orders, commission এবং settlement
 - P2: Payment/courier sandbox integration, returns/refunds, notifications
 - P3: Production monitoring, backups, security review এবং mobile app
+
+## Neon PostgreSQL প্রস্তুতি (২০২৬-১১-০১)
+- Neon project `haat-bangladesh` তৈরি হয়েছে (PostgreSQL 17, Singapore region); database `haat`।
+- মূল `main` branch-এ PostgreSQL schema `001_init.sql` এবং index migration `002_indexes.sql` প্রয়োগ করা হয়েছে; ২৪টি application table এবং ৪৫টি index যাচাই করা হয়েছে।
+- আলাদা `haat-schema-validation` branch-এও schema যাচাইয়ের জন্য migration চালানো হয়েছে।
+- এটি কেবল database schema provisioning; API এখনো `node:sqlite` synchronous API ব্যবহার করে। PostgreSQL runtime adapter, route-level async conversion, seed compatibility ও end-to-end tests সম্পন্ন না হওয়া পর্যন্ত production API deploy করা যাবে না।
