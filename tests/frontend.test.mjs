@@ -58,3 +58,11 @@ test('storefront renders live product images safely when provided by API', async
   assert.match(html, /p\.image\?'<img class="product-image"/);
   assert.match(html, /referrerpolicy="no-referrer"/);
 });
+
+test('admin console exposes dashboard metrics and seller application moderation', async () => {
+  const html = await read('apps/web/public/admin.html');
+  assert.match(html, /admin\/dashboard/);
+  assert.match(html, /admin\/sellers\?status=PENDING/);
+  assert.match(html, /data-seller/);
+  assert.match(html, /dashboardStats/);
+});
