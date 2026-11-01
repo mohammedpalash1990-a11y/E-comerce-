@@ -33,3 +33,12 @@ test('initial marketplace categories are reproducibly seeded by an idempotent mi
     assert.ok(sql.includes("'" + slug + "'"), 'missing category ' + slug);
   }
 });
+
+
+test('SQLite development seed matches all canonical marketplace categories idempotently', async () => {
+  const source = await readFile(new URL('../apps/api/src/seed.mjs', import.meta.url), 'utf8');
+  assert.match(source, /ON CONFLICT\(slug\) DO NOTHING/);
+  for (const slug of ['electronics', 'fashion', 'home', 'beauty', 'grocery', 'kids', 'sports', 'books']) {
+    assert.ok(source.includes("'" + slug + "'"), 'missing development seed category ' + slug);
+  }
+});
