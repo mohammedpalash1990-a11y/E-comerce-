@@ -115,7 +115,7 @@ test('courier booking locks and scopes the seller order before creating a shipme
   const orderRead=db.calls.find(x=>x.sql?.includes('FROM seller_orders so JOIN orders'));
   assert.deepEqual(orderRead.values,['so-1',sellerId]);
   assert.ok(db.calls.some(x=>x.sql?.includes('INSERT INTO shipments')));
-  assert.ok(db.calls.some(x=>x.sql?.includes('COURIER_BOOKED')));
+  assert.ok(db.calls.some(x=>x.values?.includes('COURIER_BOOKED')));
 });
 
 test('shipment lookup cannot access a shipment owned by another seller',async()=>{
