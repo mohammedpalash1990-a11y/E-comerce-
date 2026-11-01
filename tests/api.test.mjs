@@ -31,7 +31,10 @@ test('catalog, seller product submission and admin moderation work with role che
     await delay(100);
   }
   assert.equal(ready, true, 'API should start');
-  assert.equal((await request('/api/v1/categories')).status, 200);
+  const categoryResponse = await request('/api/v1/categories');
+  assert.equal(categoryResponse.status, 200);
+  const categorySlugs = categoryResponse.data.data.map(category => category.slug).sort();
+  assert.deepEqual(categorySlugs, ['beauty', 'books', 'electronics', 'fashion', 'grocery', 'home', 'kids', 'sports']);
   const initialCatalog = await request('/api/v1/products');
   assert.equal(initialCatalog.status, 200);
   assert.ok(initialCatalog.data.data.length >= 3);
