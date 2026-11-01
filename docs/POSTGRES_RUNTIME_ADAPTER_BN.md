@@ -57,3 +57,5 @@ The configured Neon `haat` main branch was inspected read-only after adding the 
 ## BIGINT numeric parsing
 
 PostgreSQL `BIGINT` values are commonly returned as strings by node-postgres. The optional helper in `apps/api/src/postgres-types.mjs` registers a parser for OID 20 and converts values to JavaScript numbers only when they fit `Number.MAX_SAFE_INTEGER`. This matters because marketplace prices, balances, stock counts and SQL `COUNT(*)` values are consumed by application arithmetic. Values outside the safe range fail loudly instead of silently rounding. Configure the parser before constructing the Pool; do not apply it to arbitrary `NUMERIC`/decimal values.
+
+The placeholder scanner also distinguishes PostgreSQL standard string literals from `E'...'` escape strings, so backslashes in ordinary strings do not incorrectly escape a closing quote. Regression coverage includes both forms.
