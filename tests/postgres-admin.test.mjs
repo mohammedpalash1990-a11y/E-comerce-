@@ -137,3 +137,53 @@ test('product moderation only allows the declared source state',async()=>{
   const repo=createPostgresAdminRepository(db);
   await assert.rejects(repo.moderateProduct({productId:'product-3',actorId:'admin-1',decision:'APPROVE'}),e=>e.status===409&&e.code==='PRODUCT_NOT_MODERATABLE');
 });
+
+test('full refund is atomic, updates payment state and writes negative finance ledger entries',async()=>{
+  const db=fakeDatabase((method,sql)=>{
+    if(sql.includes('FROM orders WHERE id='))return{id:'order-1',user_id:'buyer-1',total_paisa:'100000',payment_status:'PAID'};
+    if(sql.includes('FROM refunds WHERE order_id='))return{amount:'0'};
+    if(sql.includes('FROM seller_orders WHERE order_id='))return[{id:'so-1',seller_id:'seller-1',net_paisa:'80000'}];
+    return undefined;
+  });
+  const repo=createPostgresAdminRepository(db,{createId:(()=>{let n=0;return()=> 'refund-'+(++n);})(),clock:()=> '2026-11-02T10:00:00.000Z'});
+  assert.deepEqual(await repo.createRefund({orderId:'order-1',actorId:'admin-1',amountBdt:1000,reason:'customer issue'}),{id:'refund-1',status:'APPROVED'});
+  assert.ok(db.calls.some(x=>x.sql?.includes("UPDATE orders SET payment_status=")&&x.values[0]==='REFUNDED'));
+  assert.ok(db.calls.some(x=>x.sql?.includes('INSERT INTO transactions')&&x.values[1]==='REFUND'&&x.values[5]===-100000));
+  assert.ok(db.calls.some(x=>x.sql?.includes('INSERT INTO transactions')&&x.values[1]==='SELLER_REVERSAL'&&x.values[5]===-80000));
+  assert.ok(db.calls.some(x=>x.sql?.includes("UPDATE payments SET status='REFUNDED'")));
+});
+
+test('refund amount cannot exceed the remaining order total',async()=>{
+  const db=fakeDatabase((method,sql)=>sql.includes('FROM orders WHERE id=')?{id:'order-2',user_id:'buyer-2',total_paisa:'10000',payment_status:'PAID'}:sql.includes('FROM refunds WHERE order_id=')?{amount:'5000'}:undefined);
+  const repo=createPostgresAdminRepository(db);
+  await assert.rejects(repo.createRefund({orderId:'order-2',actorId:'admin-1',amountBdt:60}),e=>e.status===409&&e.code==='REFUND_LIMIT_EXCEEDED');
+  assert.equal(db.calls.some(x=>x.sql?.includes('INSERT INTO transactions')),false);
+});
+
+test('requested refund approval serializes on parent order and applies seller earning reversal',async()=>{
+  const db=fakeDatabase((method,sql)=>{
+    if(sql.includes('FROM refunds WHERE id=')&&!sql.includes('FOR UPDATE'))return{order_id:'order-3'};
+    if(sql.includes('FROM orders WHERE id='))return{id:'order-3',user_id:'buyer-3',total_paisa:'20000',payment_status:'PAID'};
+    if(sql.includes('FROM refunds WHERE id=')&&sql.includes('FOR UPDATE'))return{id:'refund-3',order_id:'order-3',amount_paisa:'5000',status:'REQUESTED'};
+    if(sql.includes('FROM refunds WHERE order_id='))return{amount:'0'};
+    if(sql.includes('FROM seller_orders WHERE order_id='))return[{id:'so-3',seller_id:'seller-3',net_paisa:'10000'}];
+    return undefined;
+  });
+  const repo=createPostgresAdminRepository(db);
+  assert.deepEqual(await repo.approveRefund({refundId:'refund-3',actorId:'admin-1'}),{id:'refund-3',status:'APPROVED'});
+  assert.ok(db.calls.some(x=>x.sql?.includes('FROM orders WHERE id=')&&x.sql.includes('FOR UPDATE')));
+  assert.ok(db.calls.some(x=>x.sql?.includes('INSERT INTO transactions')&&x.values[1]==='SELLER_REVERSAL'&&x.values[5]===-2500));
+});
+
+test('refund rejection is single-use and does not change order payment state',async()=>{
+  const db=fakeDatabase((method,sql)=>{
+    if(sql.includes('FROM refunds WHERE id=')&&!sql.includes('FOR UPDATE'))return{order_id:'order-4'};
+    if(sql.includes('FROM orders WHERE id='))return{id:'order-4'};
+    if(sql.includes('FROM refunds WHERE id=')&&sql.includes('FOR UPDATE'))return{id:'refund-4',status:'REQUESTED'};
+    return undefined;
+  });
+  const repo=createPostgresAdminRepository(db);
+  assert.deepEqual(await repo.rejectRefund({refundId:'refund-4',actorId:'admin-1'}),{id:'refund-4',status:'REJECTED'});
+  assert.ok(db.calls.some(x=>x.sql?.includes("UPDATE refunds SET status='REJECTED'")));
+  assert.equal(db.calls.some(x=>x.sql?.includes('INSERT INTO transactions')),false);
+});
