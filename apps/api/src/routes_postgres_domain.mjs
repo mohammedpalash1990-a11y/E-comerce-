@@ -292,6 +292,7 @@ export default function registerPostgresDomain(route, ok, {
     };
   }));
   route('POST', '/api/v1/seller/orders/:id/status', ['SELLER'], invoke(ok, async ({ user, params, body }) => {
+    if (seller) await seller.assertWritable(user.id, { allowPending: false });
     const status = String(body.status || '').toUpperCase();
     if (!['CONFIRMED','PROCESSING','SHIPPED','DELIVERED','CANCELLED'].includes(status)) {
       throw new HttpError(400, 'Invalid order status');
