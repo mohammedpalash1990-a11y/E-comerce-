@@ -60,7 +60,8 @@
 ## Storefront preview UX সংশোধন (২০২৬-১১-০১)
 - API offline থাকলে storefront আর hard-coded ৮টি নমুনা পণ্যকে live inventory হিসেবে দেখায় না; পরিষ্কার offline/preview বার্তা ও retry control দেখায়।
 - পণ্য ও category API থেকে একসঙ্গে লোড হয়; cart-এর localStorage key versioned করা হয়েছে।
-- Seller এবং Admin login পেজে `/health` endpoint দিয়ে API/database connection status দেখায়।
+- Seller এবং Admin পেজে সবসময় দৃশ্যমান `/health` endpoint status থাকে; Admin Console-এ dashboard KPI, pending seller approvals, product approvals ও product thumbnail দেখানো হয়।
+- Seller product submission form-এ description ও HTTPS image URL যোগ করা হয়েছে; seller list এবং customer storefront-এ image preview দেখায়।
 - নতুন frontend regression test যোগ হয়েছে; CI pass করেছে।
 
 ## Neon PostgreSQL প্রস্তুতি (২০২৬-১১-০১)
