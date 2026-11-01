@@ -50,8 +50,8 @@ export function applySellerStatus(so, next, actor, note) {
   }
   q('UPDATE seller_orders SET status=? WHERE id=?').run(next, so.id);
   if (next === 'DELIVERED') {
-    q('INSERT INTO transactions VALUES(?,?,?,?,?,?,?,?)').run(id(), 'SELLER_EARNING', so.order_id, so.id, so.seller_id, so.net_paisa, so.id, now());
-    q('INSERT INTO transactions VALUES(?,?,?,?,?,?,?,?)').run(id(), 'COMMISSION', so.order_id, so.id, so.seller_id, so.commission_paisa, so.id, now());
+    q('INSERT INTO transactions VALUES(?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING').run(id(), 'SELLER_EARNING', so.order_id, so.id, so.seller_id, so.net_paisa, so.id, now());
+    q('INSERT INTO transactions VALUES(?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING').run(id(), 'COMMISSION', so.order_id, so.id, so.seller_id, so.commission_paisa, so.id, now());
   }
   addEvent(so.order_id, so.id, next, note, actor);
   audit(actor, 'ORDER_STATUS_' + next, 'seller_order', so.id, { from: so.status, order_id: so.order_id });
