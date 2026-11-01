@@ -13,8 +13,9 @@
 <label class="field">স্টক<input name="stock" type="number" min="0" max="1000000" step="1" required></label><button class="btn" type="submit">পণ্য জমা দিন</button></form><div id="formMsg" class="notice hidden"></div></section>
 <section class="panel"><div class="toolbar"><div><h2>আমার অর্ডারসমূহ</h2><p class="muted">শুধু আপনার পণ্যের অর্ডার ও ডেলিভারি তথ্য এখানে দেখানো হবে।</p></div><button id="refreshOrders" class="btn">অর্ডার রিফ্রেশ</button></div><div id="orderCards"><p class="muted">লোড হচ্ছে...</p></div></section>
 <section class="panel"><div class="toolbar"><h2>আমার পণ্যসমূহ</h2><button id="refresh" class="btn">রিফ্রেশ</button></div><div class="tablewrap"><table><thead><tr><th>পণ্য</th><th>দাম</th><th>স্টক</th><th>অবস্থা</th></tr></thead><tbody id="productRows"><tr><td colspan="4">লোড হচ্ছে...</td></tr></tbody></table></div></section></section>
-</main><script>
-const api='/api/v1';let token=localStorage.getItem('haat_seller_token')||'';
+</main><script src="./api-config.js"></script>
+<script>
+const api=(String(window.HAAT_API_BASE||'').replace(/\/+$/,'')+'/api/v1');let token=localStorage.getItem('haat_seller_token')||'';
 const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=n=>'৳'+Number(n).toLocaleString('en-BD',{maximumFractionDigits:2});
 async function call(path,options={}){const r=await fetch(api+path,{...options,headers:{...(options.body?{'content-type':'application/json'}:{}),...(token?{authorization:'Bearer '+token}:{}),...(options.headers||{})}});const data=await r.json();if(!r.ok)throw Error(data.error||'Request failed');return data}
