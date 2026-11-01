@@ -17,14 +17,14 @@ GitHub Pages hosts only static files. It does not execute the Node.js API, SQLit
 ## 3. Deploying the API to a Node.js host
 1. Deploy the repository to a Node.js 22.5+ service (not a static-site service).
 2. Set the start command to `npm run start:api`.
-3. Attach persistent storage and set `SQLITE_FILE` to a writable persistent path for a private staging/demo only. Do not use SQLite on ephemeral storage.
-4. Set `NODE_ENV=production`, `PORT` from the host, `CORS_ORIGINS` to the exact HTTPS storefront origin(s), and a strong unique `PAYMENT_WEBHOOK_SECRET`.
-5. Configure `ADMIN_PHONE` and `ADMIN_PASSWORD` only for first production admin bootstrap. Never use the demo credentials.
-6. Verify `GET /health` and review server logs before connecting the frontend.
-7. Set `window.HAAT_API_BASE` in `apps/web/public/api-config.js` to the API origin only (for example `https://api.example.com`, without `/api/v1`).
-8. Redeploy the static frontend and test customer, seller and admin flows against the staging API.
+3. For an isolated private development demo only, attach persistent storage and set `SQLITE_FILE` to a writable path. Never use ephemeral storage for data you need to keep.
+4. Keep `NODE_ENV=development` for the current SQLite demo runtime and protect it behind private access; demo accounts are seeded in this mode.
+5. Do not set `NODE_ENV=production`: the API intentionally exits with a clear error until the PostgreSQL runtime adapter and production migration path exist.
+6. `DATABASE_URL` is currently reserved/documentary and is not consumed by the application.
+7. After a supported database runtime is implemented, configure exact HTTPS `CORS_ORIGINS`, secret-manager values, admin bootstrap and health checks.
+8. Set `window.HAAT_API_BASE` to the API origin only after the API is deployed and validated; redeploy the frontend and run staging E2E tests.
 
-**Important:** the current runtime is SQLite-backed. A PostgreSQL URL in `.env.example` does not mean the API is already using PostgreSQL. Do not use this configuration for real customer or payment data.
+**Important:** GitHub Pages is a static preview. The current API uses SQLite, and the application deliberately blocks production mode rather than risk accepting real customer/payment data without a supported persistent production database.
 
 ## 4. Before production
 - Implement and test the PostgreSQL runtime adapter and reviewed migrations.
