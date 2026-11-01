@@ -17,6 +17,11 @@ export const config = {
   exposeDevCodes: !prod
 };
 if (prod && !config.webhookSecret) throw new Error('PAYMENT_WEBHOOK_SECRET is required in production');
+if (prod) {
+  if (env.DATABASE_URL) throw new Error('PostgreSQL runtime adapter is not implemented; production startup is blocked');
+  throw new Error('Production startup is blocked: current API runtime uses SQLite. Use development/staging only until PostgreSQL runtime and migrations are implemented');
+}
+
 
 export class HttpError extends Error { constructor(status, message, extra) { super(message); this.status = status; this.extra = extra; } }
 export const bad = m => new HttpError(400, m);
