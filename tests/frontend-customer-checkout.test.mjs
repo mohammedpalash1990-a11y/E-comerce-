@@ -61,3 +61,78 @@ test('customer and storefront inline JavaScript parses without syntax errors', a
     for (const script of scripts) new vm.Script(script, { filename: name + ':inline-script' });
   }
 });
+
+
+test('storefront cart sync clears local cart only after successful server writes', async () => {
+  const match = account.match(/async function syncStorefrontCart\(\)\{[\s\S]*?\nasync function enter\(/);
+  assert.ok(match, 'syncStorefrontCart implementation should be present');
+  const source = match[0].replace(/\nasync function enter\($/, '');
+  const storage = new Map([['haat_cart_v1', JSON.stringify({ product_a: 2, product_b: 1 })]]);
+  const calls = [];
+  const context = {
+    localStorage: {
+      getItem: key => storage.get(key) ?? null,
+      setItem: (key, value) => storage.set(key, value),
+      removeItem: key => storage.delete(key)
+    },
+    request: async (path, options) => {
+      calls.push({ path, options });
+      return { data: {} };
+    }
+  };
+  const sync = vm.runInNewContext('(' + source + ')', context);
+  const errors = await sync();
+  assert.deepEqual(errors, []);
+  assert.equal(storage.has('haat_cart_v1'), false);
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls.map(x => JSON.parse(x.options.body)), [
+    { productId: 'product_a', quantity: 2 },
+    { productId: 'product_b', quantity: 1 }
+  ]);
+});
+
+test('storefront cart sync retains only items whose server write failed', async () => {
+  const match = account.match(/async function syncStorefrontCart\(\)\{[\s\S]*?\nasync function enter\(/);
+  assert.ok(match);
+  const source = match[0].replace(/\nasync function enter\($/, '');
+  const storage = new Map([['haat_cart_v1', JSON.stringify({ good: 3, unavailable: 2 })]]);
+  const context = {
+    localStorage: {
+      getItem: key => storage.get(key) ?? null,
+      setItem: (key, value) => storage.set(key, value),
+      removeItem: key => storage.delete(key)
+    },
+    request: async (_path, options) => {
+      const body = JSON.parse(options.body);
+      if (body.productId === 'unavailable') throw new Error('স্টকে যথেষ্ট পণ্য নেই');
+      return { data: {} };
+    }
+  };
+  const sync = vm.runInNewContext('(' + source + ')', context);
+  const errors = await sync();
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /স্টকে যথেষ্ট পণ্য নেই/);
+  assert.deepEqual(JSON.parse(storage.get('haat_cart_v1')), { unavailable: 2 });
+});
+
+test('storefront cart sync rejects malformed data and invalid quantities without deleting them', async () => {
+  const match = account.match(/async function syncStorefrontCart\(\)\{[\s\S]*?\nasync function enter\(/);
+  assert.ok(match);
+  const source = match[0].replace(/\nasync function enter\($/, '');
+  for (const raw of ['{broken', JSON.stringify({ invalid: 0, fractional: 1.5, excessive: 1001 })]) {
+    const storage = new Map([['haat_cart_v1', raw]]);
+    let requestCount = 0;
+    const sync = vm.runInNewContext('(' + source + ')', {
+      localStorage: {
+        getItem: key => storage.get(key) ?? null,
+        setItem: (key, value) => storage.set(key, value),
+        removeItem: key => storage.delete(key)
+      },
+      request: async () => { requestCount++; return {}; }
+    });
+    const errors = await sync();
+    assert.ok(errors.length > 0);
+    assert.equal(requestCount, 0);
+    assert.equal(storage.get('haat_cart_v1'), raw);
+  }
+});
