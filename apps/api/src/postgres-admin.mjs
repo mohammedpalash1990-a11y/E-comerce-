@@ -44,6 +44,57 @@ export function createPostgresAdminRepository(database,{createId=randomUUID,cloc
     });
   }
 
+  function normalizePhone(value) { return String(value??'').replace(/[\\s-]/g,'').replace(/^\\+?88/,''); }
+  function validPhone(value) { return /^01[3-9]\\d{8}$/.test(value); }
+  function validEmail(value) { return /^[^\\s@<>]+@[^\\s@<>]+\\.[^\\s@<>]+$/.test(value)&&value.length<=160; }
+
+  async function listCustomers({query:search='',limit:pageSize=100}={}) {
+    const term='%'+String(search||'').trim().slice(0,60)+'%';
+    return query("SELECT u.id,u.name,u.phone,u.email,u.status,u.created_at,(SELECT COUNT(*) FROM orders o WHERE o.user_id=u.id) orders FROM users u WHERE u.role='CUSTOMER' AND (u.name LIKE ? OR u.phone LIKE ? OR COALESCE(u.email,'') LIKE ?) ORDER BY u.created_at DESC LIMIT ?").all(term,term,term,limit(pageSize));
+  }
+
+  async function getCustomer(customerId) {
+    const customer=await query("SELECT id,name,phone,email,status,phone_verified,email_verified,created_at FROM users WHERE id=? AND role='CUSTOMER'").get(String(customerId));
+    if(!customer) throw fail(404,'CUSTOMER_NOT_FOUND','কাস্টমার পাওয়া যায়নি');
+    const [addresses,orders]=await Promise.all([
+      query('SELECT label,name,phone,address,area,is_default FROM addresses WHERE user_id=?').all(String(customerId)),
+      query('SELECT COUNT(*) count FROM orders WHERE user_id=?').get(String(customerId))
+    ]);
+    return {...customer,addresses,order_count:integer(orders.count,'order_count')};
+  }
+
+  async function updateCustomer({customerId,actorId,body={}}) {
+    const current=await query("SELECT id,name,phone,email FROM users WHERE id=? AND role='CUSTOMER'").get(String(customerId));
+    if(!current) throw fail(404,'CUSTOMER_NOT_FOUND','কাস্টমার পাওয়া যায়নি');
+    const name=String(body.name??current.name).trim().slice(0,100),phone=normalizePhone(body.phone??current.phone),email=String(body.email??current.email??'').trim().toLowerCase()||null;
+    if(!name||!validPhone(phone)||(email&&!validEmail(email))) throw fail(400,'INVALID_CUSTOMER_DETAILS','মোবাইল, ইমেইল বা নাম সঠিক নয়');
+    const duplicate=await query("SELECT id FROM users WHERE id<>? AND (phone=? OR (? IS NOT NULL AND lower(email)=?)) LIMIT 1").get(String(customerId),phone,email,email);
+    if(duplicate) throw fail(409,'CUSTOMER_CONTACT_IN_USE','মোবাইল বা ইমেইল অন্য অ্যাকাউন্টে ব্যবহৃত');
+    await database.tx(async()=>{
+      await query('UPDATE users SET name=?,phone=?,email=? WHERE id=? AND role=\'CUSTOMER\'').run(name,phone,email,String(customerId));
+      await query('INSERT INTO audit_logs(id,actor_id,action,entity,entity_id,detail,created_at) VALUES(?,?,?,?,?,?,?)').run(makeId(),String(actorId),'CUSTOMER_EDIT','user',String(customerId),JSON.stringify({name,phone,email}),stamp());
+    });
+    return getCustomer(customerId);
+  }
+
+  async function setCustomerStatus({customerId,actorId,status}) {
+    const next=String(status||'').toUpperCase();
+    if(!['ACTIVE','SUSPENDED'].includes(next)) throw fail(400,'INVALID_CUSTOMER_STATUS','কাস্টমার স্ট্যাটাস সঠিক নয়');
+    return database.tx(async()=>{
+      const customer=await query("SELECT id FROM users WHERE id=? AND role='CUSTOMER' FOR UPDATE").get(String(customerId));
+      if(!customer) throw fail(404,'CUSTOMER_NOT_FOUND','কাস্টমার পাওয়া যায়নি');
+      await query('UPDATE users SET status=? WHERE id=?').run(next,String(customerId));
+      if(next==='SUSPENDED') await query('DELETE FROM sessions WHERE user_id=?').run(String(customerId));
+      await query('INSERT INTO audit_logs(id,actor_id,action,entity,entity_id,detail,created_at) VALUES(?,?,?,?,?,?,?)').run(makeId(),String(actorId),'CUSTOMER_'+next,'user',String(customerId),'{}',stamp());
+      return {id:String(customerId),status:next};
+    });
+  }
+
+  async function listCustomerOrders(customerId) {
+    const rows=await query('SELECT id,total_paisa,subtotal_paisa,shipping_paisa,discount_paisa,status,payment_method,payment_status,created_at FROM orders WHERE user_id=? ORDER BY created_at DESC LIMIT 200').all(String(customerId));
+    return rows.map(row=>({...row,orderNumber:'BD-'+String(row.id).slice(0,8).toUpperCase(),total_bdt:money(row.total_paisa),subtotal_bdt:money(row.subtotal_paisa),shipping_bdt:money(row.shipping_paisa),discount_bdt:money(row.discount_paisa)}));
+  }
+
   async function listSellers({status,limit:pageSize=100}={}) {
     const state=status?String(status).toUpperCase():null;
     if(state&&!['PENDING','APPROVED','REJECTED','SUSPENDED'].includes(state)) throw fail(400,'INVALID_SELLER_STATUS','বিক্রেতার স্ট্যাটাস সঠিক নয়');
@@ -346,5 +397,5 @@ export function createPostgresAdminRepository(database,{createId=randomUUID,cloc
     return {total_revenue_bdt:money(row.revenue),total_orders:integer(row.orders,'orders'),total_customers:integer(row.customers,'customers'),total_sellers:integer(row.sellers,'sellers'),pending_seller_applications:integer(row.pending_sellers,'pending_sellers'),pending_product_approvals:integer(row.pending_products,'pending_products'),total_products:integer(row.products,'products'),active_products:integer(row.active_products,'active_products'),cancelled_orders:integer(row.cancelled_orders,'cancelled_orders'),pending_payouts:integer(row.pending_payouts,'pending_payouts'),pending_payout_amount_bdt:money(row.pending_payout_amount),platform_commission_bdt:money(row.commission)};
   }
 
-  return Object.freeze({listPayouts,decidePayout,listSellers,getSeller,getSellerOverview,listSellerProducts,listSellerOrders,listProducts,decideSeller,setCommission,listCategories,createCategory,updateCategory,deleteCategory,listBrands,createBrand,deleteBrand,listCoupons,createCoupon,toggleCoupon,listPendingProducts,moderateProduct,listRefunds,createRefund,approveRefund,rejectRefund,financeSummary,listTransactions,financeReport,listAuditLogs,dashboard});
+  return Object.freeze({listPayouts,decidePayout,listCustomers,getCustomer,updateCustomer,setCustomerStatus,listCustomerOrders,listSellers,getSeller,getSellerOverview,listSellerProducts,listSellerOrders,listProducts,decideSeller,setCommission,listCategories,createCategory,updateCategory,deleteCategory,listBrands,createBrand,deleteBrand,listCoupons,createCoupon,toggleCoupon,listPendingProducts,moderateProduct,listRefunds,createRefund,approveRefund,rejectRefund,financeSummary,listTransactions,financeReport,listAuditLogs,dashboard});
 }
