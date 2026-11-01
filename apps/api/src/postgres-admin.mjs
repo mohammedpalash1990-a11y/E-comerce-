@@ -57,6 +57,40 @@ export function createPostgresAdminRepository(database,{createId=randomUUID,cloc
     return row;
   }
 
+  async function getSellerOverview(sellerId) {
+    const seller=await getSeller(sellerId);
+    const row=await query(`SELECT
+      (SELECT COUNT(*) FROM products WHERE seller_id=? AND status<>'ARCHIVED') product_count,
+      (SELECT COUNT(*) FROM seller_orders WHERE seller_id=?) order_count,
+      COALESCE((SELECT SUM(amount_paisa) FROM transactions WHERE seller_id=? AND kind IN ('SELLER_EARNING','SELLER_REVERSAL')),0) earnings,
+      COALESCE((SELECT SUM(amount_paisa) FROM transactions WHERE seller_id=? AND kind='COMMISSION'),0) commission,
+      COALESCE((SELECT SUM(amount_paisa) FROM payouts WHERE seller_id=? AND status='APPROVED'),0) paid,
+      COALESCE((SELECT SUM(amount_paisa) FROM payouts WHERE seller_id=? AND status IN ('REQUESTED','APPROVED')),0) reserved,
+      COALESCE((SELECT SUM(net_paisa) FROM seller_orders WHERE seller_id=? AND status IN ('CONFIRMED','PROCESSING','SHIPPED')),0) pending`).get(String(sellerId),String(sellerId),String(sellerId),String(sellerId),String(sellerId),String(sellerId),String(sellerId));
+    const earnings=integer(row.earnings,'earnings'),reserved=integer(row.reserved,'reserved');
+    return {...seller,product_count:integer(row.product_count,'product_count'),order_count:integer(row.order_count,'order_count'),finance:{commission_bdt:money(row.commission),earned_bdt:money(earnings),available_bdt:money(earnings-reserved),paid_out_bdt:money(row.paid),pending_bdt:money(row.pending)}};
+  }
+
+  async function listSellerProducts(sellerId) {
+    const rows=await query('SELECT p.id,p.name_bn,p.name_en,p.price_paisa,p.discount_paisa,p.stock,p.status FROM products p WHERE p.seller_id=? ORDER BY p.created_at DESC,p.id DESC').all(String(sellerId));
+    return rows.map(row=>({...row,price_bdt:money(row.price_paisa),discount_price_bdt:row.discount_paisa==null?null:money(row.discount_paisa)}));
+  }
+
+  async function listSellerOrders(sellerId) {
+    const rows=await query('SELECT id,order_id,status,subtotal_paisa,commission_paisa,net_paisa,created_at FROM seller_orders WHERE seller_id=? ORDER BY created_at DESC,id DESC LIMIT 200').all(String(sellerId));
+    return rows.map(row=>({...row,orderNumber:'BD-'+String(row.order_id).slice(0,8).toUpperCase(),subtotal_bdt:money(row.subtotal_paisa),commission_bdt:money(row.commission_paisa),net_bdt:money(row.net_paisa)}));
+  }
+
+  async function listProducts({status,query:search='',limit:pageSize=100}={}) {
+    const state=status?String(status).toUpperCase():null;
+    const term='%'+String(search||'').trim().slice(0,80)+'%';
+    const rows=await query(`SELECT p.id,p.name_bn,p.name_en,p.price_paisa,p.discount_paisa,p.stock,p.status,c.slug category_slug,sp.shop_name seller_name
+      FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN seller_profiles sp ON sp.user_id=p.seller_id
+      WHERE p.status<>'ARCHIVED' AND (p.name_bn LIKE ? OR p.name_en LIKE ?)${state?' AND p.status=?':''}
+      ORDER BY p.created_at DESC,p.id DESC LIMIT ?`).all(...(state?[term,term,state,limit(pageSize)]:[term,term,limit(pageSize)]));
+    return rows.map(row=>({...row,price_bdt:money(row.price_paisa),discount_price_bdt:row.discount_paisa==null?null:money(row.discount_paisa)}));
+  }
+
   async function decideSeller({sellerId,actorId,decision,reason=''}) {
     const action=String(decision||'').toUpperCase();
     const states={APPROVE:['APPROVED','ACTIVE'],REJECT:['REJECTED','ACTIVE'],SUSPEND:['SUSPENDED','SUSPENDED'],ACTIVATE:['APPROVED','ACTIVE']};
@@ -224,5 +258,5 @@ export function createPostgresAdminRepository(database,{createId=randomUUID,cloc
     return {total_revenue_bdt:money(row.revenue),total_orders:integer(row.orders,'orders'),total_customers:integer(row.customers,'customers'),total_sellers:integer(row.sellers,'sellers'),pending_seller_applications:integer(row.pending_sellers,'pending_sellers'),pending_product_approvals:integer(row.pending_products,'pending_products'),total_products:integer(row.products,'products'),active_products:integer(row.active_products,'active_products'),cancelled_orders:integer(row.cancelled_orders,'cancelled_orders'),pending_payouts:integer(row.pending_payouts,'pending_payouts'),pending_payout_amount_bdt:money(row.pending_payout_amount),platform_commission_bdt:money(row.commission)};
   }
 
-  return Object.freeze({listPayouts,decidePayout,listSellers,getSeller,decideSeller,setCommission,listPendingProducts,moderateProduct,listRefunds,createRefund,approveRefund,rejectRefund,financeSummary,listTransactions,financeReport,listAuditLogs,dashboard});
+  return Object.freeze({listPayouts,decidePayout,listSellers,getSeller,getSellerOverview,listSellerProducts,listSellerOrders,listProducts,decideSeller,setCommission,listPendingProducts,moderateProduct,listRefunds,createRefund,approveRefund,rejectRefund,financeSummary,listTransactions,financeReport,listAuditLogs,dashboard});
 }
