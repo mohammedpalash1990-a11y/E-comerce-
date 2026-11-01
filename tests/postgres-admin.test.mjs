@@ -187,3 +187,31 @@ test('refund rejection is single-use and does not change order payment state',as
   assert.ok(db.calls.some(x=>x.sql?.includes("UPDATE refunds SET status='REJECTED'")));
   assert.equal(db.calls.some(x=>x.sql?.includes('INSERT INTO transactions')),false);
 });
+
+test('admin seller overview scopes all finance aggregates to the selected seller',async()=>{
+  const db=fakeDatabase((method,sql)=>{
+    if(sql.includes('FROM seller_profiles sp JOIN users u WHERE u.id='))return{id:'seller-10',status:'APPROVED',shop_name:'Shop 10'};
+    if(sql.includes('product_count'))return{product_count:'4',order_count:'3',earnings:'50000',commission:'5000',paid:'10000',reserved:'15000',pending:'20000'};
+    return undefined;
+  });
+  const repo=createPostgresAdminRepository(db);
+  const result=await repo.getSellerOverview('seller-10');
+  assert.equal(result.product_count,4);
+  assert.equal(result.order_count,3);
+  assert.equal(result.finance.available_bdt,350);
+  assert.deepEqual(db.calls[1].values,Array(7).fill('seller-10'));
+});
+
+test('admin product listing validates status and formats paisa without losing decimals',async()=>{
+  const db=fakeDatabase((method,sql)=>sql.includes('FROM products p JOIN categories')?[{id:'p-1',name_bn:'পণ্য',price_paisa:'12550',discount_paisa:'9999',stock:'2',status:'ACTIVE'}]:[]);
+  const repo=createPostgresAdminRepository(db);
+  const rows=await repo.listProducts({status:'ACTIVE',query:'পণ্য'});
+  assert.equal(rows[0].price_bdt,125.5);
+  assert.equal(rows[0].discount_price_bdt,99.99);
+  assert.deepEqual(db.calls[0].values,['%পণ্য%','%পণ্য%','ACTIVE',100]);
+});
+
+test('seller list rejects unknown moderation states',async()=>{
+  const repo=createPostgresAdminRepository(fakeDatabase(()=>[]));
+  await assert.rejects(repo.listSellers({status:'UNKNOWN'}),e=>e.status===400&&e.code==='INVALID_SELLER_STATUS');
+});
