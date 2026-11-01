@@ -24,7 +24,7 @@ export function createPostgresAdminRepository(database,{createId=randomUUID,cloc
       const payout=await query("SELECT id,seller_id,amount_paisa,status FROM payouts WHERE id=? FOR UPDATE").get(String(payoutId));
       if(!payout||payout.status!=='REQUESTED') throw fail(409,'PAYOUT_NOT_PENDING','পেআউট অনুরোধটি আর pending নেই');
       if(action==='APPROVE') {
-        const totals=await query("SELECT COALESCE(SUM(amount_paisa),0) reserved FROM payouts WHERE seller_id=? AND id<>? AND status IN ('REQUESTED','APPROVED')").get(payout.seller_id);
+        const totals=await query("SELECT COALESCE(SUM(amount_paisa),0) reserved FROM payouts WHERE seller_id=? AND id<>? AND status IN ('REQUESTED','APPROVED')").get(payout.seller_id,String(payoutId));
         const earnings=await query("SELECT COALESCE(SUM(amount_paisa),0) earned FROM transactions WHERE seller_id=? AND kind IN ('SELLER_EARNING','SELLER_REVERSAL')").get(payout.seller_id);
         const reserved=integer(totals.reserved||0,'reserved'), earned=integer(earnings.earned||0,'earned'), amount=integer(payout.amount_paisa,'payout.amount_paisa');
         if(amount+reserved>earned) throw fail(409,'INSUFFICIENT_BALANCE','পেআউট অনুমোদনের জন্য পর্যাপ্ত balance নেই');
