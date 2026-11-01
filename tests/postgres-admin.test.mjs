@@ -359,3 +359,11 @@ test('admin shipment delivery status calls the existing PostgreSQL seller order 
   assert.equal(transition.nextStatus,'DELIVERED');
   assert.ok(db.calls.some(x=>x.sql?.includes('UPDATE shipments SET status=')));
 });
+
+test('admin order note is saved under a row lock with audit trail',async()=>{
+  const db=fakeDatabase((method,sql)=>sql.includes('FROM orders WHERE id=')?{id:'order-note'}:undefined);
+  const repo=createPostgresAdminRepository(db);
+  assert.deepEqual(await repo.setOrderNote({orderId:'order-note',actorId:'admin-1',note:'Check delivery'}),{saved:true});
+  assert.ok(db.calls.some(x=>x.sql?.includes('FROM orders WHERE id=')&&x.sql.includes('FOR UPDATE')));
+  assert.ok(db.calls.some(x=>x.sql?.includes('UPDATE orders SET admin_note=')&&x.values[0]==='Check delivery'));
+});
