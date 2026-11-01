@@ -24,6 +24,12 @@ function buildRoutes(overrides = {}) {
         status: 'AWAITING_PAYMENT', payment_status: 'PENDING', payment_method: 'BKASH'
       })
     },
+    customer: {
+      listAddresses: async () => [], createAddress: async () => ({ id: 'address-1' }),
+      updateAddress: async input => ({ id: input.addressId }), deleteAddress: async () => ({ deleted: true }),
+      listWishlist: async () => [], addWishlist: async () => ({ added: true }),
+      removeWishlist: async () => ({ removed: true }), saveReview: async () => ({ saved: true })
+    },
     orders: {
       listCustomerOrders: async () => [],
       getCustomerOrder: async () => null,
@@ -60,6 +66,28 @@ function route(app, method, pattern) {
   assert.ok(found, method + ' ' + pattern + ' route is registered');
   return found.handler;
 }
+
+
+test('PostgreSQL customer account routes delegate address, wishlist and review operations', async () => {
+  const app = buildRoutes();
+  const address = await route(app, 'POST', '/api/v1/customer/addresses')({
+    user: { id: 'buyer-1', name: 'Buyer' }, body: { name: 'Buyer' }
+  });
+  assert.equal(address.status, 201);
+  assert.equal(address.body.data.id, 'address-1');
+
+  const wishlist = await route(app, 'POST', '/api/v1/customer/wishlist')({
+    user: { id: 'buyer-1' }, body: { productId: 'p-1' }
+  });
+  assert.equal(wishlist.status, 201);
+  assert.deepEqual(wishlist.body.data, { added: true });
+
+  const review = await route(app, 'POST', '/api/v1/customer/products/:id/reviews')({
+    user: { id: 'buyer-1' }, params: ['p-1'], body: { rating: 5 }
+  });
+  assert.equal(review.status, 201);
+  assert.deepEqual(review.body.data, { saved: true });
+});
 
 test('PostgreSQL domain routes provide the existing customer cart response shape', async () => {
   const app = buildRoutes();
