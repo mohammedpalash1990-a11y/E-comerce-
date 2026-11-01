@@ -212,7 +212,7 @@ export function createPostgresAdminRepository(database,{createId=randomUUID,cloc
   async function listBrands() { return query('SELECT id,slug,name FROM brands ORDER BY name').all(); }
 
   async function createBrand({actorId,name}) {
-    const label=String(name??'').trim().slice(0,80),slug=label.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,80);
+    const label=String(name??'').trim().slice(0,80),slug=label.toLowerCase().replace(/[^a-z0-9\u0980-\u09ff]+/g,'-').replace(/^-|-$/g,'').slice(0,80);
     if(!label||!slug) throw fail(400,'INVALID_BRAND','ব্র্যান্ডের নাম সঠিক নয়');
     const id=makeId();
     await database.tx(async()=>{
