@@ -1,0 +1,10 @@
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(lower(email)) WHERE email IS NOT NULL AND email<>'';
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_products_status ON products(status,active);
+CREATE INDEX IF NOT EXISTS idx_products_seller ON products(seller_id);
+CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id,created_at);
+CREATE INDEX IF NOT EXISTS idx_seller_orders_seller ON seller_orders(seller_id,created_at);
+CREATE INDEX IF NOT EXISTS idx_order_items_so ON order_items(seller_order_id);
+CREATE INDEX IF NOT EXISTS idx_payments_order ON payments(order_id);
+CREATE INDEX IF NOT EXISTS idx_tx_seller ON transactions(seller_id);
+CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at);

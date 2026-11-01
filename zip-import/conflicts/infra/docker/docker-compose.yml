@@ -1,0 +1,23 @@
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.api
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      SQLITE_FILE: /app/data/marketplace.sqlite
+    ports: ["4000:4000"]
+    volumes:
+      - marketplace_data:/app/data
+  web:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.web
+    environment:
+      WEB_PORT: 3000
+      API_HOST: api
+    ports: ["3000:3000"]
+    depends_on: [api]
+volumes:
+  marketplace_data:

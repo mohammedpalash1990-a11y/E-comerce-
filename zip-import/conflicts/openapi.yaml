@@ -1,0 +1,55 @@
+openapi: 3.0.3
+info:
+  title: HAAT Marketplace API
+  version: 1.0.0
+  description: Development API contract for the Bangladesh multi-vendor marketplace MVP.
+servers:
+  - url: http://localhost:4000
+paths:
+  /health:
+    get:
+      summary: API health
+      responses:
+        '200': { description: Service is healthy }
+  /api/v1/categories:
+    get:
+      summary: List active categories
+      responses:
+        '200': { description: Category list }
+  /api/v1/products:
+    get:
+      summary: Search active products
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string }
+      responses:
+        '200': { description: Product list }
+  /api/v1/auth/login:
+    post:
+      summary: Customer, seller or admin login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, password]
+              properties:
+                phone: { type: string }
+                password: { type: string, format: password }
+      responses:
+        '200': { description: Authenticated session }
+        '401': { description: Invalid credentials }
+  /api/v1/checkout:
+    post:
+      summary: Place COD order
+      security: [{ bearerAuth: [] }]
+      responses:
+        '201': { description: Order created }
+        '401': { description: Authentication required }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
