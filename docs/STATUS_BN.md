@@ -66,6 +66,6 @@
 
 ## Neon PostgreSQL প্রস্তুতি (২০২৬-১১-০১)
 - Neon project `haat-bangladesh` তৈরি হয়েছে (PostgreSQL 17, Singapore region); database `haat`।
-- মূল `main` branch-এ PostgreSQL schema `001_init.sql` এবং index migration `002_indexes.sql` প্রয়োগ করা হয়েছে; ২৪টি application table, ৪৫টি index ও ২টি migration record যাচাই করা হয়েছে। ৮টি প্রাথমিক marketplace category-ও seed করা হয়েছে।
+- মূল `main` branch-এ PostgreSQL schema `001_init.sql`, index migration `002_indexes.sql` ও category seed migration `003_seed_categories.sql` প্রয়োগ করা হয়েছে; ২৪টি application table, ৪৫টি index ও ২টি migration record যাচাই করা হয়েছে। ৮টি প্রাথমিক marketplace category-ও idempotent migration দিয়ে seed করা হয়েছে।
 - আলাদা `haat-schema-validation` branch-এও schema যাচাইয়ের জন্য migration চালানো হয়েছে।
 - এটি কেবল database schema provisioning; API এখনো `node:sqlite` synchronous API ব্যবহার করে। PostgreSQL runtime adapter, route-level async conversion, seed compatibility ও end-to-end tests সম্পন্ন না হওয়া পর্যন্ত production API deploy করা যাবে না।
