@@ -120,6 +120,94 @@ export function createPostgresAdminRepository(database,{createId=randomUUID,cloc
     });
   }
 
+  async function listCategories() {
+    return query('SELECT id,slug,name_bn,name_en FROM categories ORDER BY name_bn').all();
+  }
+
+  async function createCategory({actorId,nameBn,nameEn='',slug=''}) {
+    const bn=String(nameBn??'').trim().slice(0,80),en=String(nameEn??'').trim().slice(0,80);
+    const key=String(slug||en||bn).trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,80);
+    if(!bn||!key) throw fail(400,'INVALID_CATEGORY','ক্যাটাগরির নাম ও slug সঠিক নয়');
+    const id=makeId();
+    await database.tx(async()=>{
+      await query('INSERT INTO categories(id,slug,name_bn,name_en) VALUES(?,?,?,?)').run(id,key,bn,en);
+      await query('INSERT INTO audit_logs(id,actor_id,action,entity,entity_id,detail,created_at) VALUES(?,?,?,?,?,?,?)').run(makeId(),String(actorId),'CATEGORY_CREATE','category',id,JSON.stringify({slug:key}),stamp());
+    });
+    return {id,slug:key};
+  }
+
+  async function updateCategory({actorId,slug,nameBn,nameEn=''}) {
+    const bn=String(nameBn??'').trim().slice(0,80),en=String(nameEn??'').trim().slice(0,80);
+    if(!bn) throw fail(400,'INVALID_CATEGORY','বাংলা নাম দিতে হবে');
+    const result=await query('UPDATE categories SET name_bn=?,name_en=? WHERE slug=?').run(bn,en,String(slug));
+    if(!result.changes) throw fail(404,'CATEGORY_NOT_FOUND','ক্যাটাগরি পাওয়া যায়নি');
+    await query('INSERT INTO audit_logs(id,actor_id,action,entity,entity_id,detail,created_at) VALUES(?,?,?,?,?,?,?)').run(makeId(),String(actorId),'CATEGORY_EDIT','category',String(slug),'{}',stamp());
+    return {slug:String(slug)};
+  }
+
+  async function deleteCategory({actorId,slug}) {
+    return database.tx(async()=>{
+      const category=await query('SELECT id FROM categories WHERE slug=? FOR UPDATE').get(String(slug));
+      if(!category) throw fail(404,'CATEGORY_NOT_FOUND','ক্যাটাগরি পাওয়া যায়নি');
+      const product=await query('SELECT id FROM products WHERE category_id=? LIMIT 1').get(category.id);
+      if(product) throw fail(409,'CATEGORY_IN_USE','এই ক্যাটাগরিতে পণ্য আছে');
+      await query('DELETE FROM categories WHERE id=?').run(category.id);
+      await query('INSERT INTO audit_logs(id,actor_id,action,entity,entity_id,detail,created_at) VALUES(?,?,?,?,?,?,?)').run(makeId(),String(actorId),'CATEGORY_DELETE','category',String(slug),'{}',stamp());
+      return {deleted:true};
+    });
+  }
+
+  async function listBrands() { return query('SELECT id,slug,name FROM brands ORDER BY name').all(); }
+
+  async function createBrand({actorId,name}) {
+    const label=String(name??'').trim().slice(0,80),slug=label.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,80);
+    if(!label||!slug) throw fail(400,'INVALID_BRAND','ব্র্যান্ডের নাম সঠিক নয়');
+    const id=makeId();
+    await database.tx(async()=>{
+      await query('INSERT INTO brands(id,slug,name) VALUES(?,?,?)').run(id,slug,label);
+      await query('INSERT INTO audit_logs(id,actor_id,action,entity,entity_id,detail,created_at) VALUES(?,?,?,?,?,?,?)').run(makeId(),String(actorId),'BRAND_CREATE','brand',id,JSON.stringify({slug}),stamp());
+    });
+    return {id,slug};
+  }
+
+  async function deleteBrand({actorId,slug}) {
+    return database.tx(async()=>{
+      const brand=await query('SELECT id FROM brands WHERE slug=? FOR UPDATE').get(String(slug));
+      if(!brand) throw fail(404,'BRAND_NOT_FOUND','ব্র্যান্ড পাওয়া যায়নি');
+      await query('UPDATE products SET brand_id=NULL WHERE brand_id=?').run(brand.id);
+      await query('DELETE FROM brands WHERE id=?').run(brand.id);
+      await query('INSERT INTO audit_logs(id,actor_id,action,entity,entity_id,detail,created_at) VALUES(?,?,?,?,?,?,?)').run(makeId(),String(actorId),'BRAND_DELETE','brand',String(slug),'{}',stamp());
+      return {deleted:true};
+    });
+  }
+
+  async function listCoupons() { return query('SELECT code,type,value,min_order_paisa,max_uses,used_count,expires_at,active FROM coupons ORDER BY code').all(); }
+
+  async function createCoupon({actorId,body={}}) {
+    const code=String(body.code??'').trim().toUpperCase();
+    if(!/^[A-Z0-9_-]{1,30}$/.test(code)) throw fail(400,'INVALID_COUPON_CODE','কুপন কোড সঠিক নয়');
+    const type=String(body.type||'PERCENT').toUpperCase()==='FIXED'?'FIXED':'PERCENT';
+    const value=type==='FIXED'?Math.round(Number(body.value)*100):Number(body.value);
+    if(!Number.isSafeInteger(value)||value<=0||(type==='PERCENT'&&value>90)) throw fail(400,'INVALID_COUPON_VALUE','কুপনের ছাড়ের পরিমাণ সঠিক নয়');
+    const minimum=Math.round(Number(body.min_order_bdt||0)*100);
+    if(!Number.isSafeInteger(minimum)||minimum<0) throw fail(400,'INVALID_COUPON_MINIMUM','ন্যূনতম অর্ডার সঠিক নয়');
+    const maxUses=body.max_uses==null||body.max_uses===''?null:Number(body.max_uses);
+    if(maxUses!==null&&(!Number.isSafeInteger(maxUses)||maxUses<1)) throw fail(400,'INVALID_COUPON_LIMIT','ব্যবহারের সীমা সঠিক নয়');
+    const expires=body.expires_at?String(body.expires_at):null;
+    await database.tx(async()=>{
+      await query('INSERT INTO coupons(code,type,value,min_order_paisa,max_uses,used_count,expires_at,active) VALUES(?,?,?,?,?,0,?,1)').run(code,type,value,minimum,maxUses,expires);
+      await query('INSERT INTO audit_logs(id,actor_id,action,entity,entity_id,detail,created_at) VALUES(?,?,?,?,?,?,?)').run(makeId(),String(actorId),'COUPON_CREATE','coupon',code,JSON.stringify({type,value}),stamp());
+    });
+    return {code};
+  }
+
+  async function toggleCoupon({actorId,code,active}) {
+    const result=await query('UPDATE coupons SET active=? WHERE code=?').run(active?1:0,String(code).toUpperCase());
+    if(!result.changes) throw fail(404,'COUPON_NOT_FOUND','কুপন পাওয়া যায়নি');
+    await query('INSERT INTO audit_logs(id,actor_id,action,entity,entity_id,detail,created_at) VALUES(?,?,?,?,?,?,?)').run(makeId(),String(actorId),'COUPON_TOGGLE','coupon',String(code).toUpperCase(),JSON.stringify({active:Boolean(active)}),stamp());
+    return {code:String(code).toUpperCase(),active:Boolean(active)};
+  }
+
   async function listPendingProducts() {
     return query("SELECT p.id,p.name_bn,p.name_en,p.price_paisa,p.discount_paisa,p.stock,p.status,c.slug category_slug,COALESCE(sp.shop_name,u.name) seller_name,(SELECT url FROM product_images i WHERE i.product_id=p.id ORDER BY position LIMIT 1) image FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN users u ON u.id=p.seller_id LEFT JOIN seller_profiles sp ON sp.user_id=p.seller_id WHERE p.status='PENDING_REVIEW' ORDER BY p.created_at,p.id").all();
   }
@@ -258,5 +346,5 @@ export function createPostgresAdminRepository(database,{createId=randomUUID,cloc
     return {total_revenue_bdt:money(row.revenue),total_orders:integer(row.orders,'orders'),total_customers:integer(row.customers,'customers'),total_sellers:integer(row.sellers,'sellers'),pending_seller_applications:integer(row.pending_sellers,'pending_sellers'),pending_product_approvals:integer(row.pending_products,'pending_products'),total_products:integer(row.products,'products'),active_products:integer(row.active_products,'active_products'),cancelled_orders:integer(row.cancelled_orders,'cancelled_orders'),pending_payouts:integer(row.pending_payouts,'pending_payouts'),pending_payout_amount_bdt:money(row.pending_payout_amount),platform_commission_bdt:money(row.commission)};
   }
 
-  return Object.freeze({listPayouts,decidePayout,listSellers,getSeller,getSellerOverview,listSellerProducts,listSellerOrders,listProducts,decideSeller,setCommission,listPendingProducts,moderateProduct,listRefunds,createRefund,approveRefund,rejectRefund,financeSummary,listTransactions,financeReport,listAuditLogs,dashboard});
+  return Object.freeze({listPayouts,decidePayout,listSellers,getSeller,getSellerOverview,listSellerProducts,listSellerOrders,listProducts,decideSeller,setCommission,listCategories,createCategory,updateCategory,deleteCategory,listBrands,createBrand,deleteBrand,listCoupons,createCoupon,toggleCoupon,listPendingProducts,moderateProduct,listRefunds,createRefund,approveRefund,rejectRefund,financeSummary,listTransactions,financeReport,listAuditLogs,dashboard});
 }
