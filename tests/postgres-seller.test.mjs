@@ -64,7 +64,7 @@ test('suspended seller cannot submit products',async()=>{
 });
 
 test('product update uses seller ownership predicate and does not bypass stock ledger',async()=>{
-  const db=fakeDatabase((method,sql)=>sql.includes('FROM seller_profiles')?{user_id:sellerId,status:'APPROVED'}:sql.includes('SELECT id FROM products')?{id:'p1'}:undefined);
+  const db=fakeDatabase((method,sql)=>sql.includes('FROM seller_profiles')?{user_id:sellerId,status:'APPROVED'}:sql.includes('SELECT id FROM products')?{id:'p1',price_paisa:'25000',discount_paisa:null}:undefined);
   const repo=createPostgresSellerRepository(db,{inventoryRepository:inventory});
   await repo.updateProduct(sellerId,'p1',{name_bn:'নতুন নাম',stock:99,images:[]});
   const lock=db.calls.find(x=>x.sql?.includes('SELECT id FROM products'));
