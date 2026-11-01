@@ -30,7 +30,7 @@
 - PostgreSQL connection-pool factory and an advisory-lock migration bootstrap command
 
 ## Still required before production
-- PostgreSQL implementations for remaining seller courier/shipment and admin management/finance routes
+- PostgreSQL implementations for remaining admin management/finance routes
 - PostgreSQL API composition that does not import or execute SQLite-backed routes or seed data
 - Real Neon/PostgreSQL integration tests and full browser E2E coverage
 - Public Node.js API hosting, persistent production database, secrets and monitoring
