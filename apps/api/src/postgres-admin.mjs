@@ -44,9 +44,9 @@ export function createPostgresAdminRepository(database,{createId=randomUUID,cloc
     });
   }
 
-  function normalizePhone(value) { return String(value??'').replace(/[\\s-]/g,'').replace(/^\\+?88/,''); }
-  function validPhone(value) { return /^01[3-9]\\d{8}$/.test(value); }
-  function validEmail(value) { return /^[^\\s@<>]+@[^\\s@<>]+\\.[^\\s@<>]+$/.test(value)&&value.length<=160; }
+  function normalizePhone(value) { return String(value??'').replace(/[\s-]/g,'').replace(/^\+?88/,''); }
+  function validPhone(value) { return /^01[3-9]\d{8}$/.test(value); }
+  function validEmail(value) { return /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(value)&&value.length<=160; }
 
   async function listCustomers({query:search='',limit:pageSize=100}={}) {
     const term='%'+String(search||'').trim().slice(0,60)+'%';
