@@ -281,3 +281,9 @@ test('admin customer suspension revokes sessions and rejects invalid statuses',a
   assert.ok(db.calls.some(x=>x.sql?.includes('DELETE FROM sessions WHERE user_id=')&&x.values[0]==='buyer-3'));
   await assert.rejects(repo.setCustomerStatus({customerId:'buyer-3',actorId:'admin-1',status:'DISABLED'}),e=>e.status===400&&e.code==='INVALID_CUSTOMER_STATUS');
 });
+
+test('category and brand slugs preserve Bengali characters',async()=>{
+  const db=fakeDatabase(()=>undefined);
+  const repo=createPostgresAdminRepository(db);
+  assert.deepEqual(await repo.createCategory({actorId:'admin-1',nameBn:'খাবার',nameEn:''}),{id:undefined,slug:'খাবার'});
+});
