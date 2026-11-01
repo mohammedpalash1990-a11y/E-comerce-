@@ -25,7 +25,9 @@ export function processRefund(refund, actor, { reverse }) {
 export default function register(route, ok) {
   route('GET', '/api/v1/admin/dashboard', A, () => {
     const n = (sql, ...a) => q(sql).get(...a).n;
-    const gross = n("SELECT COALESCE(SUM(total_paisa),0) n FROM orders WHERE status NOT IN('CANCELLED','AWAITING_PAYMENT')");
+    // Revenue means money confirmed as received, not merely order value.
+    // COD is marked PAID only after delivery; online payments are marked by verified callbacks.
+    const gross = n("SELECT COALESCE(SUM(total_paisa),0) n FROM orders WHERE payment_status='PAID' AND status<>'CANCELLED'");
     return ok({ total_revenue_bdt: bdt(gross), total_orders: n("SELECT COUNT(*) n FROM orders WHERE status<>'AWAITING_PAYMENT'"), total_customers: n("SELECT COUNT(*) n FROM users WHERE role='CUSTOMER'"), total_sellers: n('SELECT COUNT(*) n FROM seller_profiles'),
       pending_seller_applications: n("SELECT COUNT(*) n FROM seller_profiles WHERE status='PENDING'"), pending_product_approvals: n("SELECT COUNT(*) n FROM products WHERE status='PENDING_REVIEW'"),
       total_products: n("SELECT COUNT(*) n FROM products WHERE status<>'ARCHIVED'"), active_products: n("SELECT COUNT(*) n FROM products WHERE status='ACTIVE' AND active=1"), cancelled_orders: n("SELECT COUNT(*) n FROM orders WHERE status='CANCELLED'"),
