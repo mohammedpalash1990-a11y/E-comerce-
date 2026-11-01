@@ -8,8 +8,9 @@
 <header class="header"><div class="brand">HAAT.</div><div class="search"><input id="search" placeholder="আপনার পছন্দের পণ্য খুঁজুন..."><button id="searchBtn">খুঁজুন</button></div><a class="headlink" href="#products">পণ্যসমূহ</a><button class="cartbtn" id="openCart">🛒 কার্ট <b id="cartCount">0</b></button></header>
 <main class="wrap">
 <section class="hero"><div class="eyebrow">BANGLADESH MULTI-VENDOR MARKETPLACE</div><h1>পছন্দের সবকিছু,<br>এক ঠিকানায়।</h1><p>বিশ্বস্ত বিক্রেতার কাছ থেকে প্রয়োজনীয় পণ্য বেছে নিন। সহজে খুঁজুন, কার্টে যোগ করুন, আর আপনার কেনাকাটা সাজিয়ে নিন।</p><button class="goldbtn" onclick="document.querySelector('#products').scrollIntoView({behavior:'smooth'})">কেনাকাটা শুরু করুন →</button></section>
+<section class="notice" id="connectionNotice" role="status" aria-live="polite">সার্ভারের সঙ্গে সংযোগ পরীক্ষা করা হচ্ছে…</section>
 <div class="sectionhead"><div><div class="eyebrow">EXPLORE</div><h2>ক্যাটাগরি অনুযায়ী কেনাকাটা</h2></div></div><div class="cats" id="cats"></div>
-<div class="sectionhead" id="products"><div><div class="eyebrow">SELECTED FOR YOU</div><h2>জনপ্রিয় পণ্য</h2><div class="muted">ডেমো ক্যাটালগ · পণ্যের তথ্য নমুনা</div></div><span class="muted" id="resultCount"></span></div><div class="grid" id="grid"></div>
+<div class="sectionhead" id="products"><div><div class="eyebrow">SELECTED FOR YOU</div><h2>জনপ্রিয় পণ্য</h2><div class="muted" id="catalogStatus">লাইভ ক্যাটালগ লোড হচ্ছে…</div></div><span class="muted" id="resultCount"></span></div><div class="grid" id="grid"></div>
 <section class="banner"><div><b>আপনি কি বিক্রেতা?</b><div class="muted">বিক্রেতা হিসেবে লগইন করুন, পণ্য যোগ করুন এবং ক্রেতার অর্ডার পরিচালনা করুন।</div></div><a href="seller.html">Seller Workspace খুলুন →</a></section>
 </main>
 <footer class="footer"><div><div class="brand">HAAT.</div><p class="note">বাংলাদেশের জন্য বাংলা-প্রথম মাল্টি-ভেন্ডর মার্কেটপ্লেস।</p></div><div><b>সহায়তা</b><p class="note">Customer care · Terms · Privacy</p><a href="seller.html">Seller Workspace</a><br><a href="admin.html">Admin Portal</a></div><div class="note">© 2026 HAAT. Development preview.</div></footer>
@@ -17,23 +18,14 @@
 <script src="./api-config.js"></script>
 <script>
 const apiUrl=path=>(String(window.HAAT_API_BASE||'').replace(/\/+$/,'')+path);
-let products=[
-{id:'p1',bn:'ওয়্যারলেস ইয়ারবাড',en:'Wireless Earbuds',price:1890,stock:32,cat:'electronics',icon:'🎧'},
-{id:'p2',bn:'কটন পাঞ্জাবি',en:'Cotton Panjabi',price:1290,stock:18,cat:'fashion',icon:'🥻'},
-{id:'p3',bn:'ডেস্ক ল্যাম্প',en:'Desk Lamp',price:950,stock:12,cat:'home',icon:'💡'},
-{id:'p4',bn:'স্মার্ট ওয়াচ',en:'Smart Watch',price:2450,stock:9,cat:'electronics',icon:'⌚'},
-{id:'p5',bn:'লেদার ওয়ালেট',en:'Leather Wallet',price:780,stock:24,cat:'fashion',icon:'👛'},
-{id:'p6',bn:'কফি মগ সেট',en:'Coffee Mug Set',price:620,stock:15,cat:'home',icon:'☕'},
-{id:'p7',bn:'ব্লুটুথ স্পিকার',en:'Bluetooth Speaker',price:1590,stock:11,cat:'electronics',icon:'🔊'},
-{id:'p8',bn:'ক্যানভাস ব্যাগ',en:'Canvas Tote Bag',price:490,stock:40,cat:'fashion',icon:'👜'}
-];
-const cats=[['all','সব পণ্য'],['electronics','ইলেকট্রনিক্স'],['fashion','ফ্যাশন'],['home','ঘর ও জীবন']];
-let active='all',cart=JSON.parse(localStorage.getItem('haat_cart_demo')||'{}'),apiReady=false;
+let products=[];
+let cats=[['all','সব পণ্য']];
+let active='all',cart=JSON.parse(localStorage.getItem('haat_cart_v1')||'{}'),apiReady=false;
 const $=s=>document.querySelector(s),escHtml=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),money=n=>'৳'+Number(n).toLocaleString('en-BD');
 function toast(t){$('#toast').textContent=t;$('#toast').classList.add('show');setTimeout(()=>$('#toast').classList.remove('show'),1800)}
 function drawCats(){$('#cats').innerHTML=cats.map(([id,name])=>'<button class="chip '+(id===active?'active':'')+'" data-cat="'+id+'">'+name+'</button>').join('')}
-function drawProducts(){const term=$('#search').value.trim().toLowerCase();const list=products.filter(p=>(active==='all'||p.cat===active)&&(!term||(p.bn+p.en).toLowerCase().includes(term)));$('#resultCount').textContent=list.length+' টি পণ্য';$('#grid').innerHTML=list.map(p=>'<article class="card"><div class="visual">'+p.icon+'</div><div class="cardbody"><h3>'+escHtml(p.bn)+'</h3><div class="muted">'+escHtml(p.en)+'</div><div class="price">'+money(p.price)+'</div><div class="cardfoot"><span class="stock">স্টক: '+Number(p.stock||0)+'</span><button class="add" data-add="'+escHtml(p.id)+'">+ কার্টে</button></div></div></article>').join('')||'<p>কোনো পণ্য পাওয়া যায়নি।</p>'}
-function save(){localStorage.setItem('haat_cart_demo',JSON.stringify(cart));drawCart()}
+function drawProducts(){const term=$('#search').value.trim().toLowerCase();const list=products.filter(p=>(active==='all'||p.cat===active)&&(!term||(p.bn+p.en).toLowerCase().includes(term)));$('#resultCount').textContent=list.length+' টি পণ্য';$('#grid').innerHTML=list.map(p=>'<article class="card"><div class="visual">'+p.icon+'</div><div class="cardbody"><h3>'+escHtml(p.bn)+'</h3><div class="muted">'+escHtml(p.en)+'</div><div class="price">'+money(p.price)+'</div><div class="cardfoot"><span class="stock">স্টক: '+Number(p.stock||0)+'</span><button class="add" data-add="'+escHtml(p.id)+'">+ কার্টে</button></div></div></article>').join('')||'<p class="empty">'+(apiReady?'এই ক্যাটাগরিতে এখনো কোনো অনুমোদিত পণ্য নেই।':'লাইভ পণ্য দেখতে সার্ভার সংযোগ প্রয়োজন।')+'</p>'}
+function save(){localStorage.setItem('haat_cart_v1',JSON.stringify(cart));drawCart()}
 function drawCart(){const count=Object.values(cart).reduce((a,b)=>a+b,0);$('#cartCount').textContent=count;let total=0;const lines=Object.entries(cart).filter(([id,q])=>q>0).map(([id,q])=>{const p=products.find(x=>x.id===id);if(!p)return '';total+=p.price*q;return '<div class="cartline"><div><b>'+escHtml(p.bn)+'</b><div class="muted">'+money(p.price)+' × '+q+'</div><div class="qty"><button data-dec="'+escHtml(id)+'">−</button><span>'+q+'</span><button data-inc="'+escHtml(id)+'">+</button></div></div><b>'+money(p.price*q)+'</b></div>'});$('#cartLines').innerHTML=lines.join('')||'<div class="empty">আপনার কার্ট এখনো খালি।</div>';$('#cartTotal').textContent=money(total)}
 $('#cats').onclick=e=>{const b=e.target.closest('[data-cat]');if(b){active=b.dataset.cat;drawCats();drawProducts()}};
 $('#grid').onclick=e=>{const b=e.target.closest('[data-add]');if(b){cart[b.dataset.add]=(cart[b.dataset.add]||0)+1;save();toast('কার্টে যোগ হয়েছে ✓')}};
@@ -65,18 +57,38 @@ $('#checkout').onclick=async()=>{
  finally{button.disabled=false;button.textContent='COD অর্ডার কনফার্ম'}
 };
 async function connectCatalog(){
+ const notice=$('#connectionNotice'),catalog=$('#catalogStatus');
+ notice.textContent='সার্ভারের সঙ্গে সংযোগ পরীক্ষা করা হচ্ছে…';
  try{
-  const response=await fetch(apiUrl('/api/v1/products'),{headers:{accept:'application/json'}});
-  if(!response.ok)return;
-  const payload=await response.json();if(!Array.isArray(payload.data))return;
+  const health=await fetch(apiUrl('/health'),{headers:{accept:'application/json'},signal:AbortSignal.timeout(8000)});
+  if(!health.ok)throw Error('API health check failed ('+health.status+')');
+  const healthData=await health.json();
+  if(!healthData.ok||healthData.db!=='ok')throw Error('ডেটাবেস প্রস্তুত নয়');
+  const [productResponse,categoryResponse]=await Promise.all([
+   fetch(apiUrl('/api/v1/products'),{headers:{accept:'application/json'},signal:AbortSignal.timeout(10000)}),
+   fetch(apiUrl('/api/v1/categories'),{headers:{accept:'application/json'},signal:AbortSignal.timeout(10000)})
+  ]);
+  if(!productResponse.ok||!categoryResponse.ok)throw Error('ক্যাটালগ লোড করা যায়নি');
+  const [payload,categoryPayload]=await Promise.all([productResponse.json(),categoryResponse.json()]);
+  if(!Array.isArray(payload.data)||!Array.isArray(categoryPayload.data))throw Error('সার্ভারের ডেটা ফরম্যাট সঠিক নয়');
   const icons={electronics:'🎧',fashion:'🛍️',home:'🏠'};
-  products=payload.data.map(p=>({id:p.id,bn:p.name_bn,en:p.name_en,price:p.price_bdt,stock:p.stock,cat:p.category_slug,icon:icons[p.category_slug]||'📦'}));
+  products=payload.data.map(p=>({id:p.id,bn:p.name_bn,en:p.name_en,price:p.sale_price_bdt??p.price_bdt,stock:p.stock,cat:p.category_slug,icon:icons[p.category_slug]||'📦'}));
+  cats=[['all','সব পণ্য'],...categoryPayload.data.map(c=>[c.slug,c.name_bn])];
   apiReady=true;
   const valid=new Set(products.map(p=>p.id));cart=Object.fromEntries(Object.entries(cart).filter(([id])=>valid.has(id)));save();
+  notice.textContent='লাইভ সার্ভার সংযুক্ত · ডেটাবেস ঠিক আছে';
+  notice.style.borderColor='#8eb79a';
+  catalog.textContent='সার্ভার থেকে পাওয়া অনুমোদিত পণ্য';
   $('#checkout').textContent='COD অর্ডার কনফার্ম';
-  $('.muted').textContent='সার্ভারের লাইভ পণ্য তালিকা';
   drawCats();drawProducts();drawCart();
- }catch{}
+ }catch(error){
+  apiReady=false;products=[];cats=[['all','সব পণ্য']];active='all';
+  notice.textContent='এখনো লাইভ সার্ভার সংযুক্ত হয়নি। বর্তমানে এটি শুধু ডিজাইন প্রিভিউ; পণ্য, লগইন ও অর্ডার চালু করতে API deployment প্রয়োজন।';
+  notice.style.borderColor='#d5a06b';
+  catalog.textContent='লাইভ ক্যাটালগ অফলাইন · Demo পণ্য দেখানো হচ্ছে না';
+  $('#checkout').textContent='সার্ভার সংযোগ প্রয়োজন';
+  drawCats();drawProducts();drawCart();
+ }
 }
 drawCats();drawProducts();drawCart();connectCatalog();
 </script></body></html>
