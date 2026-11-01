@@ -43,3 +43,9 @@ All methods are asynchronous. Every caller must use `await`; do not attempt to p
 ## Tests
 
 `tests/postgres-runtime.test.mjs` uses a fake Pool to validate query parameterization, async result contracts, transaction pinning, rollback, nested savepoints, and concurrent transaction isolation without requiring a live database.
+
+## PostgreSQL migration runner
+
+`apps/api/src/postgres-migrations.mjs` adds an explicit migration runner for a supplied pg-compatible Pool. It acquires a PostgreSQL session advisory lock, applies numbered SQL files in lexical order, records each successful migration in `schema_migrations`, skips recorded files, and rolls back a failed migration. The runner is intentionally not called by the current SQLite server; wiring it in requires the future PostgreSQL bootstrap and connection lifecycle.
+
+The runner uses one checked-out client for the lock and all migration transactions. Do not run schema migrations through a transaction-pooled proxy that cannot preserve session-level advisory locks.
