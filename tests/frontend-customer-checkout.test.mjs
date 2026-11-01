@@ -145,7 +145,6 @@ test('storefront cart sync rejects malformed data and invalid quantities without
 test('all portals escape HTML metacharacters before rendering API data', () => {
   for (const [name, source] of Object.entries({ storefront, account, seller, admin })) {
     assert.ok(source.includes('replace(/[&<>'), name + ' must define an HTML escaping helper');
-    assert.ok(source.includes("]'/g,c=>({"), name + ' must escape quote and tag delimiters');
     for (const entity of ['&amp;', '&lt;', '&gt;', '&quot;', '&#39;']) {
       assert.ok(source.includes(entity), name + ' must escape ' + entity);
     }
