@@ -29,7 +29,7 @@ test('placeholder conversion follows PostgreSQL standard strings and E-string es
   const standard = postgresPlaceholders("SELECT 'C:\\path\\file ?', ?");
   assert.equal(standard.count, 1);
   assert.ok(standard.text.endsWith(", $1"));
-  const escaped = postgresPlaceholders("SELECT E'it\\\\'s ?' AS note, ?");
+  const escaped = postgresPlaceholders("SELECT E'it\\'s ?' AS note, ?");
   assert.equal(escaped.count, 1);
   assert.ok(escaped.text.endsWith(', $1'));
 });
