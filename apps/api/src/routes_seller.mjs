@@ -70,7 +70,7 @@ export default function register(route, ok) {
 
   // ----- products -----
   route('GET', '/api/v1/seller/products', S, ({ user }) => ok(q(`SELECT p.id,p.name_bn,p.name_en,p.price_paisa,p.discount_paisa,p.stock,p.status,p.sku,c.slug category_slug,
-    (SELECT url FROM product_images i WHERE i.product_id=p.id ORDER BY position LIMIT 1) image FROM products p JOIN categories c ON c.id=p.category_id WHERE p.seller_id=? AND p.status<>'ARCHIVED' ORDER BY p.rowid DESC`).all(user.id).map(productView)));
+    (SELECT url FROM product_images i WHERE i.product_id=p.id ORDER BY position LIMIT 1) image FROM products p JOIN categories c ON c.id=p.category_id WHERE p.seller_id=? AND p.status<>'ARCHIVED' ORDER BY p.created_at DESC,p.id DESC`).all(user.id).map(productView)));
   route('GET', '/api/v1/seller/products/:id', S, ({ user, params }) => {
     const p = sellerProductRow(params[0], user.id); if (!p) throw new HttpError(404, 'Product not found');
     return ok({ ...productView(p), variants: JSON.parse(p.variants || '[]'), images: q('SELECT url FROM product_images WHERE product_id=? ORDER BY position').all(p.id).map(i => i.url) });
@@ -115,13 +115,13 @@ export default function register(route, ok) {
     delivery: { name: o.delivery_name, phone: o.delivery_phone, address: o.delivery_address, area: o.delivery_area, note: o.customer_note },
     items: q('SELECT product_name_bn,quantity,unit_price_paisa,variant FROM order_items WHERE seller_order_id=?').all(o.id).map(i => ({ name_bn: i.product_name_bn, quantity: i.quantity, unit_price_bdt: bdt(i.unit_price_paisa), variant: i.variant })),
     shipment: q('SELECT id,provider,tracking_id,status FROM shipments WHERE seller_order_id=? ORDER BY created_at DESC LIMIT 1').get(o.id) || null,
-    history: q('SELECT status,note,created_at FROM order_events WHERE seller_order_id=? ORDER BY created_at,rowid').all(o.id)
+    history: q('SELECT status,note,created_at FROM order_events WHERE seller_order_id=? ORDER BY created_at,id').all(o.id)
   });
   const SO_SQL = `SELECT so.*,o.delivery_name,o.delivery_phone,o.delivery_address,o.delivery_area,o.customer_note,o.payment_method,o.payment_status,u.name customer_name,u.phone customer_phone
     FROM seller_orders so JOIN orders o ON o.id=so.order_id JOIN users u ON u.id=o.user_id WHERE so.seller_id=? AND so.status<>'AWAITING_PAYMENT'`;
   route('GET', '/api/v1/seller/orders', S, ({ user, url }) => {
     const st = url.searchParams.get('status');
-    return ok(q(SO_SQL + (st ? ' AND so.status=?' : '') + ' ORDER BY so.created_at DESC,so.rowid DESC LIMIT 200').all(...(st ? [user.id, st] : [user.id])).map(subView));
+    return ok(q(SO_SQL + (st ? ' AND so.status=?' : '') + ' ORDER BY so.created_at DESC,so.id DESC LIMIT 200').all(...(st ? [user.id, st] : [user.id])).map(subView));
   });
   route('GET', '/api/v1/seller/orders/:id', S, ({ user, params }) => {
     const o = q(SO_SQL + ' AND so.id=?').get(user.id, params[0]); if (!o) throw new HttpError(404, 'Seller order not found'); return ok(subView(o));
@@ -156,7 +156,7 @@ export default function register(route, ok) {
   route('GET', '/api/v1/seller/finance', S, ({ user }) => {
     const { available_paisa, ...b } = sellerBalance(user.id);
     return ok({ ...b,
-      settlements: q("SELECT t.kind,t.amount_paisa,t.created_at,t.seller_order_id FROM transactions t WHERE t.seller_id=? ORDER BY t.created_at DESC,t.rowid DESC LIMIT 100").all(user.id).map(t => ({ kind: t.kind, amount_bdt: bdt(t.amount_paisa), created_at: t.created_at, seller_order_id: t.seller_order_id })),
+      settlements: q("SELECT t.kind,t.amount_paisa,t.created_at,t.seller_order_id FROM transactions t WHERE t.seller_id=? ORDER BY t.created_at DESC,t.id DESC LIMIT 100").all(user.id).map(t => ({ kind: t.kind, amount_bdt: bdt(t.amount_paisa), created_at: t.created_at, seller_order_id: t.seller_order_id })),
       payouts: q('SELECT id,amount_paisa,method,account,status,note,created_at,decided_at FROM payouts WHERE seller_id=? ORDER BY created_at DESC').all(user.id).map(p => ({ id: p.id, amount_bdt: bdt(p.amount_paisa), method: p.method, account: p.account, status: p.status, note: p.note, created_at: p.created_at, decided_at: p.decided_at })) });
   });
   route('POST', '/api/v1/seller/payouts', S, ({ user, body }) => {
