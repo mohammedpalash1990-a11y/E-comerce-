@@ -255,3 +255,29 @@ test('coupon toggle persists active state and audit metadata',async()=>{
   assert.ok(db.calls.some(x=>x.sql?.includes('UPDATE coupons SET active=')&&x.values[0]===0));
   assert.ok(db.calls.some(x=>x.sql?.includes('INSERT INTO audit_logs')&&x.values[2]==='COUPON_TOGGLE'));
 });
+
+test('admin customer lookup returns addresses and order count only for customer accounts',async()=>{
+  const db=fakeDatabase((method,sql)=>sql.includes("FROM users WHERE id=? AND role='CUSTOMER'")?{id:'buyer-1',name:'Buyer',phone:'01712345678',email:'buyer@example.com',status:'ACTIVE'}:sql.includes('SELECT COUNT(*) count FROM orders')?{count:'2'}:undefined);
+  const repo=createPostgresAdminRepository(db);
+  const customer=await repo.getCustomer('buyer-1');
+  assert.equal(customer.order_count,2);
+  assert.deepEqual(customer.addresses,[]);
+  assert.ok(db.calls[0].sql.includes("role='CUSTOMER'"));
+});
+
+test('admin customer update normalizes Bangladesh phone and writes audit',async()=>{
+  const db=fakeDatabase((method,sql)=>sql.includes("FROM users WHERE id=? AND role='CUSTOMER'")?{id:'buyer-2',name:'Buyer',phone:'01712345678',email:null}:sql.includes('SELECT COUNT(*) count FROM orders')?{count:0}:undefined);
+  const repo=createPostgresAdminRepository(db,{createId:()=> 'audit-1'});
+  const updated=await repo.updateCustomer({customerId:'buyer-2',actorId:'admin-1',body:{name:'New Buyer',phone:'+8801712345678',email:'new@example.com'}});
+  assert.equal(updated.phone,'01712345678');
+  assert.ok(db.calls.some(x=>x.sql?.includes('UPDATE users SET name=')&&x.values[1]==='01712345678'));
+  assert.ok(db.calls.some(x=>x.sql?.includes('INSERT INTO audit_logs')&&x.values[2]==='CUSTOMER_EDIT'));
+});
+
+test('admin customer suspension revokes sessions and rejects invalid statuses',async()=>{
+  const db=fakeDatabase((method,sql)=>sql.includes("FROM users WHERE id=? AND role='CUSTOMER' FOR UPDATE")?{id:'buyer-3'}:undefined);
+  const repo=createPostgresAdminRepository(db);
+  assert.deepEqual(await repo.setCustomerStatus({customerId:'buyer-3',actorId:'admin-1',status:'SUSPENDED'}),{id:'buyer-3',status:'SUSPENDED'});
+  assert.ok(db.calls.some(x=>x.sql?.includes('DELETE FROM sessions WHERE user_id=')&&x.values[0]==='buyer-3'));
+  await assert.rejects(repo.setCustomerStatus({customerId:'buyer-3',actorId:'admin-1',status:'DISABLED'}),e=>e.status===400&&e.code==='INVALID_CUSTOMER_STATUS');
+});
