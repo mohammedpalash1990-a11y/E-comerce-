@@ -284,6 +284,6 @@ test('admin customer suspension revokes sessions and rejects invalid statuses',a
 
 test('category and brand slugs preserve Bengali characters',async()=>{
   const db=fakeDatabase(()=>undefined);
-  const repo=createPostgresAdminRepository(db);
-  assert.deepEqual(await repo.createCategory({actorId:'admin-1',nameBn:'খাবার',nameEn:''}),{id:undefined,slug:'খাবার'});
+  const repo=createPostgresAdminRepository(db,{createId:()=> 'category-bn'});
+  assert.deepEqual(await repo.createCategory({actorId:'admin-1',nameBn:'খাবার',nameEn:''}),{id:'category-bn',slug:'খাবার'});
 });
