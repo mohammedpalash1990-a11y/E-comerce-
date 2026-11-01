@@ -1,0 +1,50 @@
+name: Import uploaded project ZIP
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Extract ZIP without overwriting existing project files
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="E-comerce-main-part1.zip"
+          test -f "$archive"
+          mkdir -p /tmp/haat-zip
+          unzip -q "$archive" -d /tmp/haat-zip
+          source_dir="$(find /tmp/haat-zip -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+          test -n "$source_dir"
+          mkdir -p incoming/extracted incoming/conflicts
+          while IFS= read -r -d '' src; do
+            rel="${src#"$source_dir"/}"
+            case "$rel" in
+              E-comerce-main-part1.zip|.git/*|node_modules/*|.env) continue ;;
+            esac
+            if [ ! -e "$rel" ]; then
+              mkdir -p "$(dirname "$rel")"
+              cp -a "$src" "$rel"
+            else
+              mkdir -p "incoming/conflicts/$(dirname "$rel")"
+              cp -a "$src" "incoming/conflicts/$rel"
+            fi
+          done < <(find "$source_dir" -type f -print0)
+          printf '%s\n' "ZIP extraction complete. Existing files were preserved; conflicts were saved under incoming/conflicts/." > incoming/IMPORT-REPORT.txt
+      - name: Commit extracted files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No extracted changes to commit."
+          else
+            git commit -m "Extract uploaded project ZIP safely"
+            git push
+          fi
