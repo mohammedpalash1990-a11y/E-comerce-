@@ -68,7 +68,7 @@ export function createPostgresDomainRepositories(database, options = {}) {
     }),
     orders: options.ordersRepository || createPostgresOrdersPaymentsRepository(database, options.ordersOptions),
     customer: options.customerRepository || createPostgresCustomerRepository(database),
-    seller: options.sellerRepository || createPostgresSellerRepository(database, { inventoryRepository: options.inventoryRepository || createPostgresInventoryRepository(database, options.inventoryOptions), ...(options.sellerOptions || {}) })
+    seller: options.sellerRepository || createPostgresSellerRepository(database, { inventoryRepository: options.inventoryRepository || createPostgresInventoryRepository(database, options.inventoryOptions), ordersRepository: options.ordersRepository || createPostgresOrdersPaymentsRepository(database, options.ordersOptions), ...(options.sellerOptions || {}) })
   });
 }
 
