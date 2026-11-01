@@ -14,7 +14,7 @@
 <section class="banner"><div><b>আপনি কি বিক্রেতা?</b><div class="muted">বিক্রেতা হিসেবে লগইন করুন, পণ্য যোগ করুন এবং ক্রেতার অর্ডার পরিচালনা করুন।</div></div><a href="seller.html">Seller Workspace খুলুন →</a></section>
 </main>
 <footer class="footer"><div><div class="brand">HAAT.</div><p class="note">বাংলাদেশের জন্য বাংলা-প্রথম মাল্টি-ভেন্ডর মার্কেটপ্লেস।</p></div><div><b>সহায়তা</b><p class="note">Customer care · Terms · Privacy</p><a href="seller.html">Seller Workspace</a><br><a href="admin.html">Admin Portal</a></div><div class="note">© 2026 HAAT. Development preview.</div></footer>
-<div class="drawer" id="drawer"><aside class="cart"><div class="carthead"><h2>আপনার কার্ট</h2><button id="closeCart">✕</button></div><div id="cartLines"></div><div class="cartline"><b>সর্বমোট</b><b id="cartTotal">৳0</b></div><button class="checkout" id="checkout">ডেমো অর্ডার কনফার্ম</button><p class="note">ব্যাকএন্ড যুক্ত থাকলে COD অর্ডার জমা হবে। এই প্রকাশ্য GitHub Pages প্রিভিউতে ব্যাকএন্ড সংযুক্ত নেই; এখানে অর্ডার বাস্তবে জমা হবে না।</p></aside></div><div class="toast" id="toast"></div>
+<div class="drawer" id="drawer"><aside class="cart"><div class="carthead"><h2>আপনার কার্ট</h2><button id="closeCart">✕</button></div><div id="cartLines"></div><div class="cartline"><b>সর্বমোট</b><b id="cartTotal">৳0</b></div><button class="checkout" id="checkout">Checkout করুন</button><p class="note">Checkout সম্পন্ন করতে আপনার অ্যাকাউন্টে যান। সেখানে ডেলিভারি ঠিকানা, কুপন ও পেমেন্ট পদ্ধতি বেছে নিতে পারবেন।</p></aside></div><div class="toast" id="toast"></div>
 <script src="./api-config.js"></script>
 <script>
 const apiUrl=path=>(String(window.HAAT_API_BASE||'').replace(/\/+$/,'')+path);
@@ -31,30 +31,10 @@ $('#cats').onclick=e=>{const b=e.target.closest('[data-cat]');if(b){active=b.dat
 $('#grid').onclick=async e=>{const wish=e.target.closest('[data-wish]'),b=e.target.closest('[data-add]');if(wish){const token=localStorage.getItem('haat_customer_token');if(!token){location.href='account.html?wishlist='+encodeURIComponent(wish.dataset.wish);return}wish.disabled=true;try{const r=await fetch(apiUrl('/api/v1/customer/wishlist'),{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify({productId:wish.dataset.wish}),signal:AbortSignal.timeout(10000)});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||'পছন্দের তালিকায় যোগ করা যায়নি');toast('পছন্দের তালিকায় যোগ হয়েছে ♡');wish.textContent='♥'}catch(err){toast(err.message);if(/token|auth|session/i.test(err.message))location.href='account.html?wishlist='+encodeURIComponent(wish.dataset.wish)}finally{wish.disabled=false}return}if(b){cart[b.dataset.add]=(cart[b.dataset.add]||0)+1;save();toast('কার্টে যোগ হয়েছে ✓')}};
 $('#cartLines').onclick=e=>{const inc=e.target.closest('[data-inc]'),dec=e.target.closest('[data-dec]');if(inc)cart[inc.dataset.inc]=(cart[inc.dataset.inc]||0)+1;if(dec){cart[dec.dataset.dec]=Math.max(0,(cart[dec.dataset.dec]||0)-1);if(!cart[dec.dataset.dec])delete cart[dec.dataset.dec]}save()};
 $('#search').oninput=drawProducts;$('#searchBtn').onclick=drawProducts;$('#openCart').onclick=()=>$('#drawer').classList.add('open');$('#closeCart').onclick=()=>$('#drawer').classList.remove('open');$('#drawer').onclick=e=>{if(e.target.id==='drawer')$('#drawer').classList.remove('open')};
-$('#checkout').onclick=async()=>{
- if(!Object.keys(cart).length){toast('কার্ট খালি আছে');return}
- if(!apiReady){toast('লাইভ অর্ডারের জন্য সার্ভার সংযোগ প্রয়োজন');return}
- const name=prompt('ডেলিভারি গ্রহণকারীর নাম লিখুন');
- if(!name)return;
- const phone=prompt('অর্ডার ও ডেলিভারির জন্য বাংলাদেশি মোবাইল নম্বর লিখুন (01XXXXXXXXX)');
- if(!phone)return;
- const address=prompt('বাসা/রোড/গ্রামসহ পূর্ণ ডেলিভারি ঠিকানা লিখুন');
- if(!address)return;
- const area=prompt('এলাকা / থানা / জেলা লিখুন');
- if(!area)return;
- const note=prompt('ডেলিভারি নোট (না থাকলে ফাঁকা রাখুন)')||'';
- const password=prompt('আপনার কাস্টমার অ্যাকাউন্টের পাসওয়ার্ড লিখুন');
- if(!password)return;
- const button=$('#checkout');button.disabled=true;button.textContent='অর্ডার জমা হচ্ছে...';
- try{
-  const login=await fetch(apiUrl('/api/v1/auth/login'),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({phone,password})});
-  const auth=await login.json();if(!login.ok)throw Error(auth.error||'লগইন করা যায়নি');
-  if(auth.data.role!=='CUSTOMER')throw Error('কাস্টমার অ্যাকাউন্ট দিয়ে অর্ডার করুন');
-  const order=await fetch(apiUrl('/api/v1/checkout'),{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+auth.token},body:JSON.stringify({delivery:{name,phone,address,area,note},items:Object.entries(cart).map(([productId,quantity])=>({productId,quantity}))})});
-  const result=await order.json();if(!order.ok)throw Error(result.error||'অর্ডার জমা হয়নি');
-  cart={};save();$('#drawer').classList.remove('open');toast('অর্ডার সফল: '+result.data.orderNumber);
- }catch(error){toast(error.message)}
- finally{button.disabled=false;button.textContent='COD অর্ডার কনফার্ম'}
+$('#checkout').onclick=()=>{
+ if(!Object.keys(cart).some(id=>Number(cart[id])>0)){toast('কার্ট খালি আছে');return}
+ if(!apiReady){toast('লাইভ Checkout-এর জন্য সার্ভার সংযোগ প্রয়োজন');return}
+ location.href='account.html?checkout=1';
 };
 async function connectCatalog(){
  const notice=$('#connectionNotice'),noticeText=$('#connectionText'),catalog=$('#catalogStatus');
@@ -79,7 +59,7 @@ async function connectCatalog(){
   noticeText.textContent='লাইভ সার্ভার সংযুক্ত · ডেটাবেস ঠিক আছে';
   notice.style.borderColor='#8eb79a';
   catalog.textContent='সার্ভার থেকে পাওয়া অনুমোদিত পণ্য';
-  $('#checkout').textContent='COD অর্ডার কনফার্ম';
+  $('#checkout').textContent='Checkout করুন';
   drawCats();drawProducts();drawCart();
  }catch(error){
   apiReady=false;products=[];cats=[['all','সব পণ্য']];active='all';
