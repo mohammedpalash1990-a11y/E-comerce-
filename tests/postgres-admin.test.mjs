@@ -330,3 +330,32 @@ test('admin product archive removes cart references and writes audit',async()=>{
   assert.ok(db.calls.some(x=>x.sql?.includes('DELETE FROM cart_items')));
   assert.ok(db.calls.some(x=>x.sql?.includes('INSERT INTO audit_logs')&&x.values[2]==='PRODUCT_DELETE'));
 });
+
+test('admin courier booking locks seller order and rejects duplicate active shipment',async()=>{
+  const db=fakeDatabase((method,sql)=>sql.includes('FROM seller_orders so JOIN orders o')?{id:'so-admin',order_id:'order-admin',seller_id:'seller-admin',status:'PROCESSING',delivery_area:'Dhaka'}:undefined);
+  const repo=createPostgresAdminRepository(db,{createId:()=> 'shipment-admin'});
+  const result=await repo.bookSellerShipment({sellerOrderId:'so-admin',actorId:'admin-1',provider:'PATHAO'});
+  assert.equal(result.status,'BOOKED');
+  assert.equal(result.provider,'PATHAO');
+  assert.ok(db.calls.some(x=>x.sql?.includes('FROM seller_orders so JOIN orders o')&&x.sql.includes('FOR UPDATE')));
+  assert.ok(db.calls.some(x=>x.sql?.includes('INSERT INTO shipments')));
+  assert.ok(db.calls.some(x=>x.sql?.includes('COURIER_BOOKED')));
+});
+
+test('admin courier booking rejects an already active shipment',async()=>{
+  const db=fakeDatabase((method,sql)=>sql.includes('FROM seller_orders so JOIN orders o')?{id:'so-active',order_id:'order-active',seller_id:'seller-active',status:'PROCESSING',delivery_area:'Dhaka'}:sql.includes('FROM shipments WHERE seller_order_id=')?{id:'existing-shipment'}:undefined);
+  const repo=createPostgresAdminRepository(db);
+  await assert.rejects(repo.bookSellerShipment({sellerOrderId:'so-active',actorId:'admin-1',provider:'PATHAO'}),e=>e.status===409&&e.code==='SHIPMENT_ALREADY_BOOKED');
+  assert.equal(db.calls.some(x=>x.sql?.includes('INSERT INTO shipments')),false);
+});
+
+test('admin shipment delivery status calls the existing PostgreSQL seller order transition',async()=>{
+  const db=fakeDatabase((method,sql)=>sql.includes('FROM shipments sh JOIN seller_orders so')?{id:'ship-admin',seller_order_id:'so-admin',order_id:'order-admin',seller_id:'seller-admin',seller_order_status:'SHIPPED',provider:'PATHAO',tracking_id:'PA-111',customer_id:'buyer-admin'}:undefined);
+  let transition;
+  const repo=createPostgresAdminRepository(db,{ordersRepository:{async transitionSellerOrder(input){transition=input;}}});
+  assert.deepEqual(await repo.updateShipment({shipmentId:'ship-admin',actorId:'admin-1',status:'DELIVERED'}),{id:'ship-admin',status:'DELIVERED'});
+  assert.equal(transition.sellerId,'seller-admin');
+  assert.equal(transition.sellerOrderId,'so-admin');
+  assert.equal(transition.nextStatus,'DELIVERED');
+  assert.ok(db.calls.some(x=>x.sql?.includes('UPDATE shipments SET status=')));
+});
