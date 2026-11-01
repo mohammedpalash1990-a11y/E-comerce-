@@ -360,7 +360,11 @@ export default function registerPostgresDomain(route, ok, {
   // ----- PostgreSQL admin seller and product moderation -----
   if (admin) {
     route('GET', '/api/v1/admin/sellers', ['ADMIN'], invoke(ok, async ({ url }) => admin.listSellers({ status: url.searchParams.get('status') || undefined, limit: Number(url.searchParams.get('limit') || 100) })));
-    route('GET', '/api/v1/admin/sellers/:id', ['ADMIN'], invoke(ok, async ({ params }) => admin.getSeller(params[0])));
+    route('GET', '/api/v1/admin/sellers/:id', ['ADMIN'], invoke(ok, async ({ params }) => admin.getSellerOverview(params[0])));
+    route('GET', '/api/v1/admin/sellers/:id/products', ['ADMIN'], invoke(ok, async ({ params }) => admin.listSellerProducts(params[0])));
+    route('GET', '/api/v1/admin/sellers/:id/orders', ['ADMIN'], invoke(ok, async ({ params }) => admin.listSellerOrders(params[0])));
+    route('GET', '/api/v1/admin/sellers/:id/finance', ['ADMIN'], invoke(ok, async ({ params }) => (await admin.getSellerOverview(params[0])).finance));
+    route('GET', '/api/v1/admin/products', ['ADMIN'], invoke(ok, async ({ url }) => admin.listProducts({ status: url.searchParams.get('status') || undefined, query: url.searchParams.get('q') || '', limit: Number(url.searchParams.get('limit') || 100) })));
     route('POST', '/api/v1/admin/sellers/:id/approve', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.decideSeller({ sellerId: params[0], actorId: user.id, decision: 'APPROVE', reason: body.reason })));
     route('POST', '/api/v1/admin/sellers/:id/reject', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.decideSeller({ sellerId: params[0], actorId: user.id, decision: 'REJECT', reason: body.reason })));
     route('POST', '/api/v1/admin/sellers/:id/suspend', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.decideSeller({ sellerId: params[0], actorId: user.id, decision: 'SUSPEND', reason: body.reason })));
