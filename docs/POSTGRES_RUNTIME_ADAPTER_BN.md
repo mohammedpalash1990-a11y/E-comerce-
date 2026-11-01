@@ -53,3 +53,7 @@ The runner uses one checked-out client for the lock and all migration transactio
 ## Neon ledger compatibility check
 
 The configured Neon `haat` main branch was inspected read-only after adding the runner. Its existing `schema_migrations.applied_at` column is `TEXT NOT NULL` (with a `now()::text` default), not `TIMESTAMPTZ`. The runner therefore explicitly supplies an ISO timestamp when inserting the ledger row; this works with the already-provisioned schema and with the runner's own `TIMESTAMPTZ` table definition. The main branch currently records `001_init.sql`, `002_indexes.sql`, and `003_seed_categories.sql`. No Neon data or schema was modified during this check.
+
+## BIGINT numeric parsing
+
+PostgreSQL `BIGINT` values are commonly returned as strings by node-postgres. The optional helper in `apps/api/src/postgres-types.mjs` registers a parser for OID 20 and converts values to JavaScript numbers only when they fit `Number.MAX_SAFE_INTEGER`. This matters because marketplace prices, balances, stock counts and SQL `COUNT(*)` values are consumed by application arithmetic. Values outside the safe range fail loudly instead of silently rounding. Configure the parser before constructing the Pool; do not apply it to arbitrary `NUMERIC`/decimal values.
