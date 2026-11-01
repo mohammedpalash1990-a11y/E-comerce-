@@ -21,10 +21,12 @@ export function createPostgresAdminRepository(database,{createId=randomUUID,cloc
     if(!['APPROVE','REJECT'].includes(action)) throw fail(400,'INVALID_DECISION','পেআউট সিদ্ধান্ত সঠিক নয়');
     const cleanNote=String(note??'').trim().slice(0,300), at=stamp();
     return database.tx(async()=>{
-      const payout=await query("SELECT id,seller_id,amount_paisa,status FROM payouts WHERE id=? FOR UPDATE").get(String(payoutId));
-      if(!payout||payout.status!=='REQUESTED') throw fail(409,'PAYOUT_NOT_PENDING','পেআউট অনুরোধটি আর pending নেই');
-      const seller=await query('SELECT user_id FROM seller_profiles WHERE user_id=? FOR UPDATE').get(payout.seller_id);
+      const candidate=await query('SELECT seller_id FROM payouts WHERE id=?').get(String(payoutId));
+      if(!candidate) throw fail(404,'PAYOUT_NOT_FOUND','পেআউট অনুরোধ পাওয়া যায়নি');
+      const seller=await query('SELECT user_id FROM seller_profiles WHERE user_id=? FOR UPDATE').get(candidate.seller_id);
       if(!seller) throw fail(404,'SELLER_NOT_FOUND','বিক্রেতা পাওয়া যায়নি');
+      const payout=await query('SELECT id,seller_id,amount_paisa,status FROM payouts WHERE id=? FOR UPDATE').get(String(payoutId));
+      if(!payout||payout.seller_id!==candidate.seller_id||payout.status!=='REQUESTED') throw fail(409,'PAYOUT_NOT_PENDING','পেআউট অনুরোধটি আর pending নেই');
       if(action==='APPROVE') {
         const totals=await query("SELECT COALESCE(SUM(amount_paisa),0) reserved FROM payouts WHERE seller_id=? AND id<>? AND status IN ('REQUESTED','APPROVED')").get(payout.seller_id,String(payoutId));
         const earnings=await query("SELECT COALESCE(SUM(amount_paisa),0) earned FROM transactions WHERE seller_id=? AND kind IN ('SELLER_EARNING','SELLER_REVERSAL')").get(payout.seller_id);
