@@ -21,7 +21,7 @@ export function recomputeParent(orderId) {
   if (p === 'DELIVERED' && cur.payment_method === 'COD' && cur.payment_status !== 'PAID') {
     q("UPDATE orders SET payment_status='PAID' WHERE id=?").run(orderId);
     q("UPDATE payments SET status='PAID',updated_at=? WHERE order_id=? AND method='COD'").run(now(), orderId);
-    q("INSERT OR IGNORE INTO transactions VALUES(?,?,?,?,?,?,?,?)").run(id(), 'ORDER_PAYMENT', orderId, null, null, cur.total_paisa, 'cod:' + orderId, now());
+    q("INSERT INTO transactions VALUES(?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING").run(id(), 'ORDER_PAYMENT', orderId, null, null, cur.total_paisa, 'cod:' + orderId, now());
   }
   if (p === 'CANCELLED' && cur.payment_status === 'PAID') ensureRefund(orderId, cur.total_paisa, 'অর্ডার বাতিল');
   return p;
@@ -50,8 +50,8 @@ export function applySellerStatus(so, next, actor, note) {
   }
   q('UPDATE seller_orders SET status=? WHERE id=?').run(next, so.id);
   if (next === 'DELIVERED') {
-    q('INSERT OR IGNORE INTO transactions VALUES(?,?,?,?,?,?,?,?)').run(id(), 'SELLER_EARNING', so.order_id, so.id, so.seller_id, so.net_paisa, so.id, now());
-    q('INSERT OR IGNORE INTO transactions VALUES(?,?,?,?,?,?,?,?)').run(id(), 'COMMISSION', so.order_id, so.id, so.seller_id, so.commission_paisa, so.id, now());
+    q('INSERT INTO transactions VALUES(?,?,?,?,?,?,?,?)').run(id(), 'SELLER_EARNING', so.order_id, so.id, so.seller_id, so.net_paisa, so.id, now());
+    q('INSERT INTO transactions VALUES(?,?,?,?,?,?,?,?)').run(id(), 'COMMISSION', so.order_id, so.id, so.seller_id, so.commission_paisa, so.id, now());
   }
   addEvent(so.order_id, so.id, next, note, actor);
   audit(actor, 'ORDER_STATUS_' + next, 'seller_order', so.id, { from: so.status, order_id: so.order_id });
