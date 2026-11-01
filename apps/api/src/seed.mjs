@@ -1,8 +1,21 @@
 import { q, id, now, hashPassword, config, validPhone, normPhone, checkPassword } from './core.mjs';
 
-if (!q('SELECT id FROM categories LIMIT 1').get()) {
-  for (const [slug, bn, en] of [['electronics', 'ইলেকট্রনিক্স', 'Electronics'], ['fashion', 'ফ্যাশন', 'Fashion'], ['home', 'ঘর ও জীবন', 'Home & Living']]) q('INSERT INTO categories VALUES(?,?,?,?)').run(id(), slug, bn, en);
+// Keep SQLite development data aligned with the canonical PostgreSQL category seed.
+// Insert missing slugs individually so partially populated databases are repaired too.
+const categories = [
+  ['electronics', 'ইলেকট্রনিক্স', 'Electronics'],
+  ['fashion', 'ফ্যাশন', 'Fashion'],
+  ['home', 'ঘর ও জীবন', 'Home & Living'],
+  ['beauty', 'সৌন্দর্য ও ব্যক্তিগত যত্ন', 'Beauty & Personal Care'],
+  ['grocery', 'মুদি ও খাদ্য', 'Grocery'],
+  ['kids', 'শিশু ও বাচ্চা', 'Kids & Baby'],
+  ['sports', 'খেলাধুলা ও আউটডোর', 'Sports & Outdoors'],
+  ['books', 'বই ও স্টেশনারি', 'Books & Stationery']
+];
+for (const [slug, bn, en] of categories) {
+  q('INSERT INTO categories(id,slug,name_bn,name_en) VALUES(?,?,?,?) ON CONFLICT(slug) DO NOTHING').run(id(), slug, bn, en);
 }
+
 if (!q('SELECT id FROM users LIMIT 1').get()) {
   if (config.prod) {
     // Production: no demo accounts. The first admin comes from environment variables.
