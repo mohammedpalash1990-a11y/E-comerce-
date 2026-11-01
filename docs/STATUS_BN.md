@@ -93,4 +93,6 @@
 - Courier quote/booking ও shipment status PostgreSQL-এ চলে; shipment read/write-এ seller ownership যাচাই হয় এবং delivery confirmation existing PostgreSQL order transition repository ব্যবহার করে।
 - PostgreSQL mode-এ legacy SQLite seller routes আর register হয় না; SQLite-only development mode অপরিবর্তিত থাকে।
 
-**এখনো বাকি:** admin management/finance/payout moderation; real PostgreSQL integration test এবং পূর্ণ end-to-end validation। তাই এই branch production-ready নয়; merge/deploy করা হয়নি।
+**Admin PostgreSQL migration-এর নতুন অংশ:** dashboard aggregate, finance summary/transactions/report, audit log list, payout list/approve/reject, seller list/detail/approve/reject/suspend/activate/commission এবং pending product moderation route যোগ হয়েছে। Payout approval seller row lock করে এবং অন্য pending/approved payout reserve হিসাব করে; seller ও product moderation audit log/notification লেখে।
+
+**এখনো বাকি:** admin customer management, full product/category/brand/coupon CRUD, order/refund/shipping admin actions; real PostgreSQL integration test এবং পূর্ণ end-to-end validation। তাই এই branch production-ready নয়; merge/deploy করা হয়নি।
