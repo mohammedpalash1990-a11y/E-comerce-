@@ -32,6 +32,7 @@ test('storefront does not silently present hard-coded demo products as live inve
   assert.match(html, /লাইভ ক্যাটালগ অফলাইন/);
   assert.match(html, /fetch\(apiUrl\('\/health'\)/);
   assert.match(html, /haat_cart_v1/);
+  assert.match(html, /retryConnection/);
   assert.doesNotMatch(html, /id:'p[1-8]',bn:/);
 });
 
