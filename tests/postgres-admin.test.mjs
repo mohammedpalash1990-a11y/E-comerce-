@@ -32,7 +32,8 @@ test('payout list validates status and returns integer-paisa amount as BDT',asyn
 
 test('payout approval locks pending request, verifies available earnings, posts ledger transaction and audit',async()=>{
   const db=fakeDatabase((method,sql)=>{
-    if(sql.includes('FROM payouts WHERE id='))return{id:'pay-1',seller_id:'seller-1',amount_paisa:'25000',status:'REQUESTED'};\n    if(sql.includes('FROM seller_profiles'))return{user_id:'seller-1'};
+    if(sql.includes('FROM payouts WHERE id='))return{id:'pay-1',seller_id:'seller-1',amount_paisa:'25000',status:'REQUESTED'};
+    if(sql.includes('FROM seller_profiles'))return{user_id:'seller-1'};
     if(sql.includes(' reserved FROM payouts'))return{reserved:'10000'};
     if(sql.includes(' earned FROM transactions'))return{earned:'100000'};
     return undefined;
@@ -48,7 +49,8 @@ test('payout approval locks pending request, verifies available earnings, posts 
 
 test('payout approval rejects when seller earnings are already reserved',async()=>{
   const db=fakeDatabase((method,sql)=>{
-    if(sql.includes('FROM payouts WHERE id='))return{id:'pay-2',seller_id:'seller-1',amount_paisa:'90000',status:'REQUESTED'};\n    if(sql.includes('FROM seller_profiles'))return{user_id:'seller-1'};
+    if(sql.includes('FROM payouts WHERE id='))return{id:'pay-2',seller_id:'seller-1',amount_paisa:'90000',status:'REQUESTED'};
+    if(sql.includes('FROM seller_profiles'))return{user_id:'seller-1'};
     if(sql.includes(' reserved FROM payouts'))return{reserved:'20000'};
     if(sql.includes(' earned FROM transactions'))return{earned:'100000'};
     return undefined;
@@ -74,7 +76,8 @@ test('payout rejection releases the reservation and records audit without a payo
 });
 
 test('finance summary uses approved revenue and computes seller available balance',async()=>{
-  const db=fakeDatabase((method,sql)=>sql.includes('SELECT\n      COALESCE')?{gross:'100000',refunds:'5000',commission:'8000',seller_earnings:'70000',paid_out:'10000',pending_payouts:'5000',seller_pending:'20000'}:undefined);
+  const db=fakeDatabase((method,sql)=>sql.includes('SELECT
+      COALESCE')?{gross:'100000',refunds:'5000',commission:'8000',seller_earnings:'70000',paid_out:'10000',pending_payouts:'5000',seller_pending:'20000'}:undefined);
   const repo=createPostgresAdminRepository(db);
   const summary=await repo.financeSummary();
   assert.equal(summary.gross_sales_bdt,1000);
