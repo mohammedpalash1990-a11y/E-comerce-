@@ -107,6 +107,9 @@ export default function registerPostgresDomain(route, ok, {
     route('DELETE', '/api/v1/seller/products/:id', ['SELLER'], invoke(ok, async ({ user, params }) => seller.archiveProduct(user.id, params[0])));
     route('GET', '/api/v1/seller/finance', ['SELLER'], invoke(ok, async ({ user }) => seller.getFinance(user.id)));
     route('POST', '/api/v1/seller/payouts', ['SELLER'], invoke(ok, async ({ user, body }) => seller.requestPayout(user.id, body), 201));
+  route('GET', '/api/v1/seller/courier/quote', ['SELLER'], invoke(ok, async ({ url }) => seller.getCourierQuotes(url.searchParams.get('area') || '')));
+  route('POST', '/api/v1/seller/orders/:id/courier', ['SELLER'], invoke(ok, async ({ user, params, body }) => seller.bookSellerShipment(user.id, params[0], body.provider), 201));
+  route('POST', '/api/v1/seller/shipments/:id/status', ['SELLER'], invoke(ok, async ({ user, params, body }) => seller.updateSellerShipment(user.id, params[0], body.status)));
   }
   // ----- shared stock ledger / seller inventory -----
   route('GET', '/api/v1/seller/products/:id/inventory', ['SELLER'], invoke(ok, async ({ user, params }) => {
