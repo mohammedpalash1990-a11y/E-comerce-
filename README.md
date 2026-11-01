@@ -14,6 +14,8 @@
 - Web server proxies `/api/*` requests to the API service
 - Storefront loads only API-backed products; if the API is offline it clearly reports preview/offline status instead of silently showing hard-coded sample products
 - Seller and admin pages show whether the API and database health endpoint is reachable
+- Seller product submission supports descriptions and HTTPS image URLs; seller and admin views can preview uploaded product images
+- Admin console includes live KPI cards and pending seller application approvals
 - Storefront has a manual API retry control; customer cart persists under a versioned local-storage key
 - Storefront automatically uses live catalogue and COD checkout when served alongside the API; GitHub Pages remains a static preview
 - Prisma PostgreSQL target schema, OpenAPI starter contract, Docker and CI scaffolding
