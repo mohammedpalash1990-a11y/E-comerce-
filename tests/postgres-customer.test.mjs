@@ -33,7 +33,7 @@ test('customer address creation locks the owner row and enforces the ten-address
   const repo = createPostgresCustomerRepository(db);
   const result = await repo.createAddress({ user: customer, body: validAddress });
   assert.ok(result.id);
-  assert.ok(db.calls.some(call => /FROM users WHERE id=\\\? FOR UPDATE/.test(call.sql)));
+  assert.ok(db.calls.some(call => call.sql.includes('FROM users WHERE id=? FOR UPDATE')));
   assert.ok(db.calls.some(call => /UPDATE addresses SET is_default=0/.test(call.sql)));
   assert.ok(db.calls.some(call => /INSERT INTO addresses/.test(call.sql)));
 });
@@ -55,7 +55,7 @@ test('address update is owner-scoped and cannot edit another customer address', 
   const repo = createPostgresCustomerRepository(db);
   await assert.rejects(repo.updateAddress({ user: customer, addressId: 'foreign-address', body: validAddress }),
     error => error instanceof HttpError && error.status === 404 && error.message === 'Address not found');
-  assert.ok(db.calls.some(call => /WHERE id=\$1 AND user_id=\\\? FOR UPDATE/.test(call.sql)));
+  assert.ok(db.calls.some(call => call.sql.includes('WHERE id=? AND user_id=? FOR UPDATE')));
   assert.equal(db.calls.some(call => /UPDATE addresses SET label=/.test(call.sql)), false);
 });
 
