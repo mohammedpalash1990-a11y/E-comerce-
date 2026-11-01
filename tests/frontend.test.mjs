@@ -23,5 +23,5 @@ test('seller and admin login forms do not expose demo credentials as defaults', 
 test('frontend API configuration is explicit and keeps API version out of the base origin', async () => {
   const config = await read('apps/web/public/api-config.js');
   assert.match(config, /window\.HAAT_API_BASE\s*=\s*''/);
-  assert.match(config, /Do not add \/api\/v1/);
+  assert.match(config, /do not append \/api\/v1/);
 });
