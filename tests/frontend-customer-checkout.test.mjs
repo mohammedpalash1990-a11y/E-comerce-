@@ -82,7 +82,7 @@ test('storefront cart sync clears local cart only after successful server writes
   };
   const sync = vm.runInNewContext('(' + source + ')', context);
   const errors = await sync();
-  assert.deepEqual(errors, []);
+  assert.deepEqual([...errors], []);
   assert.equal(storage.has('haat_cart_v1'), false);
   assert.equal(calls.length, 2);
   assert.deepEqual(calls.map(x => JSON.parse(x.options.body)), [
