@@ -32,7 +32,7 @@ test('payout list validates status and returns integer-paisa amount as BDT',asyn
 
 test('payout approval locks pending request, verifies available earnings, posts ledger transaction and audit',async()=>{
   const db=fakeDatabase((method,sql)=>{
-    if(sql.includes('FROM payouts WHERE id='))return{id:'pay-1',seller_id:'seller-1',amount_paisa:'25000',status:'REQUESTED'};
+    if(sql.includes('FROM payouts WHERE id='))return{id:'pay-1',seller_id:'seller-1',amount_paisa:'25000',status:'REQUESTED'};\n    if(sql.includes('FROM seller_profiles'))return{user_id:'seller-1'};
     if(sql.includes(' reserved FROM payouts'))return{reserved:'10000'};
     if(sql.includes(' earned FROM transactions'))return{earned:'100000'};
     return undefined;
@@ -48,7 +48,7 @@ test('payout approval locks pending request, verifies available earnings, posts 
 
 test('payout approval rejects when seller earnings are already reserved',async()=>{
   const db=fakeDatabase((method,sql)=>{
-    if(sql.includes('FROM payouts WHERE id='))return{id:'pay-2',seller_id:'seller-1',amount_paisa:'90000',status:'REQUESTED'};
+    if(sql.includes('FROM payouts WHERE id='))return{id:'pay-2',seller_id:'seller-1',amount_paisa:'90000',status:'REQUESTED'};\n    if(sql.includes('FROM seller_profiles'))return{user_id:'seller-1'};
     if(sql.includes(' reserved FROM payouts'))return{reserved:'20000'};
     if(sql.includes(' earned FROM transactions'))return{earned:'100000'};
     return undefined;
@@ -66,7 +66,7 @@ test('payout decision is single-use and rejects an already decided request',asyn
 });
 
 test('payout rejection releases the reservation and records audit without a payout transaction',async()=>{
-  const db=fakeDatabase((method,sql)=>sql.includes('FROM payouts WHERE id=')?{id:'pay-4',seller_id:'seller-2',amount_paisa:'5000',status:'REQUESTED'}:undefined);
+  const db=fakeDatabase((method,sql)=>sql.includes('FROM payouts WHERE id=')?{id:'pay-4',seller_id:'seller-2',amount_paisa:'5000',status:'REQUESTED'}:sql.includes('FROM seller_profiles')?{user_id:'seller-2'}:undefined);
   const repo=createPostgresAdminRepository(db,{createId:()=> 'event-1'});
   assert.deepEqual(await repo.decidePayout({payoutId:'pay-4',actorId:'admin-1',decision:'REJECT',note:'invalid account'}),{id:'pay-4',status:'REJECTED'});
   assert.ok(db.calls.some(x=>x.sql?.includes("UPDATE payouts SET status='REJECTED'")));
