@@ -31,7 +31,7 @@ export async function runPostgresMigrations(pool, directory) {
       await client.query('BEGIN');
       try {
         await client.query(sql);
-        await client.query('INSERT INTO schema_migrations(name) VALUES($1)', [name]);
+        await client.query('INSERT INTO schema_migrations(name, applied_at) VALUES($1, $2)', [name, new Date().toISOString()]);
         await client.query('COMMIT');
         applied.add(name);
         appliedNow.push(name);
