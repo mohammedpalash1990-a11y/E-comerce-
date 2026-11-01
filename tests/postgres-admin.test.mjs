@@ -302,3 +302,31 @@ test('admin shipping charge cannot mutate paid orders',async()=>{
   await assert.rejects(repo.setShippingCharge({orderId:'order-paid',actorId:'admin-1',shippingBdt:50}),e=>e.status===409&&e.code==='ORDER_SHIPPING_LOCKED');
   assert.equal(db.calls.some(x=>x.sql?.includes('UPDATE orders SET shipping_paisa=')),false);
 });
+
+test('admin product edit routes stock changes through the shared inventory ledger',async()=>{
+  const db=fakeDatabase((method,sql)=>sql.includes('FROM products WHERE id=')?{id:'product-edit',price_paisa:'25000',discount_paisa:null,status:'ACTIVE'}:undefined);
+  let stock;
+  const repo=createPostgresAdminRepository(db,{inventoryRepository:{async setStock(input){stock=input;return{stock:input.stock};}},createId:()=> 'edit-audit'});
+  assert.deepEqual(await repo.updateProduct({productId:'product-edit',actorId:'admin-1',body:{name_bn:'নতুন নাম',price_bdt:300,stock:7,images:['https://cdn.example/p.png']}}),{id:'product-edit'});
+  assert.equal(stock.stock,7);
+  assert.equal(stock.reason,'ADMIN_PRODUCT_EDIT_STOCK');
+  assert.ok(db.calls.some(x=>x.sql?.includes('UPDATE products SET name_bn=?,price_paisa=?')));
+  assert.ok(db.calls.some(x=>x.sql?.includes('INSERT INTO product_images')));
+  assert.equal(db.calls.some(x=>x.sql?.includes('UPDATE products SET stock=')),false);
+});
+
+test('admin product edit rejects discount greater than or equal to effective price',async()=>{
+  const db=fakeDatabase((method,sql)=>sql.includes('FROM products WHERE id=')?{id:'product-discount',price_paisa:'10000',discount_paisa:null,status:'ACTIVE'}:undefined);
+  const repo=createPostgresAdminRepository(db);
+  await assert.rejects(repo.updateProduct({productId:'product-discount',actorId:'admin-1',body:{discount_price_bdt:100}}),e=>e.status===400&&e.code==='INVALID_DISCOUNT');
+  assert.equal(db.calls.some(x=>x.sql?.includes('UPDATE products SET')),false);
+});
+
+test('admin product archive removes cart references and writes audit',async()=>{
+  const db=fakeDatabase((method,sql)=>sql.includes('FROM products WHERE id=')?{id:'product-archive'}:undefined);
+  const repo=createPostgresAdminRepository(db);
+  assert.deepEqual(await repo.archiveProduct({productId:'product-archive',actorId:'admin-1'}),{deleted:true});
+  assert.ok(db.calls.some(x=>x.sql?.includes("UPDATE products SET status='ARCHIVED'")));
+  assert.ok(db.calls.some(x=>x.sql?.includes('DELETE FROM cart_items')));
+  assert.ok(db.calls.some(x=>x.sql?.includes('INSERT INTO audit_logs')&&x.values[2]==='PRODUCT_DELETE'));
+});
