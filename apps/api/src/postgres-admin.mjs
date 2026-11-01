@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto';
+import { productFields, parseImages } from './routes_seller.mjs';
 
 function fail(status, code, message) { const error = new Error(message); error.status=status; error.code=code; return error; }
 function integer(value,label) { const n=typeof value==='number'?value:Number(value); if(!Number.isSafeInteger(n)) throw fail(500,'INVALID_DATABASE_VALUE',label+' is not a safe integer'); return n; }
 function limit(value, fallback=100) { const n=Number(value??fallback); return Number.isInteger(n)?Math.min(Math.max(n,1),500):fallback; }
 function money(value) { return integer(value??0,'money')/100; }
 
-export function createPostgresAdminRepository(database,{createId=randomUUID,clock=()=>new Date().toISOString()}={}) {
+export function createPostgresAdminRepository(database,{createId=randomUUID,clock=()=>new Date().toISOString(),inventoryRepository}={}) {
   if(!database||typeof database.q!=='function'||typeof database.tx!=='function') throw new TypeError('A PostgreSQL database adapter with q() and tx() is required');
   const query=sql=>database.q(sql), stamp=()=>clock(), makeId=()=>createId();
 
@@ -258,6 +259,55 @@ export function createPostgresAdminRepository(database,{createId=randomUUID,cloc
     if(!result.changes) throw fail(404,'COUPON_NOT_FOUND','কুপন পাওয়া যায়নি');
     await query('INSERT INTO audit_logs(id,actor_id,action,entity,entity_id,detail,created_at) VALUES(?,?,?,?,?,?,?)').run(makeId(),String(actorId),'COUPON_TOGGLE','coupon',String(code).toUpperCase(),JSON.stringify({active:Boolean(active)}),stamp());
     return {code:String(code).toUpperCase(),active:Boolean(active)};
+  }
+
+  async function updateProduct({productId,actorId,body={}}) {
+    return database.tx(async()=>{
+      const existing=await query("SELECT id,price_paisa,discount_paisa,status FROM products WHERE id=? AND status<>'ARCHIVED' FOR UPDATE").get(String(productId));
+      if(!existing) throw fail(404,'PRODUCT_NOT_FOUND','পণ্য পাওয়া যায়নি');
+      const clean={...body,category_slug:undefined,brand_slug:undefined};
+      const fields=productFields(clean,{partial:true}),images=parseImages(body.images),requestedStock=fields.stock;
+      delete fields.stock;
+      const nextPrice=fields.price_paisa??integer(existing.price_paisa,'price_paisa');
+      const nextDiscount=fields.discount_paisa!==undefined?fields.discount_paisa:existing.discount_paisa;
+      if(nextDiscount!=null&&integer(nextDiscount,'discount_paisa')>=nextPrice) throw fail(400,'INVALID_DISCOUNT','ডিসকাউন্ট মূল্য মূল্যের চেয়ে কম হতে হবে');
+      if(body.category_slug!==undefined) {
+        const category=await query('SELECT id FROM categories WHERE slug=?').get(String(body.category_slug));
+        if(!category) throw fail(400,'INVALID_CATEGORY','ক্যাটাগরি সঠিক নয়');
+        fields.category_id=category.id;
+      }
+      if(body.brand_slug!==undefined) {
+        if(!body.brand_slug) fields.brand_id=null;
+        else {
+          const brand=await query('SELECT id FROM brands WHERE slug=?').get(String(body.brand_slug));
+          if(!brand) throw fail(400,'INVALID_BRAND','ব্র্যান্ড সঠিক নয়');
+          fields.brand_id=brand.id;
+        }
+      }
+      const keys=Object.keys(fields);
+      if(keys.length) await query('UPDATE products SET '+keys.map(key=>key+'=?').join(',')+',updated_at=? WHERE id=?').run(...keys.map(key=>fields[key]),stamp(),String(productId));
+      if(requestedStock!==undefined) {
+        if(!inventoryRepository?.setStock) throw fail(503,'INVENTORY_REPOSITORY_UNAVAILABLE','ইনভেন্টরি আপডেট এখন সম্ভব নয়');
+        await inventoryRepository.setStock({productId:String(productId),stock:requestedStock,reason:'ADMIN_PRODUCT_EDIT_STOCK',actorId:String(actorId),reference:'admin-product-edit:'+String(productId)});
+      }
+      if(images!==null) {
+        await query('DELETE FROM product_images WHERE product_id=?').run(String(productId));
+        for(let position=0;position<images.length;position++) await query('INSERT INTO product_images(id,product_id,url,position) VALUES(?,?,?,?)').run(makeId(),String(productId),images[position],position);
+      }
+      await query('INSERT INTO audit_logs(id,actor_id,action,entity,entity_id,detail,created_at) VALUES(?,?,?,?,?,?,?)').run(makeId(),String(actorId),'PRODUCT_ADMIN_EDIT','product',String(productId),JSON.stringify({fields:Object.keys(fields),stock:requestedStock??null,images:images?.length}),stamp());
+      return {id:String(productId)};
+    });
+  }
+
+  async function archiveProduct({productId,actorId}) {
+    return database.tx(async()=>{
+      const product=await query("SELECT id FROM products WHERE id=? AND status<>'ARCHIVED' FOR UPDATE").get(String(productId));
+      if(!product) throw fail(404,'PRODUCT_NOT_FOUND','পণ্য পাওয়া যায়নি');
+      await query("UPDATE products SET status='ARCHIVED',active=0,updated_at=? WHERE id=?").run(stamp(),String(productId));
+      await query('DELETE FROM cart_items WHERE product_id=?').run(String(productId));
+      await query('INSERT INTO audit_logs(id,actor_id,action,entity,entity_id,detail,created_at) VALUES(?,?,?,?,?,?,?)').run(makeId(),String(actorId),'PRODUCT_DELETE','product',String(productId),'{}',stamp());
+      return {deleted:true};
+    });
   }
 
   async function listPendingProducts() {
