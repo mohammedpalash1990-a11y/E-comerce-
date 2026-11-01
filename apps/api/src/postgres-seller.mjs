@@ -47,7 +47,7 @@ export function createPostgresSellerRepository(database,{inventoryRepository,ord
   async function getCourierQuotes(area=''){ return Object.fromEntries(COURIERS.map(provider=>[provider,courierQuote(provider,area)/100])); }
   async function bookSellerShipment(sellerId,sellerOrderId,provider){
     const selected=String(provider||'').toUpperCase();if(!COURIERS.includes(selected))throw fail(400,'INVALID_COURIER','অজানা কুরিয়ার');
-    const booking=courierBook(selected,'');const shipmentId=makeId(),created=stamp();
+    const shipmentId=makeId(),created=stamp();
     return database.tx(async()=>{
       await assertWritable(sellerId,{allowPending:false});
       const order=await query('SELECT so.id,so.order_id,so.status,o.delivery_area FROM seller_orders so JOIN orders o ON o.id=so.order_id WHERE so.id=? AND so.seller_id=? FOR UPDATE').get(String(sellerOrderId),String(sellerId));
@@ -55,7 +55,7 @@ export function createPostgresSellerRepository(database,{inventoryRepository,ord
       if(!['PROCESSING','SHIPPED'].includes(order.status))throw fail(409,'ORDER_NOT_READY','অর্ডার PROCESSING বা SHIPPED অবস্থায় থাকতে হবে');
       const active=await query("SELECT id FROM shipments WHERE seller_order_id=? AND status NOT IN ('FAILED_DELIVERY','RETURNED') LIMIT 1 FOR UPDATE").get(order.id);
       if(active)throw fail(409,'SHIPMENT_ALREADY_BOOKED','ইতিমধ্যে কুরিয়ার বুক করা আছে');
-      const quote=courierQuote(selected,order.delivery_area);
+      const booking=courierBook(selected,order.delivery_area);const quote=booking.charge;
       await query('INSERT INTO shipments(id,seller_order_id,provider,tracking_id,status,charge_paisa,mode,created_at) VALUES(?,?,?,?,?,?,?,?)').run(shipmentId,order.id,selected,booking.trackingId,'BOOKED',quote,'sandbox',created);
       await query('INSERT INTO order_events(id,order_id,seller_order_id,status,note,actor_id,created_at) VALUES(?,?,?,?,?,?,?)').run(makeId(),order.order_id,order.id,'COURIER_BOOKED',selected+' '+booking.trackingId,String(sellerId),created);
       await query('INSERT INTO audit_logs(id,actor_id,action,entity,entity_id,detail,created_at) VALUES(?,?,?,?,?,?,?)').run(makeId(),String(sellerId),'COURIER_BOOKED','shipment',shipmentId,JSON.stringify({seller_order_id:order.id,provider:selected,tracking_id:booking.trackingId}),created);
