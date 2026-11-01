@@ -29,7 +29,7 @@ let products=[
 ];
 const cats=[['all','সব পণ্য'],['electronics','ইলেকট্রনিক্স'],['fashion','ফ্যাশন'],['home','ঘর ও জীবন']];
 let active='all',cart=JSON.parse(localStorage.getItem('haat_cart_demo')||'{}'),apiReady=false;
-const $=s=>document.querySelector(s),escHtml=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c])),money=n=>'৳'+Number(n).toLocaleString('en-BD');
+const $=s=>document.querySelector(s),escHtml=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),money=n=>'৳'+Number(n).toLocaleString('en-BD');
 function toast(t){$('#toast').textContent=t;$('#toast').classList.add('show');setTimeout(()=>$('#toast').classList.remove('show'),1800)}
 function drawCats(){$('#cats').innerHTML=cats.map(([id,name])=>'<button class="chip '+(id===active?'active':'')+'" data-cat="'+id+'">'+name+'</button>').join('')}
 function drawProducts(){const term=$('#search').value.trim().toLowerCase();const list=products.filter(p=>(active==='all'||p.cat===active)&&(!term||(p.bn+p.en).toLowerCase().includes(term)));$('#resultCount').textContent=list.length+' টি পণ্য';$('#grid').innerHTML=list.map(p=>'<article class="card"><div class="visual">'+p.icon+'</div><div class="cardbody"><h3>'+escHtml(p.bn)+'</h3><div class="muted">'+escHtml(p.en)+'</div><div class="price">'+money(p.price)+'</div><div class="cardfoot"><span class="stock">স্টক: '+Number(p.stock||0)+'</span><button class="add" data-add="'+escHtml(p.id)+'">+ কার্টে</button></div></div></article>').join('')||'<p>কোনো পণ্য পাওয়া যায়নি।</p>'}
