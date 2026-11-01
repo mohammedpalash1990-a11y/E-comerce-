@@ -2,7 +2,7 @@
 // before the async pg runtime is enabled.
 export function postgresPlaceholders(sql) {
   if (typeof sql !== 'string') throw new TypeError('SQL must be a string');
-  let out = '', index = 0, state = 'normal', dollarTag = '';
+  let out = '', index = 0, state = 'normal', dollarTag = '', blockDepth = 0;
   for (let i = 0; i < sql.length; i++) {
     const ch = sql[i], next = sql[i + 1];
     if (state === 'single' || state === 'escape-single') {
@@ -25,7 +25,11 @@ export function postgresPlaceholders(sql) {
     }
     if (state === 'block-comment') {
       out += ch;
-      if (ch === '*' && next === '/') { out += next; i++; state = 'normal'; }
+      if (ch === '/' && next === '*') { out += next; i++; blockDepth++; }
+      else if (ch === '*' && next === '/') {
+        out += next; i++;
+        if (--blockDepth === 0) state = 'normal';
+      }
       continue;
     }
     if (state === 'dollar') {
@@ -42,7 +46,7 @@ export function postgresPlaceholders(sql) {
     }
     if (ch === '"') { state = 'double'; out += ch; continue; }
     if (ch === '-' && next === '-') { state = 'line-comment'; out += '--'; i++; continue; }
-    if (ch === '/' && next === '*') { state = 'block-comment'; out += '/*'; i++; continue; }
+    if (ch === '/' && next === '*') { state = 'block-comment'; blockDepth = 1; out += '/*'; i++; continue; }
     if (ch === '$') {
       const match = sql.slice(i).match(/^\$[A-Za-z_][A-Za-z0-9_]*\$|^\$\$/);
       if (match) { dollarTag = match[0]; state = 'dollar'; out += dollarTag; i += dollarTag.length - 1; continue; }

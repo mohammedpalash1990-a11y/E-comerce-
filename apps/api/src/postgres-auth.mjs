@@ -90,17 +90,30 @@ export function createPostgresAuthRepository(database, overrides = {}) {
     return code;
   }
 
-  async function checkOtp(userId, purpose, code) {
-    const row = await query('SELECT * FROM otp_codes WHERE user_id=? AND purpose=? AND used_at IS NULL ORDER BY created_at DESC LIMIT 1')
+  // Must be called inside a transaction. The row lock serializes all attempts
+  // against the current OTP, including simultaneous valid-code submissions.
+  async function consumeOtp(userId, purpose, code) {
+    const row = await query('SELECT * FROM otp_codes WHERE user_id=? AND purpose=? AND used_at IS NULL ORDER BY created_at DESC LIMIT 1 FOR UPDATE')
       .get(userId, purpose);
     if (!row || row.expires_at < getNow() || Number(row.attempts) >= 5) {
-      throw bad('কোড মেয়াদোত্তীর্ণ বা অবৈধ');
+      return bad('কোড মেয়াদোত্তীর্ণ বা অবৈধ');
     }
+
+    // The row lock makes this read/check/increment sequence atomic across
+    // PostgreSQL transactions; attempts can never advance beyond five.
     await query('UPDATE otp_codes SET attempts=attempts+1 WHERE id=?').run(row.id);
     if (!safeEq(hash(String(code || '') + userId), row.code_hash)) {
-      throw bad('কোড সঠিক নয়');
+      return bad('কোড সঠিক নয়');
     }
-    await query('UPDATE otp_codes SET used_at=? WHERE id=?').run(getNow(), row.id);
+    await query('UPDATE otp_codes SET used_at=? WHERE id=? AND used_at IS NULL').run(getNow(), row.id);
+    return null;
+  }
+
+  async function checkOtp(userId, purpose, code) {
+    // Return the validation error from the transaction and throw only after
+    // it commits, so a failed attempt is not rolled back with the exception.
+    const error = await transaction(() => consumeOtp(userId, purpose, code));
+    if (error) throw error;
   }
 
   async function findByIdentifier(identifier) {
@@ -285,12 +298,15 @@ export function createPostgresAuthRepository(database, overrides = {}) {
     const u = await findByIdentifier(body.identifier);
     if (!u) throw bad('কোড মেয়াদোত্তীর্ণ বা অবৈধ');
     checkPassword(body.new_password);
-    await transaction(async () => {
-      await checkOtp(u.id, 'RESET', body.code);
+    const otpError = await transaction(async () => {
+      const error = await consumeOtp(u.id, 'RESET', body.code);
+      if (error) return error;
       await query('UPDATE users SET password=? WHERE id=?').run(hashPw(body.new_password), u.id);
       await revokeUserSessions(u.id);
       await auditLog(u.id, 'PASSWORD_RESET', 'user', u.id);
+      return null;
     });
+    if (otpError) throw otpError;
     return { reset: true };
   }
 
@@ -303,11 +319,14 @@ export function createPostgresAuthRepository(database, overrides = {}) {
 
   async function verify(user, body) {
     const purpose = body.purpose === 'EMAIL' ? 'EMAIL' : 'PHONE';
-    await transaction(async () => {
-      await checkOtp(user.id, purpose, body.code);
+    const otpError = await transaction(async () => {
+      const error = await consumeOtp(user.id, purpose, body.code);
+      if (error) return error;
       const col = purpose === 'EMAIL' ? 'email_verified' : 'phone_verified';
       await query(`UPDATE users SET ${col}=1 WHERE id=?`).run(user.id);
+      return null;
     });
+    if (otpError) throw otpError;
     return { verified: purpose };
   }
 
