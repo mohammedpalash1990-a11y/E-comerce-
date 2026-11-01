@@ -14,7 +14,9 @@
 </main>
 <footer class="footer"><div><div class="brand">HAAT.</div><p class="note">বাংলাদেশের জন্য বাংলা-প্রথম মাল্টি-ভেন্ডর মার্কেটপ্লেস।</p></div><div><b>সহায়তা</b><p class="note">Customer care · Terms · Privacy</p><a href="seller.html">Seller Workspace</a><br><a href="admin.html">Admin Portal</a></div><div class="note">© 2026 HAAT. Development preview.</div></footer>
 <div class="drawer" id="drawer"><aside class="cart"><div class="carthead"><h2>আপনার কার্ট</h2><button id="closeCart">✕</button></div><div id="cartLines"></div><div class="cartline"><b>সর্বমোট</b><b id="cartTotal">৳0</b></div><button class="checkout" id="checkout">ডেমো অর্ডার কনফার্ম</button><p class="note">ব্যাকএন্ড যুক্ত থাকলে COD অর্ডার জমা হবে। এই প্রকাশ্য GitHub Pages প্রিভিউতে ব্যাকএন্ড সংযুক্ত নেই; এখানে অর্ডার বাস্তবে জমা হবে না।</p></aside></div><div class="toast" id="toast"></div>
+<script src="./api-config.js"></script>
 <script>
+const apiUrl=path=>(String(window.HAAT_API_BASE||'').replace(/\/+$/,'')+path);
 let products=[
 {id:'p1',bn:'ওয়্যারলেস ইয়ারবাড',en:'Wireless Earbuds',price:1890,stock:32,cat:'electronics',icon:'🎧'},
 {id:'p2',bn:'কটন পাঞ্জাবি',en:'Cotton Panjabi',price:1290,stock:18,cat:'fashion',icon:'🥻'},
@@ -53,10 +55,10 @@ $('#checkout').onclick=async()=>{
  if(!password)return;
  const button=$('#checkout');button.disabled=true;button.textContent='অর্ডার জমা হচ্ছে...';
  try{
-  const login=await fetch('/api/v1/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({phone,password})});
+  const login=await fetch(apiUrl('/api/v1/auth/login'),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({phone,password})});
   const auth=await login.json();if(!login.ok)throw Error(auth.error||'লগইন করা যায়নি');
   if(auth.data.role!=='CUSTOMER')throw Error('কাস্টমার অ্যাকাউন্ট দিয়ে অর্ডার করুন');
-  const order=await fetch('/api/v1/checkout',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+auth.token},body:JSON.stringify({delivery:{name,phone,address,area,note},items:Object.entries(cart).map(([productId,quantity])=>({productId,quantity}))})});
+  const order=await fetch(apiUrl('/api/v1/checkout'),{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+auth.token},body:JSON.stringify({delivery:{name,phone,address,area,note},items:Object.entries(cart).map(([productId,quantity])=>({productId,quantity}))})});
   const result=await order.json();if(!order.ok)throw Error(result.error||'অর্ডার জমা হয়নি');
   cart={};save();$('#drawer').classList.remove('open');toast('অর্ডার সফল: '+result.data.orderNumber);
  }catch(error){toast(error.message)}
@@ -64,7 +66,7 @@ $('#checkout').onclick=async()=>{
 };
 async function connectCatalog(){
  try{
-  const response=await fetch('/api/v1/products',{headers:{accept:'application/json'}});
+  const response=await fetch(apiUrl('/api/v1/products'),{headers:{accept:'application/json'}});
   if(!response.ok)return;
   const payload=await response.json();if(!Array.isArray(payload.data))return;
   const icons={electronics:'🎧',fashion:'🛍️',home:'🏠'};
