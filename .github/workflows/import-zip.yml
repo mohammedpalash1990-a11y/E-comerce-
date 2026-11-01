@@ -2,6 +2,10 @@ name: Import uploaded project ZIP
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - 'E-comerce-main-part1.zip'
+      - '.github/workflows/import-zip.yml'
 
 permissions:
   contents: write
