@@ -387,6 +387,8 @@ export default function registerPostgresDomain(route, ok, {
     route('GET', '/api/v1/admin/coupons', ['ADMIN'], invoke(ok, async () => admin.listCoupons()));
     route('POST', '/api/v1/admin/coupons', ['ADMIN'], invoke(ok, async ({ user, body }) => admin.createCoupon({ actorId: user.id, body }), 201));
     route('PATCH', '/api/v1/admin/coupons/:code', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.toggleCoupon({ actorId: user.id, code: params[0], active: body.active })));
+    route('PUT', '/api/v1/admin/products/:id', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.updateProduct({ productId: params[0], actorId: user.id, body })), { limit: 3000000 });
+    route('DELETE', '/api/v1/admin/products/:id', ['ADMIN'], invoke(ok, async ({ user, params }) => admin.archiveProduct({ productId: params[0], actorId: user.id })));
     route('GET', '/api/v1/admin/products/pending', ['ADMIN'], invoke(ok, async () => admin.listPendingProducts()));
     route('POST', '/api/v1/admin/products/:id/approve', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.moderateProduct({ productId: params[0], actorId: user.id, decision: 'APPROVE', reason: body.reason })));
     route('POST', '/api/v1/admin/products/:id/reject', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.moderateProduct({ productId: params[0], actorId: user.id, decision: 'REJECT', reason: body.reason })));
