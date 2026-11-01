@@ -30,3 +30,11 @@ test('storefront keeps its existing product section and links to account portal'
   assert.match(storefront, /href="account\.html"/);
   assert.match(storefront, /haat_cart_v1/);
 });
+
+test('customer account inline JavaScript parses without syntax errors', async () => {
+  const vm = await import('node:vm');
+  const scripts = [...account.matchAll(/<script(?:\\s[^>]*)?>([\\s\\S]*?)<\\/script>/gi)]
+    .map(match => match[1].trim()).filter(Boolean);
+  assert.ok(scripts.length > 0, 'expected inline account application script');
+  for (const script of scripts) new vm.Script(script, { filename: 'account.html:inline-script' });
+});
