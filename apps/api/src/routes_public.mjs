@@ -51,7 +51,7 @@ export default function register(route, ok) {
     const sp = url.searchParams, term = (sp.get('q') || '').slice(0, 80), where = [LIVE, '(p.name_bn LIKE ? OR p.name_en LIKE ?)'], args = ['%' + term + '%', '%' + term + '%'];
     if (sp.get('category')) { where.push('c.slug=?'); args.push(sp.get('category')); }
     if (sp.get('brand')) { where.push('b.slug=?'); args.push(sp.get('brand')); }
-    const eff = 'COALESCE(NULLIF(MIN(p.discount_paisa,p.price_paisa),0),p.price_paisa)';
+    const eff = 'CASE WHEN p.discount_paisa IS NOT NULL AND p.discount_paisa>0 AND p.discount_paisa<p.price_paisa THEN p.discount_paisa ELSE p.price_paisa END';
     if (sp.get('min_price') && Number(sp.get('min_price')) >= 0) { where.push(eff + '>=?'); args.push(Math.round(Number(sp.get('min_price')) * 100)); }
     if (sp.get('max_price') && Number(sp.get('max_price')) > 0) { where.push(eff + '<=?'); args.push(Math.round(Number(sp.get('max_price')) * 100)); }
     const order = { price_asc: eff + ' ASC', price_desc: eff + ' DESC', newest: 'p.created_at DESC,p.id DESC' }[sp.get('sort')] || 'p.name_bn';
