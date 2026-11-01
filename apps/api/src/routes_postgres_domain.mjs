@@ -5,6 +5,7 @@ import { createPostgresCheckoutRepository } from './postgres-checkout.mjs';
 import { createPostgresOrdersPaymentsRepository } from './postgres-orders-payments.mjs';
 import { createPostgresCustomerRepository } from './postgres-customer.mjs';
 import { createPostgresSellerRepository } from './postgres-seller.mjs';
+import { createPostgresAdminRepository } from './postgres-admin.mjs';
 
 function toHttpError(error) {
   if (error instanceof HttpError) return error;
@@ -68,7 +69,8 @@ export function createPostgresDomainRepositories(database, options = {}) {
     }),
     orders: options.ordersRepository || createPostgresOrdersPaymentsRepository(database, options.ordersOptions),
     customer: options.customerRepository || createPostgresCustomerRepository(database),
-    seller: options.sellerRepository || createPostgresSellerRepository(database, { inventoryRepository: options.inventoryRepository || createPostgresInventoryRepository(database, options.inventoryOptions), ordersRepository: options.ordersRepository || createPostgresOrdersPaymentsRepository(database, options.ordersOptions), ...(options.sellerOptions || {}) })
+    seller: options.sellerRepository || createPostgresSellerRepository(database, { inventoryRepository: options.inventoryRepository || createPostgresInventoryRepository(database, options.inventoryOptions), ordersRepository: options.ordersRepository || createPostgresOrdersPaymentsRepository(database, options.ordersOptions), ...(options.sellerOptions || {}) }),
+    admin: options.adminRepository || createPostgresAdminRepository(database, options.adminOptions)
   });
 }
 
@@ -82,7 +84,7 @@ export default function registerPostgresDomain(route, ok, {
   if (!repositories?.inventory || !repositories?.checkout || !repositories?.orders) {
     throw new TypeError('PostgreSQL domain repositories are required');
   }
-  const { inventory, checkout, orders, customer, seller } = repositories;
+  const { inventory, checkout, orders, customer, seller, admin } = repositories;
   if (!customer) throw new TypeError('PostgreSQL customer repository is required');
 
 
@@ -338,6 +340,18 @@ export default function registerPostgresDomain(route, ok, {
       note: String(body.note || '').slice(0, 300)
     });
   }));
+
+  // ----- PostgreSQL admin finance and payout operations -----
+  if (admin) {
+    route('GET', '/api/v1/admin/dashboard', ['ADMIN'], invoke(ok, async () => admin.dashboard()));
+    route('GET', '/api/v1/admin/payouts', ['ADMIN'], invoke(ok, async ({ url }) => admin.listPayouts({ status: url.searchParams.get('status') || undefined, limit: Number(url.searchParams.get('limit') || 200) })));
+    route('POST', '/api/v1/admin/payouts/:id/approve', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.decidePayout({ payoutId: params[0], actorId: user.id, decision: 'APPROVE', note: body.note })));
+    route('POST', '/api/v1/admin/payouts/:id/reject', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.decidePayout({ payoutId: params[0], actorId: user.id, decision: 'REJECT', note: body.note })));
+    route('GET', '/api/v1/admin/finance/summary', ['ADMIN'], invoke(ok, async () => admin.financeSummary()));
+    route('GET', '/api/v1/admin/finance/transactions', ['ADMIN'], invoke(ok, async ({ url }) => admin.listTransactions({ kind: url.searchParams.get('kind') || undefined, limit: Number(url.searchParams.get('limit') || 200) })));
+    route('GET', '/api/v1/admin/finance/report', ['ADMIN'], invoke(ok, async ({ url }) => admin.financeReport({ from: url.searchParams.get('from') || undefined, to: url.searchParams.get('to') || undefined })));
+    route('GET', '/api/v1/admin/audit-logs', ['ADMIN'], invoke(ok, async ({ url }) => admin.listAuditLogs({ limit: Number(url.searchParams.get('limit') || 200) })));
+  }
 
   // ----- payment lifecycle -----
   route('POST', '/api/v1/payments/callback/:gateway', null, invoke(ok, async ({ params, body }) => {
