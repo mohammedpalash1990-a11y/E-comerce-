@@ -11,7 +11,7 @@
     "dev": "node scripts/dev.mjs",
     "start:api": "node apps/api/src/server.mjs",
     "start:web": "node apps/web/server.mjs",
-    "test": "node --test tests/*.test.mjs",
+    "test": "node --test --test-concurrency=1 tests/*.test.mjs",
     "check": "node --check apps/api/src/server.mjs && node --check apps/api/src/server.modular.mjs && node --check apps/web/server.mjs && node --check scripts/dev.mjs && node scripts/check.mjs && npm test",
     "start:api:modular": "node apps/api/src/server.modular.mjs"
   }
