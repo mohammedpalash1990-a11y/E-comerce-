@@ -24,10 +24,10 @@ export function createPostgresAdminRepository(database,{createId=randomUUID,cloc
       const payout=await query("SELECT id,seller_id,amount_paisa,status FROM payouts WHERE id=? FOR UPDATE").get(String(payoutId));
       if(!payout||payout.status!=='REQUESTED') throw fail(409,'PAYOUT_NOT_PENDING','পেআউট অনুরোধটি আর pending নেই');
       if(action==='APPROVE') {
-        const totals=await query("SELECT COALESCE(SUM(amount_paisa),0) reserved FROM payouts WHERE seller_id=? AND status='APPROVED'").get(payout.seller_id);
+        const totals=await query("SELECT COALESCE(SUM(amount_paisa),0) reserved FROM payouts WHERE seller_id=? AND id<>? AND status IN ('REQUESTED','APPROVED')").get(payout.seller_id);
         const earnings=await query("SELECT COALESCE(SUM(amount_paisa),0) earned FROM transactions WHERE seller_id=? AND kind IN ('SELLER_EARNING','SELLER_REVERSAL')").get(payout.seller_id);
         const reserved=integer(totals.reserved||0,'reserved'), earned=integer(earnings.earned||0,'earned'), amount=integer(payout.amount_paisa,'payout.amount_paisa');
-        if(amount>earned-reserved) throw fail(409,'INSUFFICIENT_BALANCE','পেআউট অনুমোদনের জন্য পর্যাপ্ত balance নেই');
+        if(amount+reserved>earned) throw fail(409,'INSUFFICIENT_BALANCE','পেআউট অনুমোদনের জন্য পর্যাপ্ত balance নেই');
         await query("UPDATE payouts SET status='APPROVED',decided_at=?,note=? WHERE id=? AND status='REQUESTED'").run(at,cleanNote,String(payoutId));
         await query('INSERT INTO transactions(id,kind,order_id,seller_order_id,seller_id,amount_paisa,ref,created_at) VALUES(?,?,?,?,?,?,?,?)').run(makeId(),'PAYOUT',null,null,payout.seller_id,-amount,String(payoutId),at);
         await query('INSERT INTO notifications(id,user_id,title,body,read,created_at) VALUES(?,?,?,?,0,?)').run(makeId(),payout.seller_id,'পেআউট অনুমোদিত',money(amount)+' টাকা',at);
