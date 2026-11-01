@@ -16,7 +16,7 @@ test('seller and admin login forms do not expose demo credentials as defaults', 
   const [seller, admin] = await Promise.all([read('apps/web/public/seller.html'), read('apps/web/public/admin.html')]);
   for (const html of [seller, admin]) {
     assert.doesNotMatch(html, /value="(?:0170000000[12]|(?:Seller|Admin)@12345)"/);
-    assert.match(html, /href="\.\/">);
+    assert.ok(html.includes('href="./">'));
   }
 });
 
