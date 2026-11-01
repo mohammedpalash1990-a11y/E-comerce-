@@ -49,3 +49,7 @@ All methods are asynchronous. Every caller must use `await`; do not attempt to p
 `apps/api/src/postgres-migrations.mjs` adds an explicit migration runner for a supplied pg-compatible Pool. It acquires a PostgreSQL session advisory lock, applies numbered SQL files in lexical order, records each successful migration in `schema_migrations`, skips recorded files, and rolls back a failed migration. The runner is intentionally not called by the current SQLite server; wiring it in requires the future PostgreSQL bootstrap and connection lifecycle.
 
 The runner uses one checked-out client for the lock and all migration transactions. Do not run schema migrations through a transaction-pooled proxy that cannot preserve session-level advisory locks.
+
+## Neon ledger compatibility check
+
+The configured Neon `haat` main branch was inspected read-only after adding the runner. Its existing `schema_migrations.applied_at` column is `TEXT NOT NULL` (with a `now()::text` default), not `TIMESTAMPTZ`. The runner therefore explicitly supplies an ISO timestamp when inserting the ledger row; this works with the already-provisioned schema and with the runner's own `TIMESTAMPTZ` table definition. The main branch currently records `001_init.sql`, `002_indexes.sql`, and `003_seed_categories.sql`. No Neon data or schema was modified during this check.
