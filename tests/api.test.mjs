@@ -135,6 +135,9 @@ test('catalog, seller product submission and admin moderation work with role che
     body: { delivery: { name: 'Test Customer', phone: '01700000003', address: 'House 10, Road 2', area: 'Dhaka' }, items: [{ productId: created.data.data.id, quantity: 1 }] }
   });
   assert.equal(secondCheckout.status, 201);
+  const unpaidDashboard = await request('/api/v1/admin/dashboard', { token: adminToken });
+  assert.equal(unpaidDashboard.data.data.total_revenue_bdt, 1760, 'unpaid COD order must not inflate received revenue');
+  assert.equal(unpaidDashboard.data.data.total_orders, 2);
   const latestOrders = await request('/api/v1/admin/orders', { token: adminToken });
   const cancelOrder = latestOrders.data.data.find(order => order.orderNumber === secondCheckout.data.data.orderNumber);
   assert.ok(cancelOrder, 'second checkout should appear in admin order queue');
