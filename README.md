@@ -15,14 +15,18 @@
 - Storefront automatically uses live catalogue and COD checkout when served alongside the API; GitHub Pages remains a static preview
 - Prisma PostgreSQL target schema, OpenAPI starter contract, Docker and CI scaffolding
 
-### Not implemented yet
-- Real seller registration, seller product submission and seller order management
-- Admin moderation, finance, refund and payout workflows
-- Multi-seller order splitting and seller commission settlement
-- Customer address book, order history, notifications and returns
-- Live bKash/Nagad/card gateway or courier integration
-- Production PostgreSQL adapter and migration execution
-- Public backend hosting, persistent production database, secrets and monitoring
+### Implemented in the modular development API
+- Seller product submission, product listing and seller-specific order fulfilment
+- Admin product moderation, seller/customer management, order status, refunds and payout workflow endpoints
+- Multi-vendor checkout with seller sub-orders and commission ledger entries
+- Customer order history, address and account endpoints, notifications
+- Sandbox payment and courier adapters only
+
+## Still required before production
+- Production PostgreSQL runtime adapter and verified migration process
+- Public Node.js API hosting, persistent production database, secrets and monitoring
+- Live payment/courier credentials and provider webhook verification
+- Full browser E2E, security, privacy and operational review
 - Native Android/iOS application
 
 ## Requirements
