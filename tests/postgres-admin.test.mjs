@@ -292,7 +292,7 @@ test('admin shipping charge updates pending order and payment amount atomically'
   const db=fakeDatabase((method,sql)=>sql.includes('FROM orders WHERE id=')?{id:'order-ship',subtotal_paisa:'100000',shipping_paisa:'5000',discount_paisa:'10000',total_paisa:'95000',payment_status:'PENDING',status:'CONFIRMED'}:undefined);
   const repo=createPostgresAdminRepository(db,{createId:()=> 'audit-ship'});
   assert.deepEqual(await repo.setShippingCharge({orderId:'order-ship',actorId:'admin-1',shippingBdt:80}),{id:'order-ship',shipping_bdt:80,total_bdt:980});
-  assert.ok(db.calls.some(x=>x.sql?.includes('UPDATE payments SET amount_paisa=')&&x.values[0]===97000));
+  assert.ok(db.calls.some(x=>x.sql?.includes('UPDATE payments SET amount_paisa=')&&x.values[0]===98000));
   assert.ok(db.calls.some(x=>x.sql?.includes('INSERT INTO audit_logs')&&x.values[2]==='SHIPPING_CHARGE_SET'));
 });
 
@@ -339,7 +339,7 @@ test('admin courier booking locks seller order and rejects duplicate active ship
   assert.equal(result.provider,'PATHAO');
   assert.ok(db.calls.some(x=>x.sql?.includes('FROM seller_orders so JOIN orders o')&&x.sql.includes('FOR UPDATE')));
   assert.ok(db.calls.some(x=>x.sql?.includes('INSERT INTO shipments')));
-  assert.ok(db.calls.some(x=>x.sql?.includes('COURIER_BOOKED')));
+  assert.ok(db.calls.some(x=>x.values?.includes('COURIER_BOOKED')));
 });
 
 test('admin courier booking rejects an already active shipment',async()=>{
