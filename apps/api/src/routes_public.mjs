@@ -54,7 +54,7 @@ export default function register(route, ok) {
     const eff = 'COALESCE(NULLIF(MIN(p.discount_paisa,p.price_paisa),0),p.price_paisa)';
     if (sp.get('min_price') && Number(sp.get('min_price')) >= 0) { where.push(eff + '>=?'); args.push(Math.round(Number(sp.get('min_price')) * 100)); }
     if (sp.get('max_price') && Number(sp.get('max_price')) > 0) { where.push(eff + '<=?'); args.push(Math.round(Number(sp.get('max_price')) * 100)); }
-    const order = { price_asc: eff + ' ASC', price_desc: eff + ' DESC', newest: 'p.created_at DESC,p.rowid DESC' }[sp.get('sort')] || 'p.name_bn';
+    const order = { price_asc: eff + ' ASC', price_desc: eff + ' DESC', newest: 'p.created_at DESC,p.id DESC' }[sp.get('sort')] || 'p.name_bn';
     const limit = Math.min(Math.max(parseInt(sp.get('limit')) || 100, 1), 100), offset = Math.max(parseInt(sp.get('offset')) || 0, 0);
     const rows = q(`SELECT p.id,p.name_bn,p.name_en,p.price_paisa,p.discount_paisa,p.stock,c.slug category_slug,b.name brand,
       (SELECT url FROM product_images i WHERE i.product_id=p.id ORDER BY position LIMIT 1) image
