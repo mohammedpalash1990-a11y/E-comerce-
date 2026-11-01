@@ -42,38 +42,81 @@ function baseRegister(b, role) {
   return { uid, name, phone, email };
 }
 
-export default function register(route, ok) {
-  route('GET', '/health', null, () => { q('SELECT 1').get(); return { status: 200, body: { ok: true, service: 'marketplace-api', db: 'ok', payment_mode: config.paymentMode } }; });
-  route('GET', '/api/v1/categories', null, () => ok(q('SELECT slug,name_bn,name_en FROM categories ORDER BY name_bn').all()));
-  route('GET', '/api/v1/brands', null, () => ok(q('SELECT slug,name FROM brands ORDER BY name').all()));
+export function createSqliteCatalogRepository() {
+  return Object.freeze({
+    async listCategories() {
+      return q('SELECT slug,name_bn,name_en FROM categories ORDER BY name_bn').all();
+    },
+    async listBrands() {
+      return q('SELECT slug,name FROM brands ORDER BY name').all();
+    },
+    async listProducts(params = new URLSearchParams()) {
+      const get = k => (params && typeof params.get === 'function' ? params.get(k) : params?.[k] ?? null);
+      const term = (get('q') || '').slice(0, 80);
+      const where = [LIVE, '(p.name_bn LIKE ? OR p.name_en LIKE ?)'];
+      const args = ['%' + term + '%', '%' + term + '%'];
+      if (get('category')) { where.push('c.slug=?'); args.push(String(get('category'))); }
+      if (get('brand')) { where.push('b.slug=?'); args.push(String(get('brand'))); }
+      const eff = 'CASE WHEN p.discount_paisa IS NOT NULL AND p.discount_paisa>0 AND p.discount_paisa<p.price_paisa THEN p.discount_paisa ELSE p.price_paisa END';
+      if (get('min_price') !== null && Number(get('min_price')) >= 0) { where.push(eff + '>=?'); args.push(Math.round(Number(get('min_price')) * 100)); }
+      if (get('max_price') !== null && Number(get('max_price')) > 0) { where.push(eff + '<=?'); args.push(Math.round(Number(get('max_price')) * 100)); }
+      const order = { price_asc: eff + ' ASC', price_desc: eff + ' DESC', newest: 'p.created_at DESC,p.id DESC' }[get('sort')] || 'p.name_bn';
+      const limit = Math.min(Math.max(parseInt(get('limit'), 10) || 100, 1), 100);
+      const offset = Math.max(parseInt(get('offset'), 10) || 0, 0);
+      const rows = q(`SELECT p.id,p.name_bn,p.name_en,p.price_paisa,p.discount_paisa,p.stock,c.slug category_slug,b.name brand,
+        (SELECT url FROM product_images i WHERE i.product_id=p.id ORDER BY position LIMIT 1) image
+        FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT ? OFFSET ?`).all(...args, limit, offset);
+      return rows.map(productView);
+    },
+    async suggestProducts(params = new URLSearchParams()) {
+      const get = k => (params && typeof params.get === 'function' ? params.get(k) : params?.[k] ?? null);
+      const t = (get('q') || '').slice(0, 40);
+      if (t.length < 1) return [];
+      return q(`SELECT p.id,p.name_bn,p.name_en FROM products p WHERE ${LIVE} AND (p.name_bn LIKE ? OR p.name_en LIKE ?) ORDER BY p.name_bn LIMIT 8`).all('%' + t + '%', '%' + t + '%');
+    },
+    async getProduct(productId) {
+      const p = q(`SELECT p.*,c.slug category_slug,b.name brand,sp.shop_name seller_shop FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id LEFT JOIN seller_profiles sp ON sp.user_id=p.seller_id WHERE p.id=? AND ${LIVE}`).get(String(productId));
+      if (!p) return null;
+      const { seller_id, password, ...rest } = p;
+      const rv = q('SELECT COALESCE(AVG(rating),0) a,COUNT(*) n FROM reviews WHERE product_id=?').get(p.id) || { a: 0, n: 0 };
+      let variants = [];
+      try {
+        const parsed = JSON.parse(p.variants || '[]');
+        if (Array.isArray(parsed)) variants = parsed;
+      } catch {}
+      return {
+        ...productView(rest),
+        variants,
+        images: q('SELECT url FROM product_images WHERE product_id=? ORDER BY position').all(p.id).map(i => i.url),
+        rating: Math.round(Number(rv.a || 0) * 10) / 10,
+        review_count: Number(rv.n || 0)
+      };
+    },
+    async listReviews(productId) {
+      return q('SELECT r.rating,r.comment,r.created_at,u.name FROM reviews r JOIN users u ON u.id=r.user_id WHERE r.product_id=? ORDER BY r.created_at DESC LIMIT 50').all(String(productId));
+    }
+  });
+}
 
-  route('GET', '/api/v1/products', null, ({ url }) => {
-    const sp = url.searchParams, term = (sp.get('q') || '').slice(0, 80), where = [LIVE, '(p.name_bn LIKE ? OR p.name_en LIKE ?)'], args = ['%' + term + '%', '%' + term + '%'];
-    if (sp.get('category')) { where.push('c.slug=?'); args.push(sp.get('category')); }
-    if (sp.get('brand')) { where.push('b.slug=?'); args.push(sp.get('brand')); }
-    const eff = 'CASE WHEN p.discount_paisa IS NOT NULL AND p.discount_paisa>0 AND p.discount_paisa<p.price_paisa THEN p.discount_paisa ELSE p.price_paisa END';
-    if (sp.get('min_price') && Number(sp.get('min_price')) >= 0) { where.push(eff + '>=?'); args.push(Math.round(Number(sp.get('min_price')) * 100)); }
-    if (sp.get('max_price') && Number(sp.get('max_price')) > 0) { where.push(eff + '<=?'); args.push(Math.round(Number(sp.get('max_price')) * 100)); }
-    const order = { price_asc: eff + ' ASC', price_desc: eff + ' DESC', newest: 'p.created_at DESC,p.id DESC' }[sp.get('sort')] || 'p.name_bn';
-    const limit = Math.min(Math.max(parseInt(sp.get('limit')) || 100, 1), 100), offset = Math.max(parseInt(sp.get('offset')) || 0, 0);
-    const rows = q(`SELECT p.id,p.name_bn,p.name_en,p.price_paisa,p.discount_paisa,p.stock,c.slug category_slug,b.name brand,
-      (SELECT url FROM product_images i WHERE i.product_id=p.id ORDER BY position LIMIT 1) image
-      FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT ? OFFSET ?`).all(...args, limit, offset);
-    return ok(rows.map(productView));
+export default function register(route, ok, { catalogRepository } = {}) {
+  const catalog = catalogRepository || createSqliteCatalogRepository();
+  route('GET', '/health', null, () => { q('SELECT 1').get(); return { status: 200, body: { ok: true, service: 'marketplace-api', db: 'ok', payment_mode: config.paymentMode } }; });
+  route('GET', '/api/v1/categories', null, async () => ok(await catalog.listCategories()));
+  route('GET', '/api/v1/brands', null, async () => ok(await catalog.listBrands()));
+
+  route('GET', '/api/v1/products', null, async ({ url }) => {
+    return ok(await catalog.listProducts(url.searchParams));
   });
-  route('GET', '/api/v1/products/suggest', null, ({ url }) => {
-    const t = (url.searchParams.get('q') || '').slice(0, 40); if (t.length < 1) return ok([]);
-    return ok(q(`SELECT p.id,p.name_bn,p.name_en FROM products p WHERE ${LIVE} AND (p.name_bn LIKE ? OR p.name_en LIKE ?) ORDER BY p.name_bn LIMIT 8`).all('%' + t + '%', '%' + t + '%'));
+  route('GET', '/api/v1/products/suggest', null, async ({ url }) => {
+    return ok(await catalog.suggestProducts(url.searchParams));
   });
-  route('GET', '/api/v1/products/:id', null, ({ params }) => {
-    const p = q(`SELECT p.*,c.slug category_slug,b.name brand,sp.shop_name seller_shop FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id LEFT JOIN seller_profiles sp ON sp.user_id=p.seller_id WHERE p.id=? AND ${LIVE}`).get(params[0]);
-    if (!p) throw new HttpError(404, 'Product not found');
-    const { seller_id, password, ...rest } = p;
-    const rv = q('SELECT COALESCE(AVG(rating),0) a,COUNT(*) n FROM reviews WHERE product_id=?').get(p.id);
-    return ok({ ...productView(rest), variants: JSON.parse(p.variants || '[]'), images: q('SELECT url FROM product_images WHERE product_id=? ORDER BY position').all(p.id).map(i => i.url), rating: Math.round(rv.a * 10) / 10, review_count: rv.n });
+  route('GET', '/api/v1/products/:id', null, async ({ params }) => {
+    const product = await catalog.getProduct(params[0]);
+    if (!product) throw new HttpError(404, 'Product not found');
+    return ok(product);
   });
-  route('GET', '/api/v1/products/:id/reviews', null, ({ params }) =>
-    ok(q('SELECT r.rating,r.comment,r.created_at,u.name FROM reviews r JOIN users u ON u.id=r.user_id WHERE r.product_id=? ORDER BY r.created_at DESC LIMIT 50').all(params[0])));
+  route('GET', '/api/v1/products/:id/reviews', null, async ({ params }) =>
+    ok(await catalog.listReviews(params[0])));
   route('GET', '/api/v1/shipping/quote', null, ({ url }) => {
     const sub = Math.round(Number(url.searchParams.get('subtotal_bdt') || 0) * 100);
     return ok({ shipping_bdt: bdt(shippingFor(url.searchParams.get('area') || '', sub)) });

@@ -1,20 +1,34 @@
 import http from 'node:http';
 import { config, q, db, now, sha256, HttpError } from './core.mjs';
-import registerPublic from './routes_public.mjs';
+import registerPublic, { createSqliteCatalogRepository } from './routes_public.mjs';
 import registerCustomer from './routes_customer.mjs';
 import registerSeller from './routes_seller.mjs';
 import registerAdmin from './routes_admin.mjs';
 import registerPayments from './routes_payments.mjs';
+import { createPostgresCatalogRepository } from './postgres-catalog.mjs';
 import './seed.mjs';
 
-const routes = [];
-// roles: null = public, 'AUTH' = any logged-in user, or array of roles
-function route(method, pattern, roles, handler, opts = {}) {
-  const re = new RegExp('^' + pattern.replace(/:id/g, '([0-9a-fA-F-]{36})').replace(/:(\w+)/g, '([^/]+)') + '$');
-  routes.push({ method, re, roles, handler, limit: opts.limit || 200000 });
-}
 export const ok = (data, status = 200) => ({ status, body: { data } });
-registerPublic(route, ok); registerCustomer(route, ok); registerSeller(route, ok); registerAdmin(route, ok); registerPayments(route, ok);
+
+export function createApiApp(options = {}) {
+  const routes = [];
+  function route(method, pattern, roles, handler, opts = {}) {
+    const re = new RegExp('^' + pattern.replace(/:id/g, '([0-9a-fA-F-]{36})').replace(/:(\w+)/g, '([^/]+)') + '$');
+    routes.push({ method, re, roles, handler, limit: opts.limit || 200000 });
+  }
+
+  const catalogRepository = options.catalogRepository || (options.postgresDatabase ? createPostgresCatalogRepository(options.postgresDatabase) : createSqliteCatalogRepository());
+  registerPublic(route, ok, { catalogRepository });
+  registerCustomer(route, ok);
+  registerSeller(route, ok);
+  registerAdmin(route, ok);
+  registerPayments(route, ok);
+
+  return { routes, catalogRepository };
+}
+
+const defaultApp = createApiApp();
+const routes = defaultApp.routes;
 
 const hits = new Map();
 function allow(key, max, windowMs) {
