@@ -112,6 +112,10 @@ test('catalog, seller product submission and admin moderation work with role che
   });
   assert.equal(sellerDelivered.status, 200);
   assert.equal(sellerDelivered.data.data.parent_status, 'DELIVERED');
+  const dash = await request('/api/v1/admin/dashboard', { token: adminToken });
+  assert.equal(dash.status, 200);
+  assert.equal(dash.data.data.total_revenue_bdt, 1760);
+  assert.equal(dash.data.data.total_orders, 1);
   assert.match(checkout.data.data.orderNumber, /^BD-[A-F0-9]{8}$/);
   assert.equal(malformedOrderRoute.status, 404);
 
