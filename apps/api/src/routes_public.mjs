@@ -98,8 +98,136 @@ export function createSqliteCatalogRepository() {
   });
 }
 
-export default function register(route, ok, { catalogRepository } = {}) {
+export function createSqliteAuthRepository() {
+  return Object.freeze({
+    async createSession(userId) {
+      return newSession(userId);
+    },
+    async getSessionUser(token) {
+      if (!token) return null;
+      const s = q('SELECT user_id,expires_at FROM sessions WHERE token_hash=?').get(sha256(token));
+      if (!s || s.expires_at < now()) return null;
+      const u = q('SELECT id,name,phone,email,role,status,phone_verified,email_verified FROM users WHERE id=?').get(s.user_id);
+      return u && u.status === 'ACTIVE' ? { ...u, token_hash: sha256(token) } : null;
+    },
+    async cleanupExpiredSessions() {
+      return q('DELETE FROM sessions WHERE expires_at<?').run(now());
+    },
+    async revokeSession(tokenHash) {
+      if (!tokenHash) return;
+      return q('DELETE FROM sessions WHERE token_hash=?').run(tokenHash);
+    },
+    async revokeUserSessions(userId, exceptTokenHash = null) {
+      if (exceptTokenHash) {
+        return q('DELETE FROM sessions WHERE user_id=? AND token_hash<>?').run(userId, exceptTokenHash);
+      }
+      return q('DELETE FROM sessions WHERE user_id=?').run(userId);
+    },
+    async issueOtp(userId, purpose) {
+      return issueOtp(userId, purpose);
+    },
+    async checkOtp(userId, purpose, code) {
+      return checkOtp(userId, purpose, code);
+    },
+    async findByIdentifier(identifier) {
+      return findByIdentifier(identifier);
+    },
+    async registerCustomer(body) {
+      const r = tx(() => {
+        const u = baseRegister(body, 'CUSTOMER');
+        const addr = text(body.address, 500, 'ঠিকানা', { required: false });
+        if (addr) q('INSERT INTO addresses VALUES(?,?,?,?,?,?,?,1)').run(id(), u.uid, 'Home', u.name, u.phone, addr, text(body.area, 100, 'এলাকা', { required: false }) || '—');
+        audit(u.uid, 'CUSTOMER_REGISTER', 'user', u.uid);
+        return u;
+      });
+      const out = { token: newSession(r.uid), data: { id: r.uid, name: r.name, role: 'CUSTOMER', phone: r.phone } };
+      if (config.exposeDevCodes) out.dev_verification_code = issueOtp(r.uid, 'PHONE');
+      return out;
+    },
+    async registerSeller(body) {
+      const shop = text(body.shop_name, 100, 'দোকানের নাম'), shopAddr = text(body.shop_address, 300, 'দোকানের ঠিকানা'), biz = text(body.business_info, 1000, 'ব্যবসার তথ্য'), nid = text(body.kyc_nid, 30, 'NID নম্বর');
+      if (!/^\d{10,17}$/.test(nid)) throw bad('সঠিক NID নম্বর দিন');
+      const r = tx(() => {
+        if (q('SELECT 1 FROM seller_profiles WHERE lower(shop_name)=lower(?)').get(shop)) throw new HttpError(409, 'এই দোকানের নাম আগেই নেওয়া হয়েছে');
+        const u = baseRegister(body, 'SELLER');
+        q('INSERT INTO seller_profiles VALUES(?,?,?,?,?,?,?,?,?)').run(u.uid, shop, shopAddr, biz, nid, text(body.kyc_trade_license, 60, 'ট্রেড লাইসেন্স', { required: false }), 'PENDING', 800, now());
+        audit(u.uid, 'SELLER_REGISTER', 'seller', u.uid, { shop });
+        for (const a of q("SELECT id FROM users WHERE role='ADMIN'").all()) notify(a.id, 'নতুন বিক্রেতা আবেদন', shop);
+        return u;
+      });
+      return { token: newSession(r.uid), data: { id: r.uid, name: r.name, role: 'SELLER', status: 'PENDING', message: 'অ্যাডমিন অনুমোদনের আগে পণ্য পাবলিক স্টোরফ্রন্টে দেখা যাবে না' } };
+    },
+    async login(body) {
+      const user = findByIdentifier(body.identifier ?? body.phone);
+      const good = verifyPassword(body.password, user && user.password);
+      if (!user || !good) throw new HttpError(401, 'Invalid phone or password');
+      if (body.portal && String(body.portal).toUpperCase() !== user.role) throw new HttpError(403, 'এই পোর্টালে লগইন অনুমোদিত নয়');
+      if (user.status !== 'ACTIVE') throw new HttpError(403, 'আপনার অ্যাকাউন্ট সাময়িকভাবে বন্ধ আছে');
+      audit(user.id, 'LOGIN', 'user', user.id);
+      return { token: newSession(user.id), data: publicUser(user) };
+    },
+    async logout(user) {
+      if (user?.token_hash) q('DELETE FROM sessions WHERE token_hash=?').run(user.token_hash);
+      return { loggedOut: true };
+    },
+    async getMe(user) {
+      const sp = user.role === 'SELLER' ? q('SELECT shop_name,status FROM seller_profiles WHERE user_id=?').get(user.id) : null;
+      return { ...publicUser(user), seller: sp };
+    },
+    async updateProfile(user, body) {
+      const name = body.name !== undefined ? text(body.name, 100, 'নাম') : user.name;
+      let { phone, email } = user;
+      if (body.phone !== undefined) { phone = normPhone(body.phone); if (!validPhone(phone)) throw bad('সঠিক মোবাইল নম্বর দিন'); }
+      if (body.email !== undefined) { email = text(body.email, 160, 'ইমেইল', { required: false }).toLowerCase() || null; if (email && !validEmail(email)) throw bad('সঠিক ইমেইল দিন'); }
+      if (phone !== user.phone && q('SELECT 1 FROM users WHERE phone=? AND id<>?').get(phone, user.id)) throw new HttpError(409, 'এই মোবাইল নম্বর ব্যবহৃত');
+      if (email && email !== user.email && q('SELECT 1 FROM users WHERE lower(email)=? AND id<>?').get(email, user.id)) throw new HttpError(409, 'এই ইমেইল ব্যবহৃত');
+      q('UPDATE users SET name=?,phone=?,email=?,phone_verified=?,email_verified=? WHERE id=?').run(name, phone, email, phone === user.phone ? user.phone_verified : 0, email === user.email ? user.email_verified : 0, user.id);
+      return publicUser(q('SELECT * FROM users WHERE id=?').get(user.id));
+    },
+    async changePassword(user, body) {
+      const row = q('SELECT password FROM users WHERE id=?').get(user.id);
+      if (!verifyPassword(body.current_password, row.password)) throw new HttpError(403, 'বর্তমান পাসওয়ার্ড সঠিক নয়');
+      checkPassword(body.new_password);
+      tx(() => { q('UPDATE users SET password=? WHERE id=?').run(hashPassword(body.new_password), user.id); q('DELETE FROM sessions WHERE user_id=? AND token_hash<>?').run(user.id, user.token_hash); audit(user.id, 'PASSWORD_CHANGE', 'user', user.id); });
+      return { changed: true };
+    },
+    async forgotPassword(body) {
+      const u = findByIdentifier(body.identifier);
+      const out = { message: 'যদি অ্যাকাউন্টটি থাকে, একটি রিসেট কোড পাঠানো হয়েছে' };
+      if (u && u.status === 'ACTIVE') { const code = issueOtp(u.id, 'RESET'); if (config.exposeDevCodes) out.dev_code = code; }
+      return out;
+    },
+    async resetPassword(body) {
+      const u = findByIdentifier(body.identifier);
+      if (!u) throw bad('কোড মেয়াদোত্তীর্ণ বা অবৈধ');
+      checkPassword(body.new_password);
+      tx(() => { checkOtp(u.id, 'RESET', body.code); q('UPDATE users SET password=? WHERE id=?').run(hashPassword(body.new_password), u.id); q('DELETE FROM sessions WHERE user_id=?').run(u.id); audit(u.id, 'PASSWORD_RESET', 'user', u.id); });
+      return { reset: true };
+    },
+    async sendVerification(user, body) {
+      const purpose = body.purpose === 'EMAIL' ? 'EMAIL' : 'PHONE';
+      if (purpose === 'EMAIL' && !user.email) throw bad('আগে ইমেইল যোগ করুন');
+      const code = issueOtp(user.id, purpose);
+      return { sent: true, ...(config.exposeDevCodes ? { dev_code: code } : {}) };
+    },
+    async verify(user, body) {
+      const purpose = body.purpose === 'EMAIL' ? 'EMAIL' : 'PHONE';
+      tx(() => { checkOtp(user.id, purpose, body.code); q(`UPDATE users SET ${purpose === 'EMAIL' ? 'email_verified' : 'phone_verified'}=1 WHERE id=?`).run(user.id); });
+      return { verified: purpose };
+    },
+    async listNotifications(userId) {
+      return q('SELECT id,title,body,read,created_at FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 50').all(userId);
+    },
+    async markNotificationsRead(userId) {
+      q('UPDATE notifications SET read=1 WHERE user_id=?').run(userId);
+      return { read: true };
+    }
+  });
+}
+
+export default function register(route, ok, { catalogRepository, authRepository } = {}) {
   const catalog = catalogRepository || createSqliteCatalogRepository();
+  const auth = authRepository || createSqliteAuthRepository();
   route('GET', '/health', null, () => { q('SELECT 1').get(); return { status: 200, body: { ok: true, service: 'marketplace-api', db: 'ok', payment_mode: config.paymentMode } }; });
   route('GET', '/api/v1/categories', null, async () => ok(await catalog.listCategories()));
   route('GET', '/api/v1/brands', null, async () => ok(await catalog.listBrands()));
@@ -123,87 +251,27 @@ export default function register(route, ok, { catalogRepository } = {}) {
   });
 
   // ---------- auth ----------
-  route('POST', '/api/v1/auth/register', null, ({ body }) => {
-    const r = tx(() => {
-      const u = baseRegister(body, 'CUSTOMER');
-      const addr = text(body.address, 500, 'ঠিকানা', { required: false });
-      if (addr) q('INSERT INTO addresses VALUES(?,?,?,?,?,?,?,1)').run(id(), u.uid, 'Home', u.name, u.phone, addr, text(body.area, 100, 'এলাকা', { required: false }) || '—');
-      audit(u.uid, 'CUSTOMER_REGISTER', 'user', u.uid);
-      return u;
-    });
-    const out = { token: newSession(r.uid), data: { id: r.uid, name: r.name, role: 'CUSTOMER', phone: r.phone } };
-    if (config.exposeDevCodes) out.dev_verification_code = issueOtp(r.uid, 'PHONE');
+  route('POST', '/api/v1/auth/register', null, async ({ body }) => {
+    const out = await auth.registerCustomer(body);
     return { status: 201, body: out };
   });
-  route('POST', '/api/v1/auth/register-seller', null, ({ body }) => {
-    const shop = text(body.shop_name, 100, 'দোকানের নাম'), shopAddr = text(body.shop_address, 300, 'দোকানের ঠিকানা'), biz = text(body.business_info, 1000, 'ব্যবসার তথ্য'), nid = text(body.kyc_nid, 30, 'NID নম্বর');
-    if (!/^\d{10,17}$/.test(nid)) throw bad('সঠিক NID নম্বর দিন');
-    const r = tx(() => {
-      if (q('SELECT 1 FROM seller_profiles WHERE lower(shop_name)=lower(?)').get(shop)) throw new HttpError(409, 'এই দোকানের নাম আগেই নেওয়া হয়েছে');
-      const u = baseRegister(body, 'SELLER');
-      q('INSERT INTO seller_profiles VALUES(?,?,?,?,?,?,?,?,?)').run(u.uid, shop, shopAddr, biz, nid, text(body.kyc_trade_license, 60, 'ট্রেড লাইসেন্স', { required: false }), 'PENDING', 800, now());
-      audit(u.uid, 'SELLER_REGISTER', 'seller', u.uid, { shop });
-      for (const a of q("SELECT id FROM users WHERE role='ADMIN'").all()) notify(a.id, 'নতুন বিক্রেতা আবেদন', shop);
-      return u;
-    });
-    return { status: 201, body: { token: newSession(r.uid), data: { id: r.uid, name: r.name, role: 'SELLER', status: 'PENDING', message: 'অ্যাডমিন অনুমোদনের আগে পণ্য পাবলিক স্টোরফ্রন্টে দেখা যাবে না' } } };
+  route('POST', '/api/v1/auth/register-seller', null, async ({ body }) => {
+    const out = await auth.registerSeller(body);
+    return { status: 201, body: out };
   });
-  route('POST', '/api/v1/auth/login', null, ({ body }) => {
-    const user = findByIdentifier(body.identifier ?? body.phone);
-    const good = verifyPassword(body.password, user && user.password);
-    if (!user || !good) throw new HttpError(401, 'Invalid phone or password');
-    if (body.portal && String(body.portal).toUpperCase() !== user.role) throw new HttpError(403, 'এই পোর্টালে লগইন অনুমোদিত নয়');
-    if (user.status !== 'ACTIVE') throw new HttpError(403, 'আপনার অ্যাকাউন্ট সাময়িকভাবে বন্ধ আছে');
-    audit(user.id, 'LOGIN', 'user', user.id);
-    return { status: 200, body: { token: newSession(user.id), data: publicUser(user) } };
+  route('POST', '/api/v1/auth/login', null, async ({ body }) => {
+    const out = await auth.login(body);
+    return { status: 200, body: out };
   });
-  route('POST', '/api/v1/auth/logout', 'AUTH', ({ user }) => { q('DELETE FROM sessions WHERE token_hash=?').run(user.token_hash); return ok({ loggedOut: true }); });
-  route('GET', '/api/v1/auth/me', 'AUTH', ({ user }) => {
-    const sp = user.role === 'SELLER' ? q('SELECT shop_name,status FROM seller_profiles WHERE user_id=?').get(user.id) : null;
-    return ok({ ...publicUser(user), seller: sp });
-  });
-  route('PATCH', '/api/v1/me', 'AUTH', ({ user, body }) => {
-    const name = body.name !== undefined ? text(body.name, 100, 'নাম') : user.name;
-    let { phone, email } = user;
-    if (body.phone !== undefined) { phone = normPhone(body.phone); if (!validPhone(phone)) throw bad('সঠিক মোবাইল নম্বর দিন'); }
-    if (body.email !== undefined) { email = text(body.email, 160, 'ইমেইল', { required: false }).toLowerCase() || null; if (email && !validEmail(email)) throw bad('সঠিক ইমেইল দিন'); }
-    if (phone !== user.phone && q('SELECT 1 FROM users WHERE phone=? AND id<>?').get(phone, user.id)) throw new HttpError(409, 'এই মোবাইল নম্বর ব্যবহৃত');
-    if (email && email !== user.email && q('SELECT 1 FROM users WHERE lower(email)=? AND id<>?').get(email, user.id)) throw new HttpError(409, 'এই ইমেইল ব্যবহৃত');
-    q('UPDATE users SET name=?,phone=?,email=?,phone_verified=?,email_verified=? WHERE id=?').run(name, phone, email, phone === user.phone ? user.phone_verified : 0, email === user.email ? user.email_verified : 0, user.id);
-    return ok({ ...publicUser(q('SELECT * FROM users WHERE id=?').get(user.id)) });
-  });
-  route('POST', '/api/v1/auth/change-password', 'AUTH', ({ user, body }) => {
-    const row = q('SELECT password FROM users WHERE id=?').get(user.id);
-    if (!verifyPassword(body.current_password, row.password)) throw new HttpError(403, 'বর্তমান পাসওয়ার্ড সঠিক নয়');
-    checkPassword(body.new_password);
-    tx(() => { q('UPDATE users SET password=? WHERE id=?').run(hashPassword(body.new_password), user.id); q('DELETE FROM sessions WHERE user_id=? AND token_hash<>?').run(user.id, user.token_hash); audit(user.id, 'PASSWORD_CHANGE', 'user', user.id); });
-    return ok({ changed: true });
-  });
-  route('POST', '/api/v1/auth/forgot-password', null, ({ body }) => {
-    const u = findByIdentifier(body.identifier);
-    const out = { message: 'যদি অ্যাকাউন্টটি থাকে, একটি রিসেট কোড পাঠানো হয়েছে' };
-    if (u && u.status === 'ACTIVE') { const code = issueOtp(u.id, 'RESET'); if (config.exposeDevCodes) out.dev_code = code; }
-    return ok(out);
-  });
-  route('POST', '/api/v1/auth/reset-password', null, ({ body }) => {
-    const u = findByIdentifier(body.identifier);
-    if (!u) throw bad('কোড মেয়াদোত্তীর্ণ বা অবৈধ');
-    checkPassword(body.new_password);
-    tx(() => { checkOtp(u.id, 'RESET', body.code); q('UPDATE users SET password=? WHERE id=?').run(hashPassword(body.new_password), u.id); q('DELETE FROM sessions WHERE user_id=?').run(u.id); audit(u.id, 'PASSWORD_RESET', 'user', u.id); });
-    return ok({ reset: true });
-  });
-  route('POST', '/api/v1/auth/send-verification', 'AUTH', ({ user, body }) => {
-    const purpose = body.purpose === 'EMAIL' ? 'EMAIL' : 'PHONE';
-    if (purpose === 'EMAIL' && !user.email) throw bad('আগে ইমেইল যোগ করুন');
-    const code = issueOtp(user.id, purpose);
-    return ok({ sent: true, ...(config.exposeDevCodes ? { dev_code: code } : {}) });
-  });
-  route('POST', '/api/v1/auth/verify', 'AUTH', ({ user, body }) => {
-    const purpose = body.purpose === 'EMAIL' ? 'EMAIL' : 'PHONE';
-    tx(() => { checkOtp(user.id, purpose, body.code); q(`UPDATE users SET ${purpose === 'EMAIL' ? 'email_verified' : 'phone_verified'}=1 WHERE id=?`).run(user.id); });
-    return ok({ verified: purpose });
-  });
+  route('POST', '/api/v1/auth/logout', 'AUTH', async ({ user }) => ok(await auth.logout(user)));
+  route('GET', '/api/v1/auth/me', 'AUTH', async ({ user }) => ok(await auth.getMe(user)));
+  route('PATCH', '/api/v1/me', 'AUTH', async ({ user, body }) => ok(await auth.updateProfile(user, body)));
+  route('POST', '/api/v1/auth/change-password', 'AUTH', async ({ user, body }) => ok(await auth.changePassword(user, body)));
+  route('POST', '/api/v1/auth/forgot-password', null, async ({ body }) => ok(await auth.forgotPassword(body)));
+  route('POST', '/api/v1/auth/reset-password', null, async ({ body }) => ok(await auth.resetPassword(body)));
+  route('POST', '/api/v1/auth/send-verification', 'AUTH', async ({ user, body }) => ok(await auth.sendVerification(user, body)));
+  route('POST', '/api/v1/auth/verify', 'AUTH', async ({ user, body }) => ok(await auth.verify(user, body)));
 
-  route('GET', '/api/v1/notifications', 'AUTH', ({ user }) => ok(q('SELECT id,title,body,read,created_at FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 50').all(user.id)));
-  route('POST', '/api/v1/notifications/read', 'AUTH', ({ user }) => { q('UPDATE notifications SET read=1 WHERE user_id=?').run(user.id); return ok({ read: true }); });
+  route('GET', '/api/v1/notifications', 'AUTH', async ({ user }) => ok(await auth.listNotifications(user.id)));
+  route('POST', '/api/v1/notifications/read', 'AUTH', async ({ user }) => ok(await auth.markNotificationsRead(user.id)));
 }

@@ -1,11 +1,12 @@
 import http from 'node:http';
 import { config, q, db, now, sha256, HttpError } from './core.mjs';
-import registerPublic, { createSqliteCatalogRepository } from './routes_public.mjs';
+import registerPublic, { createSqliteCatalogRepository, createSqliteAuthRepository } from './routes_public.mjs';
 import registerCustomer from './routes_customer.mjs';
 import registerSeller from './routes_seller.mjs';
 import registerAdmin from './routes_admin.mjs';
 import registerPayments from './routes_payments.mjs';
 import { createPostgresCatalogRepository } from './postgres-catalog.mjs';
+import { createPostgresAuthRepository } from './postgres-auth.mjs';
 import './seed.mjs';
 
 export const ok = (data, status = 200) => ({ status, body: { data } });
@@ -18,17 +19,19 @@ export function createApiApp(options = {}) {
   }
 
   const catalogRepository = options.catalogRepository || (options.postgresDatabase ? createPostgresCatalogRepository(options.postgresDatabase) : createSqliteCatalogRepository());
-  registerPublic(route, ok, { catalogRepository });
+  const authRepository = options.authRepository || (options.postgresDatabase ? createPostgresAuthRepository(options.postgresDatabase) : createSqliteAuthRepository());
+  registerPublic(route, ok, { catalogRepository, authRepository });
   registerCustomer(route, ok);
   registerSeller(route, ok);
   registerAdmin(route, ok);
   registerPayments(route, ok);
 
-  return { routes, catalogRepository };
+  return { routes, catalogRepository, authRepository };
 }
 
 const defaultApp = createApiApp();
 const routes = defaultApp.routes;
+const defaultAuthRepository = defaultApp.authRepository;
 
 const hits = new Map();
 function allow(key, max, windowMs) {
@@ -56,49 +59,57 @@ async function readBody(req, limit) {
   if (!size) return {};
   try { const v = JSON.parse(Buffer.concat(chunks).toString('utf8')); if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error('JSON body must be an object'); return v; } catch { throw new HttpError(400, 'Invalid JSON object'); }
 }
-export function sessionUser(req) {
+export async function sessionUser(req, authRepository = defaultAuthRepository) {
   const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
   if (!token) return null;
+  if (authRepository && typeof authRepository.getSessionUser === 'function') {
+    return authRepository.getSessionUser(token);
+  }
   const s = q('SELECT user_id,expires_at FROM sessions WHERE token_hash=?').get(sha256(token));
   if (!s || s.expires_at < now()) return null;
   const u = q('SELECT id,name,phone,email,role,status,phone_verified,email_verified FROM users WHERE id=?').get(s.user_id);
   return u && u.status === 'ACTIVE' ? { ...u, token_hash: sha256(token) } : null;
 }
 
-export const server = http.createServer(async (req, res) => {
-  const origin = req.headers.origin;
-  const headers = { 'x-content-type-options': 'nosniff', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer', 'permissions-policy': 'camera=(), microphone=(), geolocation=()', 'cross-origin-resource-policy': 'same-site', 'x-permitted-cross-domain-policies': 'none', 'content-security-policy': "default-src 'none'; frame-ancestors 'none'" };
-  if (config.prod) headers['strict-transport-security'] = 'max-age=31536000; includeSubDomains';
-  if (origin && config.corsOrigins.includes(origin)) {
-    Object.assign(headers, { 'access-control-allow-origin': origin, vary: 'Origin', 'access-control-allow-methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS', 'access-control-allow-headers': 'authorization,content-type', 'access-control-max-age': '600' });
-  }
-  if (req.method === 'OPTIONS') { res.writeHead(origin && headers['access-control-allow-origin'] ? 204 : 403, headers); return res.end(); }
-  try {
-    const url = new URL(req.url, 'http://localhost');
-    const path = url.pathname;
-    const ip = (process.env.TRUST_PROXY === '1' && String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()) || req.socket.remoteAddress || 'x';
-    if (!allow('g:' + ip, config.generalMax, 60000)) return send(res, 429, { error: 'অনেক বেশি অনুরোধ, কিছুক্ষণ পরে চেষ্টা করুন' }, headers);
-    if (req.method === 'POST' && path.startsWith('/api/v1/auth/') && !allow('a:' + ip, config.authMax, 60000)) return send(res, 429, { error: 'অনেক বেশি চেষ্টা হয়েছে, এক মিনিট পরে আবার চেষ্টা করুন' }, headers);
-    let matched = null, pathMismatch = false;
-    for (const r of routes) { const m = path.match(r.re); if (m) { if (r.method === req.method) { matched = { r, m }; break; } pathMismatch = true; } }
-    if (!matched) return send(res, pathMismatch ? 405 : 404, { error: pathMismatch ? 'Method not allowed' : 'Not found' }, headers);
-    const { r, m } = matched;
-    let user = null;
-    if (r.roles) {
-      user = sessionUser(req);
-      if (!user) return send(res, 401, { error: 'Authentication required' }, headers);
-      if (r.roles !== 'AUTH' && !r.roles.includes(user.role)) return send(res, 403, { error: 'You do not have permission for this action' }, headers);
+export function createHttpServer(app = defaultApp) {
+  return http.createServer(async (req, res) => {
+    const origin = req.headers.origin;
+    const headers = { 'x-content-type-options': 'nosniff', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer', 'permissions-policy': 'camera=(), microphone=(), geolocation=()', 'cross-origin-resource-policy': 'same-site', 'x-permitted-cross-domain-policies': 'none', 'content-security-policy': "default-src 'none'; frame-ancestors 'none'" };
+    if (config.prod) headers['strict-transport-security'] = 'max-age=31536000; includeSubDomains';
+    if (origin && config.corsOrigins.includes(origin)) {
+      Object.assign(headers, { 'access-control-allow-origin': origin, vary: 'Origin', 'access-control-allow-methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS', 'access-control-allow-headers': 'authorization,content-type', 'access-control-max-age': '600' });
     }
-    const body = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) ? await readBody(req, r.limit) : {};
-    const out = await r.handler({ req, res, url, params: m.slice(1), body, user, ip });
-    return send(res, out.status || 200, out.body, headers);
-  } catch (e) {
-    if (e instanceof HttpError) return send(res, e.status, { error: e.message, ...(e.extra || {}) }, headers);
-    if (/UNIQUE constraint/.test(e.message || '')) return send(res, 409, { error: 'ডুপ্লিকেট তথ্য পাওয়া গেছে' }, headers);
-    console.error('[api error]', e);
-    return send(res, 500, { error: 'Internal server error' }, headers);
-  }
-});
+    if (req.method === 'OPTIONS') { res.writeHead(origin && headers['access-control-allow-origin'] ? 204 : 403, headers); return res.end(); }
+    try {
+      const url = new URL(req.url, 'http://localhost');
+      const path = url.pathname;
+      const ip = (process.env.TRUST_PROXY === '1' && String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()) || req.socket.remoteAddress || 'x';
+      if (!allow('g:' + ip, config.generalMax, 60000)) return send(res, 429, { error: 'অনেক বেশি অনুরোধ, কিছুক্ষণ পরে চেষ্টা করুন' }, headers);
+      if (req.method === 'POST' && path.startsWith('/api/v1/auth/') && !allow('a:' + ip, config.authMax, 60000)) return send(res, 429, { error: 'অনেক বেশি চেষ্টা হয়েছে, এক মিনিট পরে আবার চেষ্টা করুন' }, headers);
+      let matched = null, pathMismatch = false;
+      for (const r of app.routes) { const m = path.match(r.re); if (m) { if (r.method === req.method) { matched = { r, m }; break; } pathMismatch = true; } }
+      if (!matched) return send(res, pathMismatch ? 405 : 404, { error: pathMismatch ? 'Method not allowed' : 'Not found' }, headers);
+      const { r, m } = matched;
+      let user = null;
+      if (r.roles) {
+        user = await sessionUser(req, app.authRepository);
+        if (!user) return send(res, 401, { error: 'Authentication required' }, headers);
+        if (r.roles !== 'AUTH' && !r.roles.includes(user.role)) return send(res, 403, { error: 'You do not have permission for this action' }, headers);
+      }
+      const body = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) ? await readBody(req, r.limit) : {};
+      const out = await r.handler({ req, res, url, params: m.slice(1), body, user, ip });
+      return send(res, out.status || 200, out.body, headers);
+    } catch (e) {
+      if (e instanceof HttpError) return send(res, e.status, { error: e.message, ...(e.extra || {}) }, headers);
+      if (/UNIQUE constraint/.test(e.message || '')) return send(res, 409, { error: 'ডুপ্লিকেট তথ্য পাওয়া গেছে' }, headers);
+      console.error('[api error]', e);
+      return send(res, 500, { error: 'Internal server error' }, headers);
+    }
+  });
+}
+
+export const server = createHttpServer(defaultApp);
+
 if (process.argv[1] && import.meta.url === new URL('file://' + process.argv[1]).href) {
   server.listen(config.port, '0.0.0.0', () => console.log('API listening on ' + config.port));
 }
