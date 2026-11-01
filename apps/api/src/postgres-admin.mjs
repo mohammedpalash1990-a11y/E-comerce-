@@ -435,6 +435,17 @@ export function createPostgresAdminRepository(database,{createId=randomUUID,cloc
     return {id:result.id,status:result.status};
   }
 
+  async function setOrderNote({orderId,actorId,note=''}) {
+    const value=String(note??'').trim().slice(0,1000);
+    return database.tx(async()=>{
+      const order=await query('SELECT id FROM orders WHERE id=? FOR UPDATE').get(String(orderId));
+      if(!order) throw fail(404,'ORDER_NOT_FOUND','অর্ডার পাওয়া যায়নি');
+      await query('UPDATE orders SET admin_note=? WHERE id=?').run(value,String(orderId));
+      await query('INSERT INTO audit_logs(id,actor_id,action,entity,entity_id,detail,created_at) VALUES(?,?,?,?,?,?,?)').run(makeId(),String(actorId),'ORDER_NOTE','order',String(orderId),'{}',stamp());
+      return {saved:true};
+    });
+  }
+
   async function setShippingCharge({orderId,actorId,shippingBdt}) {
     const amount=Number(shippingBdt),shipping=Math.round(amount*100);
     if(!Number.isFinite(amount)||!Number.isSafeInteger(shipping)||shipping<0||shipping>1e7||Math.abs(amount*100-shipping)>1e-7) throw fail(400,'INVALID_SHIPPING_CHARGE','ডেলিভারি চার্জ সঠিক নয়');
@@ -503,5 +514,5 @@ export function createPostgresAdminRepository(database,{createId=randomUUID,cloc
     return {total_revenue_bdt:money(row.revenue),total_orders:integer(row.orders,'orders'),total_customers:integer(row.customers,'customers'),total_sellers:integer(row.sellers,'sellers'),pending_seller_applications:integer(row.pending_sellers,'pending_sellers'),pending_product_approvals:integer(row.pending_products,'pending_products'),total_products:integer(row.products,'products'),active_products:integer(row.active_products,'active_products'),cancelled_orders:integer(row.cancelled_orders,'cancelled_orders'),pending_payouts:integer(row.pending_payouts,'pending_payouts'),pending_payout_amount_bdt:money(row.pending_payout_amount),platform_commission_bdt:money(row.commission)};
   }
 
-  return Object.freeze({listPayouts,decidePayout,listCustomers,getCustomer,updateCustomer,setCustomerStatus,listCustomerOrders,listSellers,getSeller,getSellerOverview,listSellerProducts,listSellerOrders,listProducts,decideSeller,setCommission,listCategories,createCategory,updateCategory,deleteCategory,listBrands,createBrand,deleteBrand,listCoupons,createCoupon,toggleCoupon,listPendingProducts,moderateProduct,bookSellerShipment,updateShipment,setShippingCharge,listRefunds,createRefund,approveRefund,rejectRefund,financeSummary,listTransactions,financeReport,listAuditLogs,dashboard});
+  return Object.freeze({listPayouts,decidePayout,listCustomers,getCustomer,updateCustomer,setCustomerStatus,listCustomerOrders,listSellers,getSeller,getSellerOverview,listSellerProducts,listSellerOrders,listProducts,decideSeller,setCommission,listCategories,createCategory,updateCategory,deleteCategory,listBrands,createBrand,deleteBrand,listCoupons,createCoupon,toggleCoupon,listPendingProducts,moderateProduct,bookSellerShipment,updateShipment,setOrderNote,setShippingCharge,listRefunds,createRefund,approveRefund,rejectRefund,financeSummary,listTransactions,financeReport,listAuditLogs,dashboard});
 }
