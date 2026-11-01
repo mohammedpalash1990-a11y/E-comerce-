@@ -67,7 +67,7 @@ test('product update uses seller ownership predicate and does not bypass stock l
   const db=fakeDatabase((method,sql)=>sql.includes('FROM seller_profiles')?{user_id:sellerId,status:'APPROVED'}:sql.includes('FROM products WHERE id=')?{id:'p1',price_paisa:'25000',discount_paisa:null}:undefined);
   const repo=createPostgresSellerRepository(db,{inventoryRepository:inventory});
   await repo.updateProduct(sellerId,'p1',{name_bn:'নতুন নাম',stock:99,images:[]});
-  const lock=db.calls.find(x=>x.sql?.includes('SELECT id FROM products'));
+  const lock=db.calls.find(x=>x.sql?.includes('FROM products WHERE id='));
   assert.deepEqual(lock.values,['p1',sellerId]);
   assert.match(lock.sql,/seller_id=\?/);
   assert.equal(db.calls.some(x=>x.sql?.includes('UPDATE products SET stock=')),false);
