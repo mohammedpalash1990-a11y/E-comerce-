@@ -8,7 +8,7 @@
 <header class="header"><div class="brand">HAAT.</div><div class="search"><input id="search" placeholder="আপনার পছন্দের পণ্য খুঁজুন..."><button id="searchBtn">খুঁজুন</button></div><a class="headlink" href="#products">পণ্যসমূহ</a><button class="cartbtn" id="openCart">🛒 কার্ট <b id="cartCount">0</b></button></header>
 <main class="wrap">
 <section class="hero"><div class="eyebrow">BANGLADESH MULTI-VENDOR MARKETPLACE</div><h1>পছন্দের সবকিছু,<br>এক ঠিকানায়।</h1><p>বিশ্বস্ত বিক্রেতার কাছ থেকে প্রয়োজনীয় পণ্য বেছে নিন। সহজে খুঁজুন, কার্টে যোগ করুন, আর আপনার কেনাকাটা সাজিয়ে নিন।</p><button class="goldbtn" onclick="document.querySelector('#products').scrollIntoView({behavior:'smooth'})">কেনাকাটা শুরু করুন →</button></section>
-<section class="notice" id="connectionNotice" role="status" aria-live="polite">সার্ভারের সঙ্গে সংযোগ পরীক্ষা করা হচ্ছে…</section>
+<section class="notice" id="connectionNotice" role="status" aria-live="polite"><span id="connectionText">সার্ভারের সঙ্গে সংযোগ পরীক্ষা করা হচ্ছে…</span> <button id="retryConnection" type="button" class="chip">আবার চেষ্টা করুন</button></section>
 <div class="sectionhead"><div><div class="eyebrow">EXPLORE</div><h2>ক্যাটাগরি অনুযায়ী কেনাকাটা</h2></div></div><div class="cats" id="cats"></div>
 <div class="sectionhead" id="products"><div><div class="eyebrow">SELECTED FOR YOU</div><h2>জনপ্রিয় পণ্য</h2><div class="muted" id="catalogStatus">লাইভ ক্যাটালগ লোড হচ্ছে…</div></div><span class="muted" id="resultCount"></span></div><div class="grid" id="grid"></div>
 <section class="banner"><div><b>আপনি কি বিক্রেতা?</b><div class="muted">বিক্রেতা হিসেবে লগইন করুন, পণ্য যোগ করুন এবং ক্রেতার অর্ডার পরিচালনা করুন।</div></div><a href="seller.html">Seller Workspace খুলুন →</a></section>
@@ -57,8 +57,8 @@ $('#checkout').onclick=async()=>{
  finally{button.disabled=false;button.textContent='COD অর্ডার কনফার্ম'}
 };
 async function connectCatalog(){
- const notice=$('#connectionNotice'),catalog=$('#catalogStatus');
- notice.textContent='সার্ভারের সঙ্গে সংযোগ পরীক্ষা করা হচ্ছে…';
+ const notice=$('#connectionNotice'),noticeText=$('#connectionText'),catalog=$('#catalogStatus');
+ noticeText.textContent='সার্ভারের সঙ্গে সংযোগ পরীক্ষা করা হচ্ছে…';
  try{
   const health=await fetch(apiUrl('/health'),{headers:{accept:'application/json'},signal:AbortSignal.timeout(8000)});
   if(!health.ok)throw Error('API health check failed ('+health.status+')');
@@ -76,19 +76,20 @@ async function connectCatalog(){
   cats=[['all','সব পণ্য'],...categoryPayload.data.map(c=>[c.slug,c.name_bn])];
   apiReady=true;
   const valid=new Set(products.map(p=>p.id));cart=Object.fromEntries(Object.entries(cart).filter(([id])=>valid.has(id)));save();
-  notice.textContent='লাইভ সার্ভার সংযুক্ত · ডেটাবেস ঠিক আছে';
+  noticeText.textContent='লাইভ সার্ভার সংযুক্ত · ডেটাবেস ঠিক আছে';
   notice.style.borderColor='#8eb79a';
   catalog.textContent='সার্ভার থেকে পাওয়া অনুমোদিত পণ্য';
   $('#checkout').textContent='COD অর্ডার কনফার্ম';
   drawCats();drawProducts();drawCart();
  }catch(error){
   apiReady=false;products=[];cats=[['all','সব পণ্য']];active='all';
-  notice.textContent='এখনো লাইভ সার্ভার সংযুক্ত হয়নি। বর্তমানে এটি শুধু ডিজাইন প্রিভিউ; পণ্য, লগইন ও অর্ডার চালু করতে API deployment প্রয়োজন।';
+  noticeText.textContent='এখনো লাইভ সার্ভার সংযুক্ত হয়নি। বর্তমানে এটি শুধু ডিজাইন প্রিভিউ; পণ্য, লগইন ও অর্ডার চালু করতে API deployment প্রয়োজন।';
   notice.style.borderColor='#d5a06b';
   catalog.textContent='লাইভ ক্যাটালগ অফলাইন · Demo পণ্য দেখানো হচ্ছে না';
   $('#checkout').textContent='সার্ভার সংযোগ প্রয়োজন';
   drawCats();drawProducts();drawCart();
  }
 }
+$('#retryConnection').onclick=connectCatalog;
 drawCats();drawProducts();drawCart();connectCatalog();
 </script></body></html>
