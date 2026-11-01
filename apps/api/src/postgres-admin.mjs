@@ -110,6 +110,73 @@ export function createPostgresAdminRepository(database,{createId=randomUUID,cloc
     });
   }
 
+  async function applyRefund({order,refund,actorId}) {
+    const amount=integer(refund.amount_paisa,'refund.amount_paisa'),total=integer(order.total_paisa,'order.total_paisa');
+    const refunded=await query("SELECT COALESCE(SUM(amount_paisa),0) amount FROM refunds WHERE order_id=? AND status='APPROVED'").get(order.id);
+    const already=integer(refunded.amount||0,'refunded.amount');
+    if(amount<=0||already+amount>total) throw fail(409,'REFUND_LIMIT_EXCEEDED','রিফান্ডের পরিমাণ অবশিষ্ট পরিশোধিত অর্থের বেশি');
+    const at=stamp();
+    await query("UPDATE refunds SET status='APPROVED',decided_at=? WHERE id=? AND status='REQUESTED'").run(at,refund.id);
+    await query('INSERT INTO transactions(id,kind,order_id,seller_order_id,seller_id,amount_paisa,ref,created_at) VALUES(?,?,?,?,?,?,?,?)').run(makeId(),'REFUND',order.id,null,null,-amount,String(refund.id),at);
+    const delivered=await query("SELECT id,seller_id,net_paisa FROM seller_orders WHERE order_id=? AND status='DELIVERED' FOR UPDATE").all(order.id);
+    for(const sellerOrder of delivered) {
+      const reversal=Math.round(integer(sellerOrder.net_paisa,'seller_order.net_paisa')*amount/total);
+      if(reversal>0) await query('INSERT INTO transactions(id,kind,order_id,seller_order_id,seller_id,amount_paisa,ref,created_at) VALUES(?,?,?,?,?,?,?,?)').run(makeId(),'SELLER_REVERSAL',order.id,sellerOrder.id,sellerOrder.seller_id,-reversal,String(refund.id)+':'+sellerOrder.id,at);
+    }
+    const next=already+amount>=total?'REFUNDED':'PARTIALLY_REFUNDED';
+    await query('UPDATE orders SET payment_status=? WHERE id=?').run(next,order.id);
+    if(next==='REFUNDED') await query("UPDATE payments SET status='REFUNDED',updated_at=? WHERE order_id=? AND status='PAID'").run(at,order.id);
+    await query('INSERT INTO audit_logs(id,actor_id,action,entity,entity_id,detail,created_at) VALUES(?,?,?,?,?,?,?)').run(makeId(),String(actorId),'REFUND_APPROVED','refund',String(refund.id),JSON.stringify({order_id:order.id,amount_paisa:amount}),at);
+    await query('INSERT INTO notifications(id,user_id,title,body,read,created_at) VALUES(?,?,?,?,0,?)').run(makeId(),order.user_id,'রিফান্ড অনুমোদিত','BD-'+String(order.id).slice(0,8).toUpperCase()+': '+money(amount)+' টাকা',at);
+    return {id:String(refund.id),status:'APPROVED'};
+  }
+
+  async function createRefund({orderId,actorId,amountBdt,reason=''}) {
+    const amount=Number(amountBdt),paisa=Math.round(amount*100);
+    if(!Number.isFinite(amount)||!Number.isSafeInteger(paisa)||paisa<=0||Math.abs(amount*100-paisa)>1e-7) throw fail(400,'INVALID_REFUND_AMOUNT','রিফান্ড পরিমাণ সঠিক নয়');
+    const why=String(reason??'').trim().slice(0,300),refundId=makeId();
+    return database.tx(async()=>{
+      const order=await query('SELECT id,user_id,total_paisa,payment_status FROM orders WHERE id=? FOR UPDATE').get(String(orderId));
+      if(!order) throw fail(404,'ORDER_NOT_FOUND','অর্ডার পাওয়া যায়নি');
+      if(!['PAID','PARTIALLY_REFUNDED'].includes(order.payment_status)) throw fail(409,'ORDER_NOT_REFUNDABLE','পেমেন্ট সম্পন্ন না হলে রিফান্ড করা যায় না');
+      const at=stamp();
+      await query('INSERT INTO refunds(id,order_id,amount_paisa,reason,status,created_at,decided_at) VALUES(?,?,?,?,?,?,NULL)').run(refundId,order.id,paisa,why,'REQUESTED',at);
+      return applyRefund({order,refund:{id:refundId,amount_paisa:paisa},actorId});
+    });
+  }
+
+  async function approveRefund({refundId,actorId}) {
+    return database.tx(async()=>{
+      const candidate=await query('SELECT order_id FROM refunds WHERE id=?').get(String(refundId));
+      if(!candidate) throw fail(404,'REFUND_NOT_FOUND','রিফান্ড অনুরোধ পাওয়া যায়নি');
+      const order=await query('SELECT id,user_id,total_paisa,payment_status FROM orders WHERE id=? FOR UPDATE').get(candidate.order_id);
+      const refund=await query('SELECT id,order_id,amount_paisa,status FROM refunds WHERE id=? FOR UPDATE').get(String(refundId));
+      if(!refund||refund.status!=='REQUESTED') throw fail(409,'REFUND_NOT_PENDING','রিফান্ড অনুরোধটি আর pending নেই');
+      if(!order) throw fail(404,'ORDER_NOT_FOUND','অর্ডার পাওয়া যায়নি');
+      if(!['PAID','PARTIALLY_REFUNDED'].includes(order.payment_status)) throw fail(409,'ORDER_NOT_REFUNDABLE','অর্ডারটি রিফান্ডযোগ্য নয়');
+      return applyRefund({order,refund,actorId});
+    });
+  }
+
+  async function rejectRefund({refundId,actorId}) {
+    return database.tx(async()=>{
+      const candidate=await query('SELECT order_id FROM refunds WHERE id=?').get(String(refundId));
+      if(!candidate) throw fail(404,'REFUND_NOT_FOUND','রিফান্ড অনুরোধ পাওয়া যায়নি');
+      await query('SELECT id FROM orders WHERE id=? FOR UPDATE').get(candidate.order_id);
+      const refund=await query("SELECT id,status FROM refunds WHERE id=? FOR UPDATE").get(String(refundId));
+      if(!refund||refund.status!=='REQUESTED') throw fail(409,'REFUND_NOT_PENDING','রিফান্ড অনুরোধটি আর pending নেই');
+      const at=stamp();
+      await query("UPDATE refunds SET status='REJECTED',decided_at=? WHERE id=? AND status='REQUESTED'").run(at,String(refundId));
+      await query('INSERT INTO audit_logs(id,actor_id,action,entity,entity_id,detail,created_at) VALUES(?,?,?,?,?,?,?)').run(makeId(),String(actorId),'REFUND_REJECTED','refund',String(refundId),'{}',at);
+      return {id:String(refundId),status:'REJECTED'};
+    });
+  }
+
+  async function listRefunds({limit:pageSize=200}={}) {
+    const rows=await query('SELECT id,order_id,amount_paisa,reason,status,created_at,decided_at FROM refunds ORDER BY created_at DESC,id DESC LIMIT ?').all(limit(pageSize,200));
+    return rows.map(row=>({...row,orderNumber:'BD-'+String(row.order_id).slice(0,8).toUpperCase(),amount_bdt:money(row.amount_paisa)}));
+  }
+
   async function financeSummary() {
     const row=await query(`SELECT
       COALESCE((SELECT SUM(total_paisa) FROM orders WHERE status NOT IN ('CANCELLED','AWAITING_PAYMENT')),0) gross,
@@ -157,5 +224,5 @@ export function createPostgresAdminRepository(database,{createId=randomUUID,cloc
     return {total_revenue_bdt:money(row.revenue),total_orders:integer(row.orders,'orders'),total_customers:integer(row.customers,'customers'),total_sellers:integer(row.sellers,'sellers'),pending_seller_applications:integer(row.pending_sellers,'pending_sellers'),pending_product_approvals:integer(row.pending_products,'pending_products'),total_products:integer(row.products,'products'),active_products:integer(row.active_products,'active_products'),cancelled_orders:integer(row.cancelled_orders,'cancelled_orders'),pending_payouts:integer(row.pending_payouts,'pending_payouts'),pending_payout_amount_bdt:money(row.pending_payout_amount),platform_commission_bdt:money(row.commission)};
   }
 
-  return Object.freeze({listPayouts,decidePayout,listSellers,getSeller,decideSeller,setCommission,listPendingProducts,moderateProduct,financeSummary,listTransactions,financeReport,listAuditLogs,dashboard});
+  return Object.freeze({listPayouts,decidePayout,listSellers,getSeller,decideSeller,setCommission,listPendingProducts,moderateProduct,listRefunds,createRefund,approveRefund,rejectRefund,financeSummary,listTransactions,financeReport,listAuditLogs,dashboard});
 }
