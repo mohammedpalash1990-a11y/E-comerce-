@@ -71,6 +71,8 @@ test('product update uses seller ownership predicate and does not bypass stock l
   assert.deepEqual(lock.values,['p1',sellerId]);
   assert.match(lock.sql,/seller_id=\?/);
   assert.equal(db.calls.some(x=>x.sql?.includes('UPDATE products SET stock=')),false);
+  assert.equal(inventory.last.stock,99);
+  assert.equal(inventory.last.reason,'SELLER_PRODUCT_STOCK_UPDATE');
   assert.ok(db.calls.some(x=>x.sql?.includes("status='PENDING_REVIEW'")));
 });
 
