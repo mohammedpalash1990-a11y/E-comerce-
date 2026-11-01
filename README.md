@@ -26,12 +26,16 @@
 - Multi-vendor checkout with seller sub-orders and commission ledger entries
 - Customer order history, address and account endpoints, notifications
 - Sandbox payment and courier adapters only
+- PostgreSQL repositories for catalog, authentication, inventory, checkout and order/payment domains
+- PostgreSQL connection-pool factory and an advisory-lock migration bootstrap command
 
 ## Still required before production
-- Production PostgreSQL runtime adapter and verified migration process
+- PostgreSQL implementations for the remaining customer address/profile/wishlist/review, seller product/finance, and admin management/finance routes
+- PostgreSQL API composition that does not import or execute SQLite-backed routes or seed data
+- Real Neon/PostgreSQL integration tests and full browser E2E coverage
 - Public Node.js API hosting, persistent production database, secrets and monitoring
 - Live payment/courier credentials and provider webhook verification
-- Full browser E2E, security, privacy and operational review
+- Full security, privacy and operational review
 - Native Android/iOS application
 
 ## Requirements
@@ -48,6 +52,18 @@ npm run dev
 - Seller placeholder: http://localhost:3000/seller.html
 - Admin placeholder: http://localhost:3000/admin.html
 - API health: http://localhost:4000/health
+
+## PostgreSQL migration bootstrap (staging/development only)
+
+Install dependencies, set `DATABASE_URL` and the PostgreSQL TLS/pool variables from `.env.example`, then run:
+
+```bash
+npm run db:migrate:postgres
+```
+
+The command verifies the database connection, applies ordered SQL files from `apps/api/migrations/postgres`, and uses a PostgreSQL advisory lock so concurrent deploy jobs do not apply the same migration simultaneously. It prints migration names but never prints the connection URL or password.
+
+**Important:** this command only prepares/checks the PostgreSQL schema. It does not switch the API to PostgreSQL. Production API startup remains blocked intentionally because some customer, seller and admin routes still use SQLite. Do not point a live API at a PostgreSQL database until that remaining route migration and end-to-end validation are complete.
 
 ## Development demo accounts
 | Role | Phone | Password |
@@ -72,14 +88,14 @@ npm run check
 ## Repository map
 - `apps/web` — customer storefront and seller/admin placeholder pages
 - `apps/api` — Node.js API + local SQLite development adapter
+- `apps/api/migrations/postgres` — PostgreSQL target schema migrations
 - `prisma` — initial PostgreSQL target schema
 - `docs` — architecture, status and deployment notes
 - `infra/docker` — container scaffolding
-- `tests` — API smoke test
+- `tests` — API and adapter tests
 
 ## Production warning
 Do not process real customer data or payments with this scaffold. See [docs/STATUS_BN.md](docs/STATUS_BN.md), [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) and [SECURITY.md](SECURITY.md).
-
 
 ## Preview and demo access
 
