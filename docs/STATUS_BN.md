@@ -25,15 +25,13 @@
 - Admin: 01700000001 / Admin@12345
 
 ## এখনো তৈরি হয়নি / production-এ নেওয়ার আগে প্রয়োজন
-1. Production PostgreSQL adapter, Prisma migration এবং deployment database
-2. Persistent secure session/token lifecycle, password reset, OTP verification এবং rate limiting
-3. Seller onboarding/KYC, product editing, inventory controls ও seller-wise fulfilment
-4. Multi-vendor cart থেকে seller-wise sub-order split এবং commission/settlement ledger
-5. Customer address book, returns/refunds, dispute handling ও notification system
-6. bKash/Nagad/SSLCommerz/card payment gateway এবং courier API integration
-7. Admin user management, finance, payout ও audit log
-8. Monitoring, automated backups, restore drill, privacy/legal review ও security testing
-9. সম্পূর্ণ Android/iOS customer ও seller app
+1. Production PostgreSQL runtime adapter ও verified migration execution (বর্তমান API SQLite development runtime ব্যবহার করে)
+2. Persistent secure session/token lifecycle, password reset ও OTP verification provider
+3. Live bKash/Nagad/SSLCommerz/card gateway এবং বাস্তব courier provider credentials/integration
+4. Public Node.js API hosting, persistent database storage, production secrets ও monitoring
+5. Returns/dispute handling, customer support operations এবং notification delivery provider
+6. Security, privacy/legal review, automated backups ও restore drill
+7. সম্পূর্ণ Android/iOS customer ও seller app
 
 ## পরীক্ষা ও deployment
 - GitHub Actions CI-তে Node.js 22 দিয়ে syntax checks, repository checks এবং API tests চলে।
