@@ -370,6 +370,16 @@ export default function registerPostgresDomain(route, ok, {
     route('POST', '/api/v1/admin/sellers/:id/suspend', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.decideSeller({ sellerId: params[0], actorId: user.id, decision: 'SUSPEND', reason: body.reason })));
     route('POST', '/api/v1/admin/sellers/:id/activate', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.decideSeller({ sellerId: params[0], actorId: user.id, decision: 'ACTIVATE', reason: body.reason })));
     route('PATCH', '/api/v1/admin/sellers/:id/commission', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.setCommission({ sellerId: params[0], actorId: user.id, commissionBps: body.commission_bps })));
+    route('GET', '/api/v1/admin/categories', ['ADMIN'], invoke(ok, async () => admin.listCategories()));
+    route('POST', '/api/v1/admin/categories', ['ADMIN'], invoke(ok, async ({ user, body }) => admin.createCategory({ actorId: user.id, nameBn: body.name_bn, nameEn: body.name_en, slug: body.slug }), 201));
+    route('PUT', '/api/v1/admin/categories/:slug', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.updateCategory({ actorId: user.id, slug: params[0], nameBn: body.name_bn, nameEn: body.name_en })));
+    route('DELETE', '/api/v1/admin/categories/:slug', ['ADMIN'], invoke(ok, async ({ user, params }) => admin.deleteCategory({ actorId: user.id, slug: params[0] })));
+    route('GET', '/api/v1/admin/brands', ['ADMIN'], invoke(ok, async () => admin.listBrands()));
+    route('POST', '/api/v1/admin/brands', ['ADMIN'], invoke(ok, async ({ user, body }) => admin.createBrand({ actorId: user.id, name: body.name }), 201));
+    route('DELETE', '/api/v1/admin/brands/:slug', ['ADMIN'], invoke(ok, async ({ user, params }) => admin.deleteBrand({ actorId: user.id, slug: params[0] })));
+    route('GET', '/api/v1/admin/coupons', ['ADMIN'], invoke(ok, async () => admin.listCoupons()));
+    route('POST', '/api/v1/admin/coupons', ['ADMIN'], invoke(ok, async ({ user, body }) => admin.createCoupon({ actorId: user.id, body }), 201));
+    route('PATCH', '/api/v1/admin/coupons/:code', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.toggleCoupon({ actorId: user.id, code: params[0], active: body.active })));
     route('GET', '/api/v1/admin/products/pending', ['ADMIN'], invoke(ok, async () => admin.listPendingProducts()));
     route('POST', '/api/v1/admin/products/:id/approve', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.moderateProduct({ productId: params[0], actorId: user.id, decision: 'APPROVE', reason: body.reason })));
     route('POST', '/api/v1/admin/products/:id/reject', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.moderateProduct({ productId: params[0], actorId: user.id, decision: 'REJECT', reason: body.reason })));
