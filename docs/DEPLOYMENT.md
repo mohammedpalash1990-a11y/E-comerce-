@@ -37,3 +37,9 @@ GitHub Pages hosts only static files. It does not execute the Node.js API, SQLit
 - Remove development seed accounts and demo credentials.
 
 This repository remains a development MVP and is not production-ready.
+
+## Neon PostgreSQL provisioning status (2026-11-01)
+- Neon project `haat-bangladesh` is provisioned (PostgreSQL 17, Singapore region), database `haat`.
+- PostgreSQL migrations `001_init.sql` and `002_indexes.sql` have been applied to the Neon main branch. Verification confirmed 24 application tables and 45 indexes.
+- A separate `haat-schema-validation` branch was also created for schema validation.
+- This is database schema provisioning only. The API still uses the synchronous `node:sqlite` interface. Do not deploy the API as production until the PostgreSQL runtime adapter, async route conversion, seed compatibility, and end-to-end tests are complete.
