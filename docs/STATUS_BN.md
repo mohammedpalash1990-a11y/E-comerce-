@@ -50,6 +50,13 @@
 - P2: Payment/courier sandbox integration, returns/refunds, notifications
 - P3: Production monitoring, backups, security review এবং mobile app
 
+## PostgreSQL compatibility groundwork (২০২৬-১১-০১)
+- API route SQL থেকে SQLite-specific `rowid` ordering সরিয়ে deterministic `created_at + id` ordering করা হয়েছে।
+- `INSERT OR IGNORE`-এর বদলে portable `ON CONFLICT DO NOTHING` ব্যবহার করা হয়েছে।
+- Product price filter-এর scalar SQLite `MIN(a,b)` expression portable SQL `CASE`-এ বদলানো হয়েছে।
+- `tests/postgres-compat.test.mjs`-এ এসব regression guard যোগ করা হয়েছে।
+- এগুলো PostgreSQL migration সহজ করে, কিন্তু database adapter এখনো SQLite; তাই এগুলোকে PostgreSQL runtime support বলা যাবে না।
+
 ## Storefront preview UX সংশোধন (২০২৬-১১-০১)
 - API offline থাকলে storefront আর hard-coded ৮টি নমুনা পণ্যকে live inventory হিসেবে দেখায় না; পরিষ্কার offline/preview বার্তা ও retry control দেখায়।
 - পণ্য ও category API থেকে একসঙ্গে লোড হয়; cart-এর localStorage key versioned করা হয়েছে।
