@@ -48,7 +48,7 @@ export function sessionUser(req) {
 
 export const server = http.createServer(async (req, res) => {
   const origin = req.headers.origin;
-  const headers = { 'x-content-type-options': 'nosniff', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer', 'content-security-policy': "default-src 'none'; frame-ancestors 'none'" };
+  const headers = { 'x-content-type-options': 'nosniff', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer', 'permissions-policy': 'camera=(), microphone=(), geolocation=()', 'cross-origin-resource-policy': 'same-site', 'x-permitted-cross-domain-policies': 'none', 'content-security-policy': "default-src 'none'; frame-ancestors 'none'" };
   if (config.prod) headers['strict-transport-security'] = 'max-age=31536000; includeSubDomains';
   if (origin && config.corsOrigins.includes(origin)) {
     Object.assign(headers, { 'access-control-allow-origin': origin, vary: 'Origin', 'access-control-allow-methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS', 'access-control-allow-headers': 'authorization,content-type', 'access-control-max-age': '600' });
