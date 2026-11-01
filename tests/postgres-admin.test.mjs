@@ -89,3 +89,49 @@ test('finance report rejects malformed and reversed date ranges',async()=>{
   await assert.rejects(repo.financeReport({from:'not-a-date'}),e=>e.status===400&&e.code==='INVALID_DATE_RANGE');
   await assert.rejects(repo.financeReport({from:'2026-12-01',to:'2026-11-01'}),e=>e.status===400&&e.code==='INVALID_DATE_RANGE');
 });
+
+test('seller approval locks profile, activates user and records audit notification',async()=>{
+  const db=fakeDatabase((method,sql)=>sql.includes('FROM seller_profiles WHERE user_id=')?{user_id:'seller-7',status:'PENDING'}:undefined);
+  const repo=createPostgresAdminRepository(db,{createId:()=> 'evt-1',clock:()=> '2026-11-02T10:00:00.000Z'});
+  assert.deepEqual(await repo.decideSeller({sellerId:'seller-7',actorId:'admin-1',decision:'APPROVE',reason:'KYC verified'}),{id:'seller-7',status:'APPROVED'});
+  assert.ok(db.calls.some(x=>x.sql?.includes('FROM seller_profiles WHERE user_id=')&&x.sql.includes('FOR UPDATE')));
+  assert.ok(db.calls.some(x=>x.sql?.includes('UPDATE users SET status=')&&x.values[0]==='ACTIVE'));
+  assert.ok(db.calls.some(x=>x.sql?.includes('INSERT INTO audit_logs')&&x.values[2]==='SELLER_APPROVED'));
+});
+
+test('seller suspension revokes existing sessions in the same transaction',async()=>{
+  const db=fakeDatabase((method,sql)=>sql.includes('FROM seller_profiles WHERE user_id=')?{user_id:'seller-8',status:'APPROVED'}:undefined);
+  const repo=createPostgresAdminRepository(db);
+  await repo.decideSeller({sellerId:'seller-8',actorId:'admin-1',decision:'SUSPEND'});
+  assert.ok(db.calls.some(x=>x.sql?.includes('DELETE FROM sessions WHERE user_id=')&&x.values[0]==='seller-8'));
+  assert.ok(db.calls.some(x=>x.sql?.includes("UPDATE users SET status=")&&x.values[0]==='SUSPENDED'));
+});
+
+test('commission update is bounded to 0 through 5000 basis points',async()=>{
+  const db=fakeDatabase((method,sql)=>sql.includes('FROM seller_profiles WHERE user_id=')?{user_id:'seller-9'}:undefined);
+  const repo=createPostgresAdminRepository(db);
+  assert.deepEqual(await repo.setCommission({sellerId:'seller-9',actorId:'admin-1',commissionBps:1250}),{id:'seller-9',commission_bps:1250});
+  await assert.rejects(repo.setCommission({sellerId:'seller-9',actorId:'admin-1',commissionBps:5001}),e=>e.status===400&&e.code==='INVALID_COMMISSION');
+});
+
+test('product moderation cannot activate product while seller is not approved',async()=>{
+  const db=fakeDatabase((method,sql)=>sql.includes('FROM products WHERE id=')?{id:'product-1',seller_id:'seller-1',status:'PENDING_REVIEW'}:sql.includes('FROM seller_profiles WHERE user_id=')?{status:'PENDING'}:undefined);
+  const repo=createPostgresAdminRepository(db);
+  await assert.rejects(repo.moderateProduct({productId:'product-1',actorId:'admin-1',decision:'APPROVE'}),e=>e.status===409&&e.code==='SELLER_NOT_APPROVED');
+  assert.equal(db.calls.some(x=>x.sql?.includes('UPDATE products SET status=')),false);
+});
+
+test('product moderation records approved state, audit and seller notification',async()=>{
+  const db=fakeDatabase((method,sql)=>sql.includes('FROM products WHERE id=')?{id:'product-2',seller_id:'seller-2',status:'PENDING_REVIEW'}:sql.includes('FROM seller_profiles WHERE user_id=')?{status:'APPROVED'}:undefined);
+  const repo=createPostgresAdminRepository(db,{createId:()=> 'evt-2'});
+  assert.deepEqual(await repo.moderateProduct({productId:'product-2',actorId:'admin-1',decision:'APPROVE'}),{id:'product-2',status:'ACTIVE'});
+  assert.ok(db.calls.some(x=>x.sql?.includes('UPDATE products SET status=')&&x.values[0]==='ACTIVE'));
+  assert.ok(db.calls.some(x=>x.sql?.includes('INSERT INTO audit_logs')&&x.values[2]==='PRODUCT_ACTIVE'));
+  assert.ok(db.calls.some(x=>x.sql?.includes('INSERT INTO notifications')&&x.values[1]==='seller-2'));
+});
+
+test('product moderation only allows the declared source state',async()=>{
+  const db=fakeDatabase((method,sql)=>sql.includes('FROM products WHERE id=')?{id:'product-3',seller_id:'seller-3',status:'ACTIVE'}:undefined);
+  const repo=createPostgresAdminRepository(db);
+  await assert.rejects(repo.moderateProduct({productId:'product-3',actorId:'admin-1',decision:'APPROVE'}),e=>e.status===409&&e.code==='PRODUCT_NOT_MODERATABLE');
+});
