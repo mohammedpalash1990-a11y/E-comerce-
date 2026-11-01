@@ -39,7 +39,9 @@ export function createApiApp(options = {}) {
         ordersRepository: options.ordersRepository,
         inventoryOptions: options.inventoryOptions,
         checkoutOptions: options.checkoutOptions,
-        ordersOptions: options.ordersOptions
+        ordersOptions: options.ordersOptions,
+        sellerRepository: options.sellerRepository,
+        sellerOptions: options.sellerOptions
       })
     : null);
   registerPublic(route, ok, { catalogRepository, authRepository });
@@ -51,7 +53,7 @@ export function createApiApp(options = {}) {
     paymentMode: options.paymentMode || config.paymentMode
   });
   registerCustomer(route, ok);
-  registerSeller(route, ok);
+  if (!domainRepositories) registerSeller(route, ok);
   registerAdmin(route, ok);
   registerPayments(route, ok);
 
