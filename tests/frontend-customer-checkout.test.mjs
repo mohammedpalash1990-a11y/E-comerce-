@@ -89,6 +89,8 @@ test('storefront cart sync clears local cart only after successful server writes
     { productId: 'product_a', quantity: 2 },
     { productId: 'product_b', quantity: 1 }
   ]);
+  await sync();
+  assert.equal(calls.length, 2, 'a retry after successful sync must not duplicate cart writes');
 });
 
 test('storefront cart sync retains only items whose server write failed', async () => {
