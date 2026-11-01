@@ -43,7 +43,7 @@ test('seller cannot read another seller product by ID',async()=>{
 });
 
 test('product creation uses pending moderation and the append-only inventory ledger',async()=>{
-  const db=fakeDatabase((method,sql)=>sql.includes('FROM seller_profiles')?{user_id:sellerId,status:'APPROVED'}:undefined);
+  const db=fakeDatabase((method,sql)=>sql.includes('FROM seller_profiles')?{user_id:sellerId,status:'APPROVED'}:sql.includes('FROM categories')?{id:'category-1'}:undefined);
   let stockInput;
   const ledger={async setStock(input){stockInput=input;return {stock:input.stock};}};
   const repo=createPostgresSellerRepository(db,{inventoryRepository:ledger,createId:(()=>{let n=0;return()=> 'id-'+(++n);})(),clock:()=> '2026-11-01T00:00:00.000Z'});
@@ -86,8 +86,8 @@ test('payout request requires approved seller, checks duplicate and available in
   const db=fakeDatabase((method,sql)=> {
     if(sql.includes('FROM seller_profiles'))return {user_id:sellerId,status:'APPROVED'};
     if(sql.includes('SELECT id FROM payouts'))return undefined;
-    if(sql.includes('AS reserved'))return {reserved:'0'};
-    if(sql.includes('AS earnings'))return {earnings:'100000'};
+    if(sql.includes(' reserved FROM payouts'))return {reserved:'0'};
+    if(sql.includes(' earnings FROM transactions'))return {earnings:'100000'};
     return undefined;
   });
   const repo=createPostgresSellerRepository(db,{inventoryRepository:inventory,createId:()=> 'payout-1'});
