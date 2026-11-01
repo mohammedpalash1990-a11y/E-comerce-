@@ -66,3 +66,9 @@ test('admin console exposes dashboard metrics and seller application moderation'
   assert.match(html, /data-seller/);
   assert.match(html, /dashboardStats/);
 });
+
+test('admin moderation queue includes seller product thumbnails', async () => {
+  const [api, html] = await Promise.all([read('apps/api/src/routes_admin.mjs'), read('apps/web/public/admin.html')]);
+  assert.match(api, /SELECT url FROM product_images i WHERE i\.product_id=p\.id/);
+  assert.match(html, /p\.image\?'<img src=/);
+});
