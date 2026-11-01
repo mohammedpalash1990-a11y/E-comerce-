@@ -95,4 +95,6 @@
 
 **Admin PostgreSQL migration-এর নতুন অংশ:** dashboard aggregate, finance summary/transactions/report, audit log list, payout list/approve/reject, seller/customer list/detail/edit/approve/reject/suspend/activate/commission, product list/moderation, category/brand/coupon CRUD, order shipping charge এবং refund create/list/approve/reject route যোগ হয়েছে। Refund order row lock করে, partial/full amount cap করে, seller earning reversal ledger-এ লেখে এবং full refund হলে payment status update করে। Payout approval seller row lock করে এবং অন্য pending/approved payout reserve হিসাব করে; seller ও product moderation audit log/notification লেখে।
 
-**এখনো বাকি:** admin product full edit/delete ও courier admin actions; real PostgreSQL integration test এবং পূর্ণ end-to-end validation। তাই এই branch production-ready নয়; merge/deploy করা হয়নি।
+**Admin API route coverage:** পুরোনো `routes_admin.mjs`-এর ৪৫টি route-এর সবগুলো PostgreSQL domain registration-এ কভার করা হয়েছে (customer/seller/product/category/brand/coupon/order/refund/payout/finance/courier/inventory/audit)।
+
+**এখনো বাকি:** live PostgreSQL database integration, full API runtime composition/production readiness, migration + data import rehearsal এবং end-to-end browser validation। এই PR-এর adapter-level tests real PostgreSQL server-এর বিকল্প নয়। তাই এই branch production-ready নয়; merge/deploy করা হয়নি।
