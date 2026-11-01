@@ -112,7 +112,7 @@ test('courier booking locks and scopes the seller order before creating a shipme
   const result=await repo.bookSellerShipment(sellerId,'so-1','PATHAO');
   assert.equal(result.status,'BOOKED');
   assert.equal(result.provider,'PATHAO');
-  const orderRead=db.calls.find(x=>x.sql?.includes('FROM seller_orders so JOIN orders')));
+  const orderRead=db.calls.find(x=>x.sql?.includes('FROM seller_orders so JOIN orders'));
   assert.deepEqual(orderRead.values,['so-1',sellerId]);
   assert.ok(db.calls.some(x=>x.sql?.includes('INSERT INTO shipments')));
   assert.ok(db.calls.some(x=>x.sql?.includes('COURIER_BOOKED')));
@@ -122,7 +122,7 @@ test('shipment lookup cannot access a shipment owned by another seller',async()=
   const db=fakeDatabase((method,sql)=>sql.includes('FROM seller_profiles')?{user_id:sellerId,status:'APPROVED'}:undefined);
   const repo=createPostgresSellerRepository(db,{inventoryRepository:inventory});
   await assert.rejects(repo.updateSellerShipment(sellerId,'foreign-shipment','IN_TRANSIT'),e=>e.status===404&&e.code==='SHIPMENT_NOT_FOUND');
-  const lookup=db.calls.find(x=>x.sql?.includes('FROM shipments sh JOIN seller_orders so')));
+  const lookup=db.calls.find(x=>x.sql?.includes('FROM shipments sh JOIN seller_orders so'));
   assert.deepEqual(lookup.values,['foreign-shipment',sellerId]);
   assert.equal(db.calls.some(x=>x.sql?.includes('UPDATE shipments')),false);
 });
