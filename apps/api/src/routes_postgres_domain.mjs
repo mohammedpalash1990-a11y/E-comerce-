@@ -352,6 +352,7 @@ export default function registerPostgresDomain(route, ok, {
     route('GET', '/api/v1/admin/finance/report', ['ADMIN'], invoke(ok, async ({ url }) => admin.financeReport({ from: url.searchParams.get('from') || undefined, to: url.searchParams.get('to') || undefined })));
     route('GET', '/api/v1/admin/audit-logs', ['ADMIN'], invoke(ok, async ({ url }) => admin.listAuditLogs({ limit: Number(url.searchParams.get('limit') || 200) })));
     route('GET', '/api/v1/admin/refunds', ['ADMIN'], invoke(ok, async ({ url }) => admin.listRefunds({ limit: Number(url.searchParams.get('limit') || 200) })));
+    route('POST', '/api/v1/admin/orders/:id/note', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.setOrderNote({ orderId: params[0], actorId: user.id, note: body.note })));
     route('POST', '/api/v1/admin/orders/:id/shipping', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.setShippingCharge({ orderId: params[0], actorId: user.id, shippingBdt: body.shipping_bdt })));
     route('POST', '/api/v1/admin/seller-orders/:id/courier', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.bookSellerShipment({ sellerOrderId: params[0], actorId: user.id, provider: body.provider }), 201));
     route('POST', '/api/v1/admin/shipments/:id/status', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.updateShipment({ shipmentId: params[0], actorId: user.id, status: body.status })));
