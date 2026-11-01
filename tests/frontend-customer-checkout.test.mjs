@@ -6,6 +6,13 @@ import vm from 'node:vm';
 const account = await readFile(new URL('../apps/web/public/account.html', import.meta.url), 'utf8');
 const storefront = await readFile(new URL('../apps/web/public/index.html', import.meta.url), 'utf8');
 
+test('customer forms access reserved name and id controls through form elements', () => {
+  assert.ok(account.includes("elements.namedItem('name').value"));
+  assert.ok(account.includes("elements.namedItem('id').value"));
+  assert.ok(!account.includes('f.name.value'));
+  assert.ok(!account.includes('f.id.value'));
+});
+
 test('customer checkout uses saved addresses and structured delivery details', () => {
   for (const id of ['checkoutPanel','checkoutForm','checkoutAddress','couponCode','applyCoupon','checkoutMsg']) assert.ok(account.includes('id="'+id+'"'));
   for (const field of ['payment_method','coupon_code','name','phone','area','address']) assert.ok(account.includes('name="'+field+'"'));
