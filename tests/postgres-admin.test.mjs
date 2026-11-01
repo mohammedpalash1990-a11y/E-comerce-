@@ -61,7 +61,7 @@ test('payout approval rejects when seller earnings are already reserved',async()
 });
 
 test('payout decision is single-use and rejects an already decided request',async()=>{
-  const db=fakeDatabase((method,sql)=>sql.includes('FROM payouts WHERE id=')?{id:'pay-3',seller_id:'seller-1',amount_paisa:'1000',status:'APPROVED'}:undefined);
+  const db=fakeDatabase((method,sql)=>sql.includes('FROM payouts WHERE id=')?{id:'pay-3',seller_id:'seller-1',amount_paisa:'1000',status:'APPROVED'}:sql.includes('FROM seller_profiles')?{user_id:'seller-1'}:undefined);
   const repo=createPostgresAdminRepository(db);
   await assert.rejects(repo.decidePayout({payoutId:'pay-3',actorId:'admin-1',decision:'REJECT'}),e=>e.status===409&&e.code==='PAYOUT_NOT_PENDING');
   assert.equal(db.calls.some(x=>x.sql?.includes('INSERT INTO transactions')),false);
