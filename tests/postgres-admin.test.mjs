@@ -215,3 +215,43 @@ test('seller list rejects unknown moderation states',async()=>{
   const repo=createPostgresAdminRepository(fakeDatabase(()=>[]));
   await assert.rejects(repo.listSellers({status:'UNKNOWN'}),e=>e.status===400&&e.code==='INVALID_SELLER_STATUS');
 });
+
+test('category deletion refuses categories that still contain products',async()=>{
+  const db=fakeDatabase((method,sql)=>sql.includes('FROM categories WHERE slug=')?{id:'cat-1'}:sql.includes('FROM products WHERE category_id=')?{id:'p-1'}:undefined);
+  const repo=createPostgresAdminRepository(db);
+  await assert.rejects(repo.deleteCategory({actorId:'admin-1',slug:'grocery'}),e=>e.status===409&&e.code==='CATEGORY_IN_USE');
+  assert.equal(db.calls.some(x=>x.sql?.includes('DELETE FROM categories')),false);
+});
+
+test('category creation normalizes slug and writes audit trail',async()=>{
+  const db=fakeDatabase(()=>undefined);
+  const repo=createPostgresAdminRepository(db,{createId:()=> 'category-1'});
+  assert.deepEqual(await repo.createCategory({actorId:'admin-1',nameBn:'গ্রোসারি',nameEn:'Grocery',slug:'Grocery & Food'}),{id:'category-1',slug:'grocery-food'});
+  assert.ok(db.calls.some(x=>x.sql?.includes('INSERT INTO categories')));
+  assert.ok(db.calls.some(x=>x.sql?.includes('INSERT INTO audit_logs')&&x.values[2]==='CATEGORY_CREATE'));
+});
+
+test('brand deletion detaches products before removing the brand',async()=>{
+  const db=fakeDatabase((method,sql)=>sql.includes('FROM brands WHERE slug=')?{id:'brand-1'}:undefined);
+  const repo=createPostgresAdminRepository(db);
+  assert.deepEqual(await repo.deleteBrand({actorId:'admin-1',slug:'brand-one'}),{deleted:true});
+  assert.ok(db.calls.some(x=>x.sql?.includes('UPDATE products SET brand_id=NULL')&&x.values[0]==='brand-1'));
+  assert.ok(db.calls.some(x=>x.sql?.includes('DELETE FROM brands')));
+});
+
+test('coupon creation stores fixed discounts as integer paisa and validates limits',async()=>{
+  const db=fakeDatabase(()=>undefined);
+  const repo=createPostgresAdminRepository(db);
+  assert.deepEqual(await repo.createCoupon({actorId:'admin-1',body:{code:'SAVE_50',type:'FIXED',value:50,min_order_bdt:500,max_uses:100}}),{code:'SAVE_50'});
+  const insert=db.calls.find(x=>x.sql?.includes('INSERT INTO coupons'));
+  assert.deepEqual(insert.values,['SAVE_50','FIXED',5000,50000,100,null]);
+  await assert.rejects(repo.createCoupon({actorId:'admin-1',body:{code:'BAD',type:'PERCENT',value:99}}),e=>e.status===400&&e.code==='INVALID_COUPON_VALUE');
+});
+
+test('coupon toggle persists active state and audit metadata',async()=>{
+  const db=fakeDatabase(()=>({changes:1}));
+  const repo=createPostgresAdminRepository(db);
+  assert.deepEqual(await repo.toggleCoupon({actorId:'admin-1',code:'summer',active:false}),{code:'SUMMER',active:false});
+  assert.ok(db.calls.some(x=>x.sql?.includes('UPDATE coupons SET active=')&&x.values[0]===0));
+  assert.ok(db.calls.some(x=>x.sql?.includes('INSERT INTO audit_logs')&&x.values[2]==='COUPON_TOGGLE'));
+});
