@@ -42,6 +42,72 @@ export function createPostgresAdminRepository(database,{createId=randomUUID,cloc
     });
   }
 
+  async function listSellers({status,limit:pageSize=100}={}) {
+    const state=status?String(status).toUpperCase():null;
+    if(state&&!['PENDING','APPROVED','REJECTED','SUSPENDED'].includes(state)) throw fail(400,'INVALID_SELLER_STATUS','বিক্রেতার স্ট্যাটাস সঠিক নয়');
+    const rows=await query('SELECT u.id,u.name,u.phone,u.email,u.status user_status,sp.shop_name,sp.shop_address,sp.business_info,sp.kyc_nid,sp.kyc_trade_license,sp.status,sp.commission_bps,sp.created_at FROM seller_profiles sp JOIN users u ON u.id=sp.user_id'+(state?' WHERE sp.status=?':'')+' ORDER BY sp.created_at DESC LIMIT ?').all(...(state?[state,limit(pageSize)]:[limit(pageSize)]));
+    return rows;
+  }
+
+  async function getSeller(sellerId) {
+    const row=await query('SELECT u.id,u.name,u.phone,u.email,u.status user_status,sp.shop_name,sp.shop_address,sp.business_info,sp.kyc_nid,sp.kyc_trade_license,sp.status,sp.commission_bps,sp.created_at FROM seller_profiles sp JOIN users u ON u.id=sp.user_id WHERE u.id=?').get(String(sellerId));
+    if(!row) throw fail(404,'SELLER_NOT_FOUND','বিক্রেতা পাওয়া যায়নি');
+    return row;
+  }
+
+  async function decideSeller({sellerId,actorId,decision,reason=''}) {
+    const action=String(decision||'').toUpperCase();
+    const states={APPROVE:['APPROVED','ACTIVE'],REJECT:['REJECTED','ACTIVE'],SUSPEND:['SUSPENDED','SUSPENDED'],ACTIVATE:['APPROVED','ACTIVE']};
+    if(!states[action]) throw fail(400,'INVALID_SELLER_DECISION','বিক্রেতার সিদ্ধান্ত সঠিক নয়');
+    const [sellerStatus,userStatus]=states[action],why=String(reason??'').trim().slice(0,300),at=stamp();
+    return database.tx(async()=>{
+      const seller=await query('SELECT user_id,status FROM seller_profiles WHERE user_id=? FOR UPDATE').get(String(sellerId));
+      if(!seller) throw fail(404,'SELLER_NOT_FOUND','বিক্রেতা পাওয়া যায়নি');
+      await query('UPDATE seller_profiles SET status=? WHERE user_id=?').run(sellerStatus,String(sellerId));
+      await query('UPDATE users SET status=? WHERE id=?').run(userStatus,String(sellerId));
+      if(userStatus==='SUSPENDED') await query('DELETE FROM sessions WHERE user_id=?').run(String(sellerId));
+      await query('INSERT INTO audit_logs(id,actor_id,action,entity,entity_id,detail,created_at) VALUES(?,?,?,?,?,?,?)').run(makeId(),String(actorId),'SELLER_'+sellerStatus,'seller',String(sellerId),JSON.stringify({reason:why}),at);
+      await query('INSERT INTO notifications(id,user_id,title,body,read,created_at) VALUES(?,?,?,?,0,?)').run(makeId(),String(sellerId),'বিক্রেতা অ্যাকাউন্ট: '+sellerStatus,why,at);
+      return {id:String(sellerId),status:sellerStatus};
+    });
+  }
+
+  async function setCommission({sellerId,actorId,commissionBps}) {
+    const bps=Number(commissionBps);
+    if(!Number.isInteger(bps)||bps<0||bps>5000) throw fail(400,'INVALID_COMMISSION','কমিশন ০–৫০% এর মধ্যে হতে হবে');
+    return database.tx(async()=>{
+      const seller=await query('SELECT user_id FROM seller_profiles WHERE user_id=? FOR UPDATE').get(String(sellerId));
+      if(!seller) throw fail(404,'SELLER_NOT_FOUND','বিক্রেতা পাওয়া যায়নি');
+      await query('UPDATE seller_profiles SET commission_bps=? WHERE user_id=?').run(bps,String(sellerId));
+      await query('INSERT INTO audit_logs(id,actor_id,action,entity,entity_id,detail,created_at) VALUES(?,?,?,?,?,?,?)').run(makeId(),String(actorId),'COMMISSION_SET','seller',String(sellerId),JSON.stringify({commission_bps:bps}),stamp());
+      return {id:String(sellerId),commission_bps:bps};
+    });
+  }
+
+  async function listPendingProducts() {
+    return query("SELECT p.id,p.name_bn,p.name_en,p.price_paisa,p.discount_paisa,p.stock,p.status,c.slug category_slug,COALESCE(sp.shop_name,u.name) seller_name,(SELECT url FROM product_images i WHERE i.product_id=p.id ORDER BY position LIMIT 1) image FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN users u ON u.id=p.seller_id LEFT JOIN seller_profiles sp ON sp.user_id=p.seller_id WHERE p.status='PENDING_REVIEW' ORDER BY p.created_at,p.id").all();
+  }
+
+  async function moderateProduct({productId,actorId,decision,reason=''}) {
+    const action=String(decision||'').toUpperCase();
+    const transitions={APPROVE:{to:'ACTIVE',from:['PENDING_REVIEW']},REJECT:{to:'REJECTED',from:['PENDING_REVIEW']},SUSPEND:{to:'SUSPENDED',from:['ACTIVE']},UNSUSPEND:{to:'ACTIVE',from:['SUSPENDED']}};
+    const selected=transitions[action];
+    if(!selected) throw fail(400,'INVALID_PRODUCT_DECISION','পণ্যের সিদ্ধান্ত সঠিক নয়');
+    const why=String(reason??'').trim().slice(0,300),at=stamp();
+    return database.tx(async()=>{
+      const product=await query('SELECT id,seller_id,status FROM products WHERE id=? FOR UPDATE').get(String(productId));
+      if(!product||!selected.from.includes(product.status)) throw fail(409,'PRODUCT_NOT_MODERATABLE','পণ্যটি এই সিদ্ধান্তের জন্য উপযুক্ত নয়');
+      if(selected.to==='ACTIVE') {
+        const seller=await query('SELECT status FROM seller_profiles WHERE user_id=?').get(product.seller_id);
+        if(seller?.status!=='APPROVED') throw fail(409,'SELLER_NOT_APPROVED','আগে বিক্রেতাকে অনুমোদন দিতে হবে');
+      }
+      await query('UPDATE products SET status=?,active=?,updated_at=? WHERE id=?').run(selected.to,selected.to==='ACTIVE'?1:0,at,String(productId));
+      await query('INSERT INTO audit_logs(id,actor_id,action,entity,entity_id,detail,created_at) VALUES(?,?,?,?,?,?,?)').run(makeId(),String(actorId),'PRODUCT_'+selected.to,'product',String(productId),JSON.stringify({reason:why}),at);
+      if(product.seller_id) await query('INSERT INTO notifications(id,user_id,title,body,read,created_at) VALUES(?,?,?,?,0,?)').run(makeId(),product.seller_id,'পণ্যের স্ট্যাটাস: '+selected.to,why,at);
+      return {id:String(productId),status:selected.to};
+    });
+  }
+
   async function financeSummary() {
     const row=await query(`SELECT
       COALESCE((SELECT SUM(total_paisa) FROM orders WHERE status NOT IN ('CANCELLED','AWAITING_PAYMENT')),0) gross,
@@ -89,5 +155,5 @@ export function createPostgresAdminRepository(database,{createId=randomUUID,cloc
     return {total_revenue_bdt:money(row.revenue),total_orders:integer(row.orders,'orders'),total_customers:integer(row.customers,'customers'),total_sellers:integer(row.sellers,'sellers'),pending_seller_applications:integer(row.pending_sellers,'pending_sellers'),pending_product_approvals:integer(row.pending_products,'pending_products'),total_products:integer(row.products,'products'),active_products:integer(row.active_products,'active_products'),cancelled_orders:integer(row.cancelled_orders,'cancelled_orders'),pending_payouts:integer(row.pending_payouts,'pending_payouts'),pending_payout_amount_bdt:money(row.pending_payout_amount),platform_commission_bdt:money(row.commission)};
   }
 
-  return Object.freeze({listPayouts,decidePayout,financeSummary,listTransactions,financeReport,listAuditLogs,dashboard});
+  return Object.freeze({listPayouts,decidePayout,listSellers,getSeller,decideSeller,setCommission,listPendingProducts,moderateProduct,financeSummary,listTransactions,financeReport,listAuditLogs,dashboard});
 }
