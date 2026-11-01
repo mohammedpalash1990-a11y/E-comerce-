@@ -25,3 +25,21 @@ test('frontend API configuration is explicit and keeps API version out of the ba
   assert.match(config, /window\.HAAT_API_BASE\s*=\s*''/);
   assert.match(config, /do not append \/api\/v1/);
 });
+
+test('storefront does not silently present hard-coded demo products as live inventory', async () => {
+  const html = await read('apps/web/public/index.html');
+  assert.match(html, /let products=\[\]/);
+  assert.match(html, /লাইভ ক্যাটালগ অফলাইন/);
+  assert.match(html, /fetch\(apiUrl\('\/health'\)/);
+  assert.match(html, /haat_cart_v1/);
+  assert.doesNotMatch(html, /id:'p[1-8]',bn:/);
+});
+
+test('seller and admin portals visibly report backend connectivity', async () => {
+  const [seller, admin] = await Promise.all([read('apps/web/public/seller.html'), read('apps/web/public/admin.html')]);
+  for (const html of [seller, admin]) {
+    assert.match(html, /id="apiStatus"/);
+    assert.match(html, /checkApiStatus\(\)/);
+    assert.match(html, /\/health/);
+  }
+});
