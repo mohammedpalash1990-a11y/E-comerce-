@@ -35,7 +35,7 @@ async function readBody(req, limit) {
   for await (const c of req) { size += c.length; if (size > limit) { tooBig = true; if (size > limit * 20) req.destroy(); continue; } chunks.push(c); } // drain instead of resetting the socket
   if (tooBig) throw new HttpError(413, 'Payload too large');
   if (!size) return {};
-  try { const v = JSON.parse(Buffer.concat(chunks).toString('utf8')); return v && typeof v === 'object' ? v : {}; } catch { throw new HttpError(400, 'Invalid JSON'); }
+  try { const v = JSON.parse(Buffer.concat(chunks).toString('utf8')); if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error('JSON body must be an object'); return v; } catch { throw new HttpError(400, 'Invalid JSON object'); }
 }
 export function sessionUser(req) {
   const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
