@@ -55,7 +55,7 @@ export default function register(route, ok) {
   route('GET', '/api/v1/customer/wishlist', C, ({ user }) => ok(q(`SELECT p.id,p.name_bn,p.name_en,p.price_paisa,p.discount_paisa,p.stock FROM wishlists w JOIN products p ON p.id=w.product_id WHERE w.user_id=? AND ${LIVE} ORDER BY w.created_at DESC`).all(user.id).map(productView)));
   route('POST', '/api/v1/customer/wishlist', C, ({ user, body }) => {
     if (!q(`SELECT 1 FROM products p WHERE p.id=? AND ${LIVE}`).get(String(body.productId || ''))) throw new HttpError(404, 'Product not found');
-    q('INSERT OR IGNORE INTO wishlists VALUES(?,?,?)').run(user.id, body.productId, now()); return ok({ added: true }, 201);
+    q('INSERT INTO wishlists VALUES(?,?,?) ON CONFLICT DO NOTHING').run(user.id, body.productId, now()); return ok({ added: true }, 201);
   });
   route('DELETE', '/api/v1/customer/wishlist/:pid', C, ({ user, params }) => { q('DELETE FROM wishlists WHERE user_id=? AND product_id=?').run(user.id, params[0]); return ok({ removed: true }); });
 
