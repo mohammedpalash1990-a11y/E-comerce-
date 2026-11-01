@@ -56,7 +56,7 @@ export default function register(route, ok) {
   const seller = sid => { const s = q(SELLER_SQL + ' WHERE u.id=?').get(sid); if (!s) throw new HttpError(404, 'Seller not found'); return s; };
   route('GET', '/api/v1/admin/sellers', A, ({ url }) => { const st = url.searchParams.get('status'); return ok(q(SELLER_SQL + (st ? ' WHERE sp.status=?' : '') + ' ORDER BY sp.created_at DESC LIMIT ?').all(...(st ? [st] : []), lim(url))); });
   route('GET', '/api/v1/admin/sellers/:id', A, ({ params }) => { const { available_paisa, ...b } = sellerBalance(params[0]); return ok({ ...seller(params[0]), balance: b, product_count: q("SELECT COUNT(*) n FROM products WHERE seller_id=? AND status<>'ARCHIVED'").get(params[0]).n }); });
-  route('GET', '/api/v1/admin/sellers/:id/products', A, ({ params }) => ok(q('SELECT id,name_bn,name_en,price_paisa,discount_paisa,stock,status FROM products WHERE seller_id=? ORDER BY rowid DESC').all(params[0]).map(productView)));
+  route('GET', '/api/v1/admin/sellers/:id/products', A, ({ params }) => ok(q('SELECT id,name_bn,name_en,price_paisa,discount_paisa,stock,status FROM products WHERE seller_id=? ORDER BY created_at DESC,id DESC').all(params[0]).map(productView)));
   route('GET', '/api/v1/admin/sellers/:id/orders', A, ({ params }) => ok(q('SELECT id,order_id,status,subtotal_paisa,commission_paisa,net_paisa,created_at FROM seller_orders WHERE seller_id=? ORDER BY created_at DESC LIMIT 200').all(params[0]).map(o => ({ id: o.id, orderNumber: orderNo(o.order_id), status: o.status, subtotal_bdt: bdt(o.subtotal_paisa), commission_bdt: bdt(o.commission_paisa), net_bdt: bdt(o.net_paisa), created_at: o.created_at }))));
   route('GET', '/api/v1/admin/sellers/:id/finance', A, ({ params }) => { const { available_paisa, ...b } = sellerBalance(params[0]); return ok(b); });
   const sellerAct = (act, status, userStatus) => route('POST', '/api/v1/admin/sellers/:id/' + act, A, ({ user, params, body }) => {
@@ -75,9 +75,9 @@ export default function register(route, ok) {
   route('GET', '/api/v1/admin/products', A, ({ url }) => {
     const st = url.searchParams.get('status'), t = '%' + (url.searchParams.get('q') || '') + '%';
     return ok(q(`SELECT p.id,p.name_bn,p.name_en,p.price_paisa,p.discount_paisa,p.stock,p.status,c.slug category_slug,sp.shop_name seller_name FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN seller_profiles sp ON sp.user_id=p.seller_id
-      WHERE p.status<>'ARCHIVED' AND (p.name_bn LIKE ? OR p.name_en LIKE ?)${st ? ' AND p.status=?' : ''} ORDER BY p.rowid DESC LIMIT ?`).all(t, t, ...(st ? [st] : []), lim(url)).map(productView));
+      WHERE p.status<>'ARCHIVED' AND (p.name_bn LIKE ? OR p.name_en LIKE ?)${st ? ' AND p.status=?' : ''} ORDER BY p.created_at DESC,p.id DESC LIMIT ?`).all(t, t, ...(st ? [st] : []), lim(url)).map(productView));
   });
-  route('GET', '/api/v1/admin/products/pending', A, () => ok(q("SELECT p.id,p.name_bn,p.name_en,p.price_paisa,p.discount_paisa,p.stock,p.status,c.slug category_slug,COALESCE(sp.shop_name,u.name) seller_name,(SELECT url FROM product_images i WHERE i.product_id=p.id ORDER BY position LIMIT 1) image FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN users u ON u.id=p.seller_id LEFT JOIN seller_profiles sp ON sp.user_id=p.seller_id WHERE p.status='PENDING_REVIEW' ORDER BY p.rowid").all().map(productView)));
+  route('GET', '/api/v1/admin/products/pending', A, () => ok(q("SELECT p.id,p.name_bn,p.name_en,p.price_paisa,p.discount_paisa,p.stock,p.status,c.slug category_slug,COALESCE(sp.shop_name,u.name) seller_name,(SELECT url FROM product_images i WHERE i.product_id=p.id ORDER BY position LIMIT 1) image FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN users u ON u.id=p.seller_id LEFT JOIN seller_profiles sp ON sp.user_id=p.seller_id WHERE p.status='PENDING_REVIEW' ORDER BY p.created_at,p.id").all().map(productView)));
   const moderate = (act, toStatus, from) => route('POST', '/api/v1/admin/products/:pid/' + act, A, ({ user, params, body }) => {
     const p = q(`SELECT id,seller_id FROM products WHERE id=? AND status IN(${from.map(() => '?').join(',')})`).get(params[0], ...from);
     if (!p) throw new HttpError(404, 'Pending product not found');
@@ -113,10 +113,10 @@ export default function register(route, ok) {
     sellers: q('SELECT so.id,so.status,so.subtotal_paisa,so.commission_paisa,sp.shop_name FROM seller_orders so LEFT JOIN seller_profiles sp ON sp.user_id=so.seller_id WHERE so.order_id=?').all(o.id).map(s => ({ id: s.id, shop: s.shop_name, status: s.status, subtotal_bdt: bdt(s.subtotal_paisa), commission_bdt: bdt(s.commission_paisa), shipment: q('SELECT id,provider,tracking_id,status FROM shipments WHERE seller_order_id=? ORDER BY created_at DESC LIMIT 1').get(s.id) || null })) });
   route('GET', '/api/v1/admin/orders', A, ({ url }) => {
     const st = url.searchParams.get('status'), t = '%' + (url.searchParams.get('q') || '') + '%';
-    return ok(q(`SELECT o.* FROM orders o JOIN users u ON u.id=o.user_id WHERE (o.id LIKE ? OR u.name LIKE ? OR u.phone LIKE ?)${st ? ' AND o.status=?' : ''} ORDER BY o.created_at DESC,o.rowid DESC LIMIT ?`).all(t.replace('BD-', '').toLowerCase(), t, t, ...(st ? [st] : []), lim(url, 200)).map(adminOrder));
+    return ok(q(`SELECT o.* FROM orders o JOIN users u ON u.id=o.user_id WHERE (o.id LIKE ? OR u.name LIKE ? OR u.phone LIKE ?)${st ? ' AND o.status=?' : ''} ORDER BY o.created_at DESC,o.id DESC LIMIT ?`).all(t.replace('BD-', '').toLowerCase(), t, t, ...(st ? [st] : []), lim(url, 200)).map(adminOrder));
   });
   const order = oid => q('SELECT * FROM orders WHERE id=?').get(oid) || (() => { throw new HttpError(404, 'Order not found'); })();
-  route('GET', '/api/v1/admin/orders/:id', A, ({ params }) => ok({ ...adminOrder(order(params[0])), history: q('SELECT status,note,created_at,seller_order_id,actor_id FROM order_events WHERE order_id=? ORDER BY created_at,rowid').all(params[0]), payments: q('SELECT id,method,amount_paisa,status,gateway_txn_id,created_at FROM payments WHERE order_id=? ORDER BY created_at').all(params[0]).map(p => ({ ...p, amount_bdt: bdt(p.amount_paisa) })) }));
+  route('GET', '/api/v1/admin/orders/:id', A, ({ params }) => ok({ ...adminOrder(order(params[0])), history: q('SELECT status,note,created_at,seller_order_id,actor_id FROM order_events WHERE order_id=? ORDER BY created_at,id').all(params[0]), payments: q('SELECT id,method,amount_paisa,status,gateway_txn_id,created_at FROM payments WHERE order_id=? ORDER BY created_at').all(params[0]).map(p => ({ ...p, amount_bdt: bdt(p.amount_paisa) })) }));
   route('POST', '/api/v1/admin/orders/:id/status', A, ({ user, params, body }) => {
     const next = String(body.status || '');
     if (!['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'].includes(next)) throw bad('Invalid order status');
@@ -174,12 +174,12 @@ export default function register(route, ok) {
       paid_out_bdt: bdt(n("SELECT COALESCE(SUM(amount_paisa),0) n FROM payouts WHERE status='APPROVED'")), pending_payouts_bdt: bdt(n("SELECT COALESCE(SUM(amount_paisa),0) n FROM payouts WHERE status='REQUESTED'")) });
   });
   route('GET', '/api/v1/admin/finance/transactions', A, ({ url }) => { const k = url.searchParams.get('kind');
-    return ok(q('SELECT id,kind,order_id,seller_order_id,seller_id,amount_paisa,ref,created_at FROM transactions' + (k ? ' WHERE kind=?' : '') + ' ORDER BY created_at DESC,rowid DESC LIMIT ?').all(...(k ? [k] : []), lim(url, 200)).map(t => ({ ...t, amount_bdt: bdt(t.amount_paisa) }))); });
+    return ok(q('SELECT id,kind,order_id,seller_order_id,seller_id,amount_paisa,ref,created_at FROM transactions' + (k ? ' WHERE kind=?' : '') + ' ORDER BY created_at DESC,id DESC LIMIT ?').all(...(k ? [k] : []), lim(url, 200)).map(t => ({ ...t, amount_bdt: bdt(t.amount_paisa) }))); });
   route('GET', '/api/v1/admin/finance/report', A, ({ url }) => {
     const from = (url.searchParams.get('from') || '0000').slice(0, 10), to = (url.searchParams.get('to') || '9999').slice(0, 10) + 'T99';
     return ok(q("SELECT substr(created_at,1,10) day,COUNT(*) orders,SUM(total_paisa) gross FROM orders WHERE status NOT IN('CANCELLED','AWAITING_PAYMENT') AND created_at>=? AND created_at<=? GROUP BY day ORDER BY day").all(from, to).map(r => ({ day: r.day, orders: r.orders, gross_bdt: bdt(r.gross) })));
   });
-  route('GET', '/api/v1/admin/audit-logs', A, ({ url }) => ok(q('SELECT id,actor_id,action,entity,entity_id,detail,created_at FROM audit_logs ORDER BY created_at DESC,rowid DESC LIMIT ?').all(lim(url, 200))));
+  route('GET', '/api/v1/admin/audit-logs', A, ({ url }) => ok(q('SELECT id,actor_id,action,entity,entity_id,detail,created_at FROM audit_logs ORDER BY created_at DESC,id DESC LIMIT ?').all(lim(url, 200))));
 
   // ----- coupons -----
   route('GET', '/api/v1/admin/coupons', A, () => ok(q('SELECT * FROM coupons ORDER BY code').all()));
