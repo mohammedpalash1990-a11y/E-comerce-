@@ -33,8 +33,11 @@ test('storefront keeps its existing product section and links to account portal'
 
 test('customer account inline JavaScript parses without syntax errors', async () => {
   const vm = await import('node:vm');
-  const scripts = [...account.matchAll(/<script(?:\\s[^>]*)?>([\\s\\S]*?)<\\/script>/gi)]
-    .map(match => match[1].trim()).filter(Boolean);
+  const scripts = account.split('<script').slice(1).map(part => {
+    const open = part.indexOf('>');
+    const close = part.indexOf('</script>');
+    return open >= 0 && close > open ? part.slice(open + 1, close).trim() : '';
+  }).filter(Boolean);
   assert.ok(scripts.length > 0, 'expected inline account application script');
   for (const script of scripts) new vm.Script(script, { filename: 'account.html:inline-script' });
 });
