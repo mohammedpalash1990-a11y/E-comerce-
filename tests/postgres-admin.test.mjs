@@ -287,3 +287,18 @@ test('category and brand slugs preserve Bengali characters',async()=>{
   const repo=createPostgresAdminRepository(db,{createId:()=> 'category-bn'});
   assert.deepEqual(await repo.createCategory({actorId:'admin-1',nameBn:'খাবার',nameEn:''}),{id:'category-bn',slug:'খাবার'});
 });
+
+test('admin shipping charge updates pending order and payment amount atomically',async()=>{
+  const db=fakeDatabase((method,sql)=>sql.includes('FROM orders WHERE id=')?{id:'order-ship',subtotal_paisa:'100000',shipping_paisa:'5000',discount_paisa:'10000',total_paisa:'95000',payment_status:'PENDING',status:'CONFIRMED'}:undefined);
+  const repo=createPostgresAdminRepository(db,{createId:()=> 'audit-ship'});
+  assert.deepEqual(await repo.setShippingCharge({orderId:'order-ship',actorId:'admin-1',shippingBdt:80}),{id:'order-ship',shipping_bdt:80,total_bdt:970});
+  assert.ok(db.calls.some(x=>x.sql?.includes('UPDATE payments SET amount_paisa=')&&x.values[0]===97000));
+  assert.ok(db.calls.some(x=>x.sql?.includes('INSERT INTO audit_logs')&&x.values[2]==='SHIPPING_CHARGE_SET'));
+});
+
+test('admin shipping charge cannot mutate paid orders',async()=>{
+  const db=fakeDatabase((method,sql)=>sql.includes('FROM orders WHERE id=')?{id:'order-paid',subtotal_paisa:'10000',shipping_paisa:'0',discount_paisa:'0',payment_status:'PAID',status:'CONFIRMED'}:undefined);
+  const repo=createPostgresAdminRepository(db);
+  await assert.rejects(repo.setShippingCharge({orderId:'order-paid',actorId:'admin-1',shippingBdt:50}),e=>e.status===409&&e.code==='ORDER_SHIPPING_LOCKED');
+  assert.equal(db.calls.some(x=>x.sql?.includes('UPDATE orders SET shipping_paisa=')),false);
+});
