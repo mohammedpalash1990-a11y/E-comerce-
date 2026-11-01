@@ -3,6 +3,7 @@ import { initiateGateway, signCallback, verifySignature } from './gateways.mjs';
 import { createPostgresInventoryRepository } from './postgres-inventory.mjs';
 import { createPostgresCheckoutRepository } from './postgres-checkout.mjs';
 import { createPostgresOrdersPaymentsRepository } from './postgres-orders-payments.mjs';
+import { createPostgresCustomerRepository } from './postgres-customer.mjs';
 
 function toHttpError(error) {
   if (error instanceof HttpError) return error;
@@ -64,7 +65,8 @@ export function createPostgresDomainRepositories(database, options = {}) {
       shippingForPaisa: options.shippingForPaisa,
       ...(options.checkoutOptions || {})
     }),
-    orders: options.ordersRepository || createPostgresOrdersPaymentsRepository(database, options.ordersOptions)
+    orders: options.ordersRepository || createPostgresOrdersPaymentsRepository(database, options.ordersOptions),
+    customer: options.customerRepository || createPostgresCustomerRepository(database)
   });
 }
 
@@ -78,7 +80,18 @@ export default function registerPostgresDomain(route, ok, {
   if (!repositories?.inventory || !repositories?.checkout || !repositories?.orders) {
     throw new TypeError('PostgreSQL domain repositories are required');
   }
-  const { inventory, checkout, orders } = repositories;
+  const { inventory, checkout, orders, customer } = repositories;
+  if (!customer) throw new TypeError('PostgreSQL customer repository is required');
+
+  // ----- customer addresses, wishlist and verified-purchase reviews -----
+  route('GET', '/api/v1/customer/addresses', ['CUSTOMER'], invoke(ok, async ({ user }) => customer.listAddresses(user.id)));
+  route('POST', '/api/v1/customer/addresses', ['CUSTOMER'], invoke(ok, async ({ user, body }) => customer.createAddress({ user, body }), 201));
+  route('PUT', '/api/v1/customer/addresses/:id', ['CUSTOMER'], invoke(ok, async ({ user, params, body }) => customer.updateAddress({ user, addressId: params[0], body })));
+  route('DELETE', '/api/v1/customer/addresses/:id', ['CUSTOMER'], invoke(ok, async ({ user, params }) => customer.deleteAddress(user.id, params[0])));
+  route('GET', '/api/v1/customer/wishlist', ['CUSTOMER'], invoke(ok, async ({ user }) => customer.listWishlist(user.id)));
+  route('POST', '/api/v1/customer/wishlist', ['CUSTOMER'], invoke(ok, async ({ user, body }) => customer.addWishlist(user.id, body.productId), 201));
+  route('DELETE', '/api/v1/customer/wishlist/:pid', ['CUSTOMER'], invoke(ok, async ({ user, params }) => customer.removeWishlist(user.id, params[0])));
+  route('POST', '/api/v1/customer/products/:id/reviews', ['CUSTOMER'], invoke(ok, async ({ user, params, body }) => customer.saveReview({ userId: user.id, productId: params[0], body }), 201));
 
   // ----- shared stock ledger / seller inventory -----
   route('GET', '/api/v1/seller/products/:id/inventory', ['SELLER'], invoke(ok, async ({ user, params }) => {
