@@ -76,8 +76,7 @@ test('payout rejection releases the reservation and records audit without a payo
 });
 
 test('finance summary uses approved revenue and computes seller available balance',async()=>{
-  const db=fakeDatabase((method,sql)=>sql.includes('SELECT
-      COALESCE')?{gross:'100000',refunds:'5000',commission:'8000',seller_earnings:'70000',paid_out:'10000',pending_payouts:'5000',seller_pending:'20000'}:undefined);
+  const db=fakeDatabase((method,sql)=>sql.includes('COALESCE((SELECT SUM(total_paisa)')?{gross:'100000',refunds:'5000',commission:'8000',seller_earnings:'70000',paid_out:'10000',pending_payouts:'5000',seller_pending:'20000'}:undefined);
   const repo=createPostgresAdminRepository(db);
   const summary=await repo.financeSummary();
   assert.equal(summary.gross_sales_bdt,1000);
