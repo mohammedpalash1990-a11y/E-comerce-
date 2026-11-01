@@ -5,11 +5,11 @@ export function postgresPlaceholders(sql) {
   let out = '', index = 0, state = 'normal', dollarTag = '';
   for (let i = 0; i < sql.length; i++) {
     const ch = sql[i], next = sql[i + 1];
-    if (state === 'single') {
+    if (state === 'single' || state === 'escape-single') {
       out += ch;
       if (ch === "'" && next === "'") { out += next; i++; }
       else if (ch === "'") state = 'normal';
-      else if (ch === '\\' && next) { out += next; i++; }
+      else if (state === 'escape-single' && ch === '\\' && next) { out += next; i++; }
       continue;
     }
     if (state === 'double') {
@@ -33,7 +33,13 @@ export function postgresPlaceholders(sql) {
       else out += ch;
       continue;
     }
-    if (ch === "'") { state = 'single'; out += ch; continue; }
+    if (ch === "'") {
+      const previous = sql[i - 1], beforePrevious = sql[i - 2];
+      const isEscapeString = (previous === 'E' || previous === 'e') && (!beforePrevious || !/[A-Za-z0-9_$]/.test(beforePrevious));
+      state = isEscapeString ? 'escape-single' : 'single';
+      out += ch;
+      continue;
+    }
     if (ch === '"') { state = 'double'; out += ch; continue; }
     if (ch === '-' && next === '-') { state = 'line-comment'; out += '--'; i++; continue; }
     if (ch === '/' && next === '*') { state = 'block-comment'; out += '/*'; i++; continue; }
@@ -44,7 +50,7 @@ export function postgresPlaceholders(sql) {
     if (ch === '?') { out += '$' + (++index); continue; }
     out += ch;
   }
-  if (state === 'single' || state === 'double' || state === 'block-comment' || state === 'dollar') {
+  if (state === 'single' || state === 'escape-single' || state === 'double' || state === 'block-comment' || state === 'dollar') {
     throw new SyntaxError('Unterminated SQL literal or comment');
   }
   return { text: out, count: index };
