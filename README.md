@@ -26,11 +26,11 @@
 - Multi-vendor checkout with seller sub-orders and commission ledger entries
 - Customer order history, address and account endpoints, notifications
 - Sandbox payment and courier adapters only
-- PostgreSQL repositories for catalog, authentication, inventory, checkout and order/payment domains
+- PostgreSQL repositories for catalog, authentication, customer addresses/wishlist/reviews, inventory, checkout and order/payment domains
 - PostgreSQL connection-pool factory and an advisory-lock migration bootstrap command
 
 ## Still required before production
-- PostgreSQL implementations for the remaining customer address/profile/wishlist/review, seller product/finance, and admin management/finance routes
+- PostgreSQL implementations for remaining seller product/finance and admin management/finance routes
 - PostgreSQL API composition that does not import or execute SQLite-backed routes or seed data
 - Real Neon/PostgreSQL integration tests and full browser E2E coverage
 - Public Node.js API hosting, persistent production database, secrets and monitoring
