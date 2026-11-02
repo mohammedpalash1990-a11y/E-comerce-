@@ -13,10 +13,10 @@ test('catalogue exposes an accessible sorting control with stable default order'
 });
 
 test('price and stock sorting operate on a filtered copy, not the source catalogue', () => {
-  assert.match(html, /const list=products\.filter\(p=>/);
-  assert.match(html, /if\(sortBy==='price-asc'\)list\.sort\(\(a,b\)=>a\.price-b\.price\)/);
-  assert.match(html, /if\(sortBy==='price-desc'\)list\.sort\(\(a,b\)=>b\.price-a\.price\)/);
-  assert.match(html, /if\(sortBy==='stock-desc'\)list\.sort\(\(a,b\)=>b\.stock-a\.stock\)/);
+  assert.match(html, /function getVisibleProducts\(searchValue,category='all',sort='featured'\)/);
+  assert.match(html, /if\(sort==='price-asc'\)list\.sort\(\(a,b\)=>a\.price-b\.price\)/);
+  assert.match(html, /if\(sort==='price-desc'\)list\.sort\(\(a,b\)=>b\.price-a\.price\)/);
+  assert.match(html, /if\(sort==='stock-desc'\)list\.sort\(\(a,b\)=>b\.stock-a\.stock\)/);
 });
 
 test('every product card offers a product-specific details action', () => {
