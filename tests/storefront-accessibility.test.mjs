@@ -15,7 +15,7 @@ test('storefront exposes a keyboard skip link and a named search landmark', () =
 test('category controls expose their selected state to assistive technology', () => {
   assert.match(html, /role="group" aria-label="পণ্য ক্যাটাগরি"/);
   assert.match(html, /aria-pressed=/);
-  assert.match(html, /\\(id===active\\)/);
+  assert.match(html, /id===active/);
 });
 
 test('cart drawer is a labelled modal with live cart updates', () => {
