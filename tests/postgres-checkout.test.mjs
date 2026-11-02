@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPostgresCheckoutRepository } from '../apps/api/src/postgres-checkout.mjs';
 
-function checkoutHarness({ stock = 8, coupon = null } = {}) {
+function checkoutHarness({ stock = 8, coupon = null, paymentMethods = ['COD'] } = {}) {
   const products = new Map([['p-1', {
     id: 'p-1', name_bn: 'শার্ট', price_paisa: '12000', discount_paisa: '10000',
     stock, active: 1, status: 'ACTIVE', seller_id: 'seller-1'
@@ -70,6 +70,7 @@ function checkoutHarness({ stock = 8, coupon = null } = {}) {
     notify: async (...args) => notices.push(args),
     addEvent: async (...args) => events.push(args),
     audit: async (...args) => audits.push(args),
+    paymentMethods,
     orderNo: id => 'HAAT-' + id
   });
   return { repo, products, calls, tables, notices, events, audits };
@@ -130,7 +131,7 @@ test('checkout refuses insufficient stock without inserting an order', async () 
 });
 
 test('checkout refuses online payment before transaction when gateway adapter is missing', async () => {
-  const h = checkoutHarness();
+  const h = checkoutHarness({ paymentMethods: ['COD', 'BKASH'] });
   await assert.rejects(h.repo.checkout(customer, {
     delivery, items: [{ productId: 'p-1', quantity: 1 }], payment_method: 'BKASH'
   }), /অনলাইন পেমেন্ট সার্ভিস/);
