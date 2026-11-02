@@ -33,3 +33,17 @@ test('placeholder conversion follows PostgreSQL standard strings and E-string es
   assert.equal(escaped.count, 1);
   assert.ok(escaped.text.endsWith(', $1'));
 });
+
+
+test('placeholder conversion ignores nested PostgreSQL block comments', () => {
+  const sql = 'SELECT ? /* outer ? /* nested ? */ still comment ? */ WHERE id=?';
+  const result = postgresPlaceholders(sql);
+  assert.equal(result.count, 2);
+  assert.equal(result.text, 'SELECT $1 /* outer ? /* nested ? */ still comment ? */ WHERE id=$2');
+});
+
+test('placeholder conversion resumes after a nested block comment closes', () => {
+  const result = postgresPlaceholders('SELECT /* a /* b */ c */ ?, ?');
+  assert.equal(result.count, 2);
+  assert.equal(result.text, 'SELECT /* a /* b */ c */ $1, $2');
+});

@@ -80,3 +80,91 @@ test('PostgreSQL unique constraint errors are recognized by SQLSTATE', () => {
   assert.equal(isPostgresUniqueViolation({ code: '23503' }), false);
   assert.equal(isPostgresUniqueViolation(new Error('UNIQUE constraint failed')), false);
 });
+
+
+test('adapter rejects an invalid pool before exposing query methods', () => {
+  assert.throws(() => createPostgresDatabase({ query() {} }), /query\(\) and connect\(\)/);
+  assert.throws(() => createPostgresDatabase(null), /query\(\) and connect\(\)/);
+});
+
+test('query facade rejects empty and non-string SQL before touching the pool', async () => {
+  const pool = fakePool(), db = createPostgresDatabase(pool);
+  assert.throws(() => db.q('   '), /non-empty string/);
+  assert.throws(() => db.q(null), /non-empty string/);
+  assert.equal(pool.calls.length, 0);
+});
+
+test('parameter mismatch is rejected before a database round trip', async () => {
+  const pool = fakePool(), db = createPostgresDatabase(pool);
+  await assert.rejects(db.q('SELECT ?, ?').all(1), /expects 2 parameters but received 1/);
+  await assert.rejects(db.q('SELECT ?').run(1, 2), /expects 1 parameters but received 2/);
+  assert.equal(pool.calls.length, 0);
+});
+
+test('nested transaction success releases its savepoint without committing the outer transaction', async () => {
+  const pool = fakePool(), db = createPostgresDatabase(pool);
+  await db.tx(async () => {
+    await db.q('SELECT 1').get();
+    await db.tx(async () => db.q('SELECT 2').get());
+    await db.q('SELECT 3').get();
+  });
+  assert.deepEqual(pool.calls.map(x => x.text), [
+    'BEGIN', 'SELECT 1', 'SAVEPOINT sp_1', 'SELECT 2',
+    'RELEASE SAVEPOINT sp_1', 'SELECT 3', 'COMMIT', 'RELEASE'
+  ]);
+});
+
+test('outer transaction rollback also undoes a successful nested savepoint', async () => {
+  const pool = fakePool(), db = createPostgresDatabase(pool);
+  await assert.rejects(db.tx(async () => {
+    await db.tx(async () => db.q('SELECT 1').get());
+    throw new Error('outer abort');
+  }), /outer abort/);
+  assert.deepEqual(pool.calls.map(x => x.text), [
+    'BEGIN', 'SAVEPOINT sp_1', 'SELECT 1', 'RELEASE SAVEPOINT sp_1', 'ROLLBACK', 'RELEASE'
+  ]);
+});
+
+test('synchronous transaction callback results are returned after commit', async () => {
+  const pool = fakePool(), db = createPostgresDatabase(pool);
+  assert.equal(await db.tx(() => 42), 42);
+  assert.deepEqual(pool.calls.map(x => x.text), ['BEGIN', 'COMMIT', 'RELEASE']);
+});
+
+test('failed BEGIN still releases the checked-out client', async () => {
+  const calls = [];
+  const pool = {
+    async query() { throw new Error('pool query should not be used'); },
+    async connect() { return {
+      async query(sql) { calls.push(sql); if (sql === 'BEGIN') throw new Error('begin failed'); },
+      release() { calls.push('RELEASE'); }
+    }; }
+  };
+  const db = createPostgresDatabase(pool);
+  await assert.rejects(db.tx(async () => 1), /begin failed/);
+  assert.deepEqual(calls, ['BEGIN', 'RELEASE']);
+});
+
+test('failed COMMIT attempts rollback and releases the client', async () => {
+  const calls = [];
+  const pool = {
+    async query() { throw new Error('pool query should not be used'); },
+    async connect() { return {
+      async query(sql) { calls.push(sql); if (sql === 'COMMIT') throw new Error('commit failed'); },
+      release() { calls.push('RELEASE'); }
+    }; }
+  };
+  const db = createPostgresDatabase(pool);
+  await assert.rejects(db.tx(async () => 1), /commit failed/);
+  assert.deepEqual(calls, ['BEGIN', 'COMMIT', 'ROLLBACK', 'RELEASE']);
+});
+
+test('nested transaction savepoint identifiers remain unique across sequential nesting', async () => {
+  const pool = fakePool(), db = createPostgresDatabase(pool);
+  await db.tx(async () => {
+    await db.tx(async () => 1);
+    await db.tx(async () => 2);
+  });
+  assert.ok(pool.calls.some(x => x.text === 'SAVEPOINT sp_1'));
+  assert.ok(pool.calls.some(x => x.text === 'SAVEPOINT sp_2'));
+});
