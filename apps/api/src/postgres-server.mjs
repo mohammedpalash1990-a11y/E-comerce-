@@ -40,13 +40,16 @@ function routeError(error, res, headers) {
 }
 async function readJsonBody(req) {
   const declared = Number(req.headers['content-length'] || 0);
-  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) throw Object.assign(new Error('Payload too large'), { status: 413 });
   const chunks = []; let size = 0;
+  let tooLarge = Number.isFinite(declared) && declared > MAX_BODY_BYTES;
+  // Drain the request even after the limit is exceeded so the server can return
+  // a deterministic 413 instead of resetting the client connection.
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > MAX_BODY_BYTES) throw Object.assign(new Error('Payload too large'), { status: 413 });
-    chunks.push(chunk);
+    if (size > MAX_BODY_BYTES) tooLarge = true;
+    if (!tooLarge) chunks.push(chunk);
   }
+  if (tooLarge) throw Object.assign(new Error('Payload too large'), { status: 413 });
   if (!size) return {};
   if (!String(req.headers['content-type'] || '').toLowerCase().includes('application/json')) throw Object.assign(new Error('Content-Type must be application/json'), { status: 415 });
   let value;
@@ -59,6 +62,8 @@ function bearerToken(req) {
   const match = String(req.headers.authorization || '').match(/^Bearer\s+([A-Za-z0-9_-]{32,256})$/i);
   return match?.[1] || null;
 }
+// Per-process defense-in-depth only. Multi-instance deployments must also apply
+// a shared rate limit at the trusted edge/API gateway.
 function createAuthRateLimiter() {
   const buckets = new Map();
   return (key, path, now = Date.now()) => {
@@ -94,7 +99,10 @@ export function createPostgresApiServer({ database, catalogRepository, authRepos
     if (req.method === 'OPTIONS') return res.writeHead(headers['access-control-allow-origin'] ? 204 : 403, headers).end();
     try {
       const url = new URL(req.url, 'http://localhost'), path = url.pathname;
-      const ip = req.socket.remoteAddress || 'unknown';
+      const forwardedIp = env.TRUST_PROXY === '1'
+        ? String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()
+        : '';
+      const ip = forwardedIp || req.socket.remoteAddress || 'unknown';
       if (path.startsWith('/api/v1/auth/') && !allowAuthRequest(ip, path)) {
         res.setHeader('retry-after', '60');
         return json(res, 429, { error: 'অনেক বেশি চেষ্টা হয়েছে, কিছুক্ষণ পরে আবার চেষ্টা করুন' }, headers);
