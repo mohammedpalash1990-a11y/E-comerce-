@@ -23,6 +23,7 @@ function lifecycleHarness({ status = 'CONFIRMED', paymentMethod = 'COD', payment
           calls.push({ sql, values, method: 'get' });
           if (sql.includes('SELECT order_id FROM seller_orders')) return sellerOrder.id === values[0] ? { order_id: sellerOrder.order_id } : undefined;
           if (sql.includes('SELECT * FROM orders')) return parent.id === values[0] ? { ...parent } : undefined;
+          if (sql.includes('SELECT status,payment_method,payment_status,total_paisa,user_id FROM orders')) return parent.id === values[0] ? { ...parent } : undefined;
           if (sql.includes('SELECT * FROM seller_orders')) return sellerOrder.id === values[0] ? { ...sellerOrder } : undefined;
           if (sql.includes('SELECT COUNT(*) count FROM seller_orders')) return { count: 0 };
           if (sql.includes('COALESCE(SUM(amount_paisa),0) amount FROM refunds')) return { amount: ledger.refunds.filter(x => x.status !== 'REJECTED').reduce((sum, x) => sum + x.amount, 0) };
