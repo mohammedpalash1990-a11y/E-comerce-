@@ -11,7 +11,7 @@ function fixture() {
     q(sql) {
       return {
         async get(...args) {
-          if (sql.includes('FROM products p JOIN seller_profiles')) {
+          if (sql.includes('FROM products p') && sql.includes('JOIN seller_profiles')) {
             return state.product?.id === args[0] && state.product.seller_id === args[1] ? { ...state.product } : undefined;
           }
           if (sql.includes('FROM inventory_adjustment_requests') && sql.includes('idempotency_key')) {
