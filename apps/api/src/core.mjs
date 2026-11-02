@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { HttpError } from './postgres-shared.mjs';
+export { HttpError };
 
 const env = process.env;
 export const prod = env.NODE_ENV === 'production';
