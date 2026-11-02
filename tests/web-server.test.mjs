@@ -1,26 +1,48 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import net from 'node:net';
 import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 
-const webPort = 4319, apiPort = 4320;
-const api = http.createServer((req, res) => {
-  res.writeHead(200, { 'content-type': 'application/json', 'x-api-test': 'ok' });
-  res.end(JSON.stringify({ path: req.url, method: req.method }));
-});
-let web;
+async function freePort() {
+  const probe = net.createServer();
+  await new Promise((resolve, reject) => probe.once('error', reject).listen(0, '127.0.0.1', resolve));
+  const { port } = probe.address();
+  await new Promise(resolve => probe.close(resolve));
+  return port;
+}
+let webPort, apiPort, web;
+let api;
 test.before(async () => {
+  webPort = await freePort();
+  apiPort = await freePort();
+  api = http.createServer((req, res) => {
+    res.writeHead(200, { 'content-type': 'application/json', 'x-api-test': 'ok' });
+    res.end(JSON.stringify({ path: req.url, method: req.method }));
+  });
   await new Promise(resolve => api.listen(apiPort, '127.0.0.1', resolve));
-  web = spawn(process.execPath, ['apps/web/server.mjs'], { env: { ...process.env, WEB_PORT: String(webPort), PORT: String(apiPort), API_HOST: '127.0.0.1' }, stdio: 'ignore' });
-  let ready = false;
+  web = spawn(process.execPath, ['apps/web/server.mjs'], {
+    env: { ...process.env, WEB_PORT: String(webPort), PORT: String(apiPort), API_HOST: '127.0.0.1' },
+    stdio: ['ignore', 'ignore', 'pipe']
+  });
+  let ready = false, startupError = '';
+  web.stderr.setEncoding('utf8');
+  web.stderr.on('data', chunk => { startupError += chunk; });
   for (let i = 0; i < 60; i++) {
-    try { const response = await fetch('http://127.0.0.1:' + webPort + '/'); if (response.ok) { ready = true; break; } } catch {}
+    try {
+      const response = await fetch('http://127.0.0.1:' + webPort + '/');
+      if (response.ok) { ready = true; break; }
+    } catch {}
+    if (web.exitCode !== null) break;
     await delay(100);
   }
-  assert.ok(ready, 'web server should start');
+  assert.ok(ready, 'web server should start: ' + startupError);
 });
-test.after(async () => { web?.kill(); await new Promise(resolve => api.close(resolve)); });
+test.after(async () => {
+  web?.kill();
+  if (api) await new Promise(resolve => api.close(resolve));
+});
 
 test('static responses include browser security headers', async () => {
   const response = await fetch('http://127.0.0.1:' + webPort + '/');
