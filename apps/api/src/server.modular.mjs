@@ -39,7 +39,11 @@ export function createApiApp(options = {}) {
         ordersRepository: options.ordersRepository,
         inventoryOptions: options.inventoryOptions,
         checkoutOptions: options.checkoutOptions,
-        ordersOptions: options.ordersOptions
+        ordersOptions: options.ordersOptions,
+        sellerRepository: options.sellerRepository,
+        sellerOptions: options.sellerOptions,
+        adminRepository: options.adminRepository,
+        adminOptions: options.adminOptions
       })
     : null);
   registerPublic(route, ok, { catalogRepository, authRepository });
@@ -50,10 +54,15 @@ export function createApiApp(options = {}) {
     gatewaySign: options.gatewaySign,
     paymentMode: options.paymentMode || config.paymentMode
   });
-  registerCustomer(route, ok);
-  registerSeller(route, ok);
-  registerAdmin(route, ok);
-  registerPayments(route, ok);
+  if (!domainRepositories) {
+    registerCustomer(route, ok);
+    registerSeller(route, ok);
+    registerAdmin(route, ok);
+    registerPayments(route, ok);
+  }
+  // In PostgreSQL mode, never fall through to legacy SQLite customer, seller,
+  // admin or payment handlers. Unmigrated endpoints remain unavailable until
+  // their PostgreSQL repositories are implemented.
 
   return { routes, catalogRepository, authRepository, domainRepositories };
 }

@@ -4,6 +4,8 @@ import { createPostgresInventoryRepository } from './postgres-inventory.mjs';
 import { createPostgresCheckoutRepository } from './postgres-checkout.mjs';
 import { createPostgresOrdersPaymentsRepository } from './postgres-orders-payments.mjs';
 import { createPostgresCustomerRepository } from './postgres-customer.mjs';
+import { createPostgresSellerRepository } from './postgres-seller.mjs';
+import { createPostgresAdminRepository } from './postgres-admin.mjs';
 
 function toHttpError(error) {
   if (error instanceof HttpError) return error;
@@ -66,7 +68,9 @@ export function createPostgresDomainRepositories(database, options = {}) {
       ...(options.checkoutOptions || {})
     }),
     orders: options.ordersRepository || createPostgresOrdersPaymentsRepository(database, options.ordersOptions),
-    customer: options.customerRepository || createPostgresCustomerRepository(database)
+    customer: options.customerRepository || createPostgresCustomerRepository(database),
+    seller: options.sellerRepository || createPostgresSellerRepository(database, { inventoryRepository: options.inventoryRepository || createPostgresInventoryRepository(database, options.inventoryOptions), ordersRepository: options.ordersRepository || createPostgresOrdersPaymentsRepository(database, options.ordersOptions), ...(options.sellerOptions || {}) }),
+    admin: options.adminRepository || createPostgresAdminRepository(database, { inventoryRepository: options.inventoryRepository || createPostgresInventoryRepository(database, options.inventoryOptions), ordersRepository: options.ordersRepository || createPostgresOrdersPaymentsRepository(database, options.ordersOptions), ...(options.adminOptions || {}) })
   });
 }
 
@@ -80,8 +84,9 @@ export default function registerPostgresDomain(route, ok, {
   if (!repositories?.inventory || !repositories?.checkout || !repositories?.orders) {
     throw new TypeError('PostgreSQL domain repositories are required');
   }
-  const { inventory, checkout, orders, customer } = repositories;
+  const { inventory, checkout, orders, customer, seller, admin } = repositories;
   if (!customer) throw new TypeError('PostgreSQL customer repository is required');
+
 
   // ----- customer addresses, wishlist and verified-purchase reviews -----
   route('GET', '/api/v1/customer/addresses', ['CUSTOMER'], invoke(ok, async ({ user }) => customer.listAddresses(user.id)));
@@ -93,6 +98,21 @@ export default function registerPostgresDomain(route, ok, {
   route('DELETE', '/api/v1/customer/wishlist/:pid', ['CUSTOMER'], invoke(ok, async ({ user, params }) => customer.removeWishlist(user.id, params[0])));
   route('POST', '/api/v1/customer/products/:id/reviews', ['CUSTOMER'], invoke(ok, async ({ user, params, body }) => customer.saveReview({ userId: user.id, productId: params[0], body }), 201));
 
+  if (seller) {
+    // ----- seller profile, dashboard and product management -----
+    route('GET', '/api/v1/seller/profile', ['SELLER'], invoke(ok, async ({ user }) => seller.getProfile(user.id)));
+    route('GET', '/api/v1/seller/dashboard', ['SELLER'], invoke(ok, async ({ user }) => seller.getDashboard(user.id)));
+    route('GET', '/api/v1/seller/products', ['SELLER'], invoke(ok, async ({ user }) => seller.listProducts(user.id)));
+    route('GET', '/api/v1/seller/products/:id', ['SELLER'], invoke(ok, async ({ user, params }) => { const product = await seller.getProduct(user.id, params[0]); if (!product) throw new HttpError(404, 'Product not found'); return product; }));
+    route('POST', '/api/v1/seller/products', ['SELLER'], invoke(ok, async ({ user, body }) => seller.createProduct(user.id, body), 201));
+    route('PUT', '/api/v1/seller/products/:id', ['SELLER'], invoke(ok, async ({ user, params, body }) => seller.updateProduct(user.id, params[0], body)));
+    route('DELETE', '/api/v1/seller/products/:id', ['SELLER'], invoke(ok, async ({ user, params }) => seller.archiveProduct(user.id, params[0])));
+    route('GET', '/api/v1/seller/finance', ['SELLER'], invoke(ok, async ({ user }) => seller.getFinance(user.id)));
+    route('POST', '/api/v1/seller/payouts', ['SELLER'], invoke(ok, async ({ user, body }) => seller.requestPayout(user.id, body), 201));
+  route('GET', '/api/v1/seller/courier/quote', ['SELLER'], invoke(ok, async ({ url }) => seller.getCourierQuotes(url.searchParams.get('area') || '')));
+  route('POST', '/api/v1/seller/orders/:id/courier', ['SELLER'], invoke(ok, async ({ user, params, body }) => seller.bookSellerShipment(user.id, params[0], body.provider), 201));
+  route('POST', '/api/v1/seller/shipments/:id/status', ['SELLER'], invoke(ok, async ({ user, params, body }) => seller.updateSellerShipment(user.id, params[0], body.status)));
+  }
   // ----- shared stock ledger / seller inventory -----
   route('GET', '/api/v1/seller/products/:id/inventory', ['SELLER'], invoke(ok, async ({ user, params }) => {
     const stock = await inventory.getStock(params[0]);
@@ -100,6 +120,7 @@ export default function registerPostgresDomain(route, ok, {
     return stock;
   }));
   route('PATCH', '/api/v1/seller/products/:id/stock', ['SELLER'], invoke(ok, async ({ user, params, body }) => {
+    if (seller) await seller.assertWritable(user.id, { allowPending: false });
     const current = await inventory.getStock(params[0]);
     if (!current || current.seller_id !== user.id) throw new HttpError(404, 'Product not found');
     const result = await inventory.setStock({
@@ -276,6 +297,7 @@ export default function registerPostgresDomain(route, ok, {
     };
   }));
   route('POST', '/api/v1/seller/orders/:id/status', ['SELLER'], invoke(ok, async ({ user, params, body }) => {
+    if (seller) await seller.assertWritable(user.id, { allowPending: false });
     const status = String(body.status || '').toUpperCase();
     if (!['CONFIRMED','PROCESSING','SHIPPED','DELIVERED','CANCELLED'].includes(status)) {
       throw new HttpError(400, 'Invalid order status');
@@ -318,6 +340,64 @@ export default function registerPostgresDomain(route, ok, {
       note: String(body.note || '').slice(0, 300)
     });
   }));
+
+  // ----- PostgreSQL admin finance and payout operations -----
+  if (admin) {
+    route('GET', '/api/v1/admin/dashboard', ['ADMIN'], invoke(ok, async () => admin.dashboard()));
+    route('GET', '/api/v1/admin/payouts', ['ADMIN'], invoke(ok, async ({ url }) => admin.listPayouts({ status: url.searchParams.get('status') || undefined, limit: Number(url.searchParams.get('limit') || 200) })));
+    route('POST', '/api/v1/admin/payouts/:id/approve', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.decidePayout({ payoutId: params[0], actorId: user.id, decision: 'APPROVE', note: body.note })));
+    route('POST', '/api/v1/admin/payouts/:id/reject', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.decidePayout({ payoutId: params[0], actorId: user.id, decision: 'REJECT', note: body.note })));
+    route('GET', '/api/v1/admin/finance/summary', ['ADMIN'], invoke(ok, async () => admin.financeSummary()));
+    route('GET', '/api/v1/admin/finance/transactions', ['ADMIN'], invoke(ok, async ({ url }) => admin.listTransactions({ kind: url.searchParams.get('kind') || undefined, limit: Number(url.searchParams.get('limit') || 200) })));
+    route('GET', '/api/v1/admin/finance/report', ['ADMIN'], invoke(ok, async ({ url }) => admin.financeReport({ from: url.searchParams.get('from') || undefined, to: url.searchParams.get('to') || undefined })));
+    route('GET', '/api/v1/admin/audit-logs', ['ADMIN'], invoke(ok, async ({ url }) => admin.listAuditLogs({ limit: Number(url.searchParams.get('limit') || 200) })));
+    route('GET', '/api/v1/admin/refunds', ['ADMIN'], invoke(ok, async ({ url }) => admin.listRefunds({ limit: Number(url.searchParams.get('limit') || 200) })));
+    route('POST', '/api/v1/admin/orders/:id/note', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.setOrderNote({ orderId: params[0], actorId: user.id, note: body.note })));
+    route('POST', '/api/v1/admin/orders/:id/shipping', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.setShippingCharge({ orderId: params[0], actorId: user.id, shippingBdt: body.shipping_bdt })));
+    route('POST', '/api/v1/admin/seller-orders/:id/courier', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.bookSellerShipment({ sellerOrderId: params[0], actorId: user.id, provider: body.provider }), 201));
+    route('POST', '/api/v1/admin/shipments/:id/status', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.updateShipment({ shipmentId: params[0], actorId: user.id, status: body.status })));
+    route('POST', '/api/v1/admin/orders/:id/refund', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.createRefund({ orderId: params[0], actorId: user.id, amountBdt: body.amount_bdt, reason: body.reason }), 201));
+    route('POST', '/api/v1/admin/refunds/:id/approve', ['ADMIN'], invoke(ok, async ({ user, params }) => admin.approveRefund({ refundId: params[0], actorId: user.id })));
+    route('POST', '/api/v1/admin/refunds/:id/reject', ['ADMIN'], invoke(ok, async ({ user, params }) => admin.rejectRefund({ refundId: params[0], actorId: user.id })));
+  }
+
+  // ----- PostgreSQL admin seller and product moderation -----
+  if (admin) {
+    route('GET', '/api/v1/admin/customers', ['ADMIN'], invoke(ok, async ({ url }) => admin.listCustomers({ query: url.searchParams.get('q') || '', limit: Number(url.searchParams.get('limit') || 100) })));
+    route('GET', '/api/v1/admin/customers/:id', ['ADMIN'], invoke(ok, async ({ params }) => admin.getCustomer(params[0])));
+    route('GET', '/api/v1/admin/customers/:id/orders', ['ADMIN'], invoke(ok, async ({ params }) => admin.listCustomerOrders(params[0])));
+    route('PUT', '/api/v1/admin/customers/:id', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.updateCustomer({ customerId: params[0], actorId: user.id, body })));
+    route('POST', '/api/v1/admin/customers/:id/suspend', ['ADMIN'], invoke(ok, async ({ user, params }) => admin.setCustomerStatus({ customerId: params[0], actorId: user.id, status: 'SUSPENDED' })));
+    route('POST', '/api/v1/admin/customers/:id/activate', ['ADMIN'], invoke(ok, async ({ user, params }) => admin.setCustomerStatus({ customerId: params[0], actorId: user.id, status: 'ACTIVE' })));
+    route('GET', '/api/v1/admin/sellers', ['ADMIN'], invoke(ok, async ({ url }) => admin.listSellers({ status: url.searchParams.get('status') || undefined, limit: Number(url.searchParams.get('limit') || 100) })));
+    route('GET', '/api/v1/admin/sellers/:id', ['ADMIN'], invoke(ok, async ({ params }) => admin.getSellerOverview(params[0])));
+    route('GET', '/api/v1/admin/sellers/:id/products', ['ADMIN'], invoke(ok, async ({ params }) => admin.listSellerProducts(params[0])));
+    route('GET', '/api/v1/admin/sellers/:id/orders', ['ADMIN'], invoke(ok, async ({ params }) => admin.listSellerOrders(params[0])));
+    route('GET', '/api/v1/admin/sellers/:id/finance', ['ADMIN'], invoke(ok, async ({ params }) => (await admin.getSellerOverview(params[0])).finance));
+    route('GET', '/api/v1/admin/products', ['ADMIN'], invoke(ok, async ({ url }) => admin.listProducts({ status: url.searchParams.get('status') || undefined, query: url.searchParams.get('q') || '', limit: Number(url.searchParams.get('limit') || 100) })));
+    route('POST', '/api/v1/admin/sellers/:id/approve', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.decideSeller({ sellerId: params[0], actorId: user.id, decision: 'APPROVE', reason: body.reason })));
+    route('POST', '/api/v1/admin/sellers/:id/reject', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.decideSeller({ sellerId: params[0], actorId: user.id, decision: 'REJECT', reason: body.reason })));
+    route('POST', '/api/v1/admin/sellers/:id/suspend', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.decideSeller({ sellerId: params[0], actorId: user.id, decision: 'SUSPEND', reason: body.reason })));
+    route('POST', '/api/v1/admin/sellers/:id/activate', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.decideSeller({ sellerId: params[0], actorId: user.id, decision: 'ACTIVATE', reason: body.reason })));
+    route('PATCH', '/api/v1/admin/sellers/:id/commission', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.setCommission({ sellerId: params[0], actorId: user.id, commissionBps: body.commission_bps })));
+    route('GET', '/api/v1/admin/categories', ['ADMIN'], invoke(ok, async () => admin.listCategories()));
+    route('POST', '/api/v1/admin/categories', ['ADMIN'], invoke(ok, async ({ user, body }) => admin.createCategory({ actorId: user.id, nameBn: body.name_bn, nameEn: body.name_en, slug: body.slug }), 201));
+    route('PUT', '/api/v1/admin/categories/:slug', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.updateCategory({ actorId: user.id, slug: params[0], nameBn: body.name_bn, nameEn: body.name_en })));
+    route('DELETE', '/api/v1/admin/categories/:slug', ['ADMIN'], invoke(ok, async ({ user, params }) => admin.deleteCategory({ actorId: user.id, slug: params[0] })));
+    route('GET', '/api/v1/admin/brands', ['ADMIN'], invoke(ok, async () => admin.listBrands()));
+    route('POST', '/api/v1/admin/brands', ['ADMIN'], invoke(ok, async ({ user, body }) => admin.createBrand({ actorId: user.id, name: body.name }), 201));
+    route('DELETE', '/api/v1/admin/brands/:slug', ['ADMIN'], invoke(ok, async ({ user, params }) => admin.deleteBrand({ actorId: user.id, slug: params[0] })));
+    route('GET', '/api/v1/admin/coupons', ['ADMIN'], invoke(ok, async () => admin.listCoupons()));
+    route('POST', '/api/v1/admin/coupons', ['ADMIN'], invoke(ok, async ({ user, body }) => admin.createCoupon({ actorId: user.id, body }), 201));
+    route('PATCH', '/api/v1/admin/coupons/:code', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.toggleCoupon({ actorId: user.id, code: params[0], active: body.active })));
+    route('PUT', '/api/v1/admin/products/:id', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.updateProduct({ productId: params[0], actorId: user.id, body })), { limit: 3000000 });
+    route('DELETE', '/api/v1/admin/products/:id', ['ADMIN'], invoke(ok, async ({ user, params }) => admin.archiveProduct({ productId: params[0], actorId: user.id })));
+    route('GET', '/api/v1/admin/products/pending', ['ADMIN'], invoke(ok, async () => admin.listPendingProducts()));
+    route('POST', '/api/v1/admin/products/:id/approve', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.moderateProduct({ productId: params[0], actorId: user.id, decision: 'APPROVE', reason: body.reason })));
+    route('POST', '/api/v1/admin/products/:id/reject', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.moderateProduct({ productId: params[0], actorId: user.id, decision: 'REJECT', reason: body.reason })));
+    route('POST', '/api/v1/admin/products/:id/suspend', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.moderateProduct({ productId: params[0], actorId: user.id, decision: 'SUSPEND', reason: body.reason })));
+    route('POST', '/api/v1/admin/products/:id/unsuspend', ['ADMIN'], invoke(ok, async ({ user, params, body }) => admin.moderateProduct({ productId: params[0], actorId: user.id, decision: 'UNSUSPEND', reason: body.reason })));
+  }
 
   // ----- payment lifecycle -----
   route('POST', '/api/v1/payments/callback/:gateway', null, invoke(ok, async ({ params, body }) => {

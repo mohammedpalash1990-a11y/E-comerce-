@@ -78,3 +78,30 @@
 - Fake Pool-ভিত্তিক test-এ query binding, transaction isolation, nested savepoint, rollback, migration ordering/idempotence/failure, এবং BIGINT parsing যাচাই করা হয়েছে। GitHub Actions-এর test ও build check সর্বশেষ যাচাইকৃত adapter commit-এ pass করেছে।
 - **সীমাবদ্ধতা:** এই adapter এখনো `core.mjs` বা API server-এ wired নয়; route-গুলোর ২৪৯টি synchronous query call pattern ও ২৬টি synchronous transaction call pattern async conversion চায়। তাই production guard অপরিবর্তিত এবং PostgreSQL production runtime এখনো চালু নয়।
 - বিস্তারিত: `docs/POSTGRES_MIGRATION_AUDIT_BN.md` এবং `docs/POSTGRES_RUNTIME_ADAPTER_BN.md`।
+
+
+## PostgreSQL Seller Workspace migration (2026-11-01)
+
+এই feature branch-এ Seller Workspace-এর PostgreSQL migration-এর প্রথম কার্যকর slice যোগ করা হয়েছে:
+
+- Seller profile ও dashboard aggregate PostgreSQL থেকে পড়া হয়।
+- Seller product list/detail/create/update/archive PostgreSQL repository ব্যবহার করে; প্রতিটি product read/write-এ authenticated seller ID দিয়ে ownership scope করা হয়।
+- নতুন product-এর stock সরাসরি products টেবিলে লেখা হয় না; shared PostgreSQL inventory repository দিয়ে stock movement ledger-এ record হয়।
+- Product submit/edit audit log-এ সংরক্ষিত হয় এবং moderation-এর জন্য `PENDING_REVIEW` হয়।
+- Finance summary, settlement history, payout history এবং payout request PostgreSQL থেকে চলে; অর্থ integer paisa-তে রাখা হয়।
+- Payout request seller profile row lock করে, approval state যাচাই করে, duplicate active request ও available balance পরীক্ষা করে।
+- Courier quote/booking ও shipment status PostgreSQL-এ চলে; shipment read/write-এ seller ownership যাচাই হয় এবং delivery confirmation existing PostgreSQL order transition repository ব্যবহার করে।
+- PostgreSQL mode-এ legacy SQLite seller routes আর register হয় না; SQLite-only development mode অপরিবর্তিত থাকে।
+
+**Admin PostgreSQL migration-এর নতুন অংশ:** dashboard aggregate, finance summary/transactions/report, audit log list, payout list/approve/reject, seller/customer list/detail/edit/approve/reject/suspend/activate/commission, product list/moderation, category/brand/coupon CRUD, order shipping charge এবং refund create/list/approve/reject route যোগ হয়েছে। Refund order row lock করে, partial/full amount cap করে, seller earning reversal ledger-এ লেখে এবং full refund হলে payment status update করে। Payout approval seller row lock করে এবং অন্য pending/approved payout reserve হিসাব করে; seller ও product moderation audit log/notification লেখে।
+
+**Admin API route coverage:** পুরোনো `routes_admin.mjs`-এর ৪৫টি route-এর সবগুলো PostgreSQL domain registration-এ কভার করা হয়েছে (customer/seller/product/category/brand/coupon/order/refund/payout/finance/courier/inventory/audit)।
+
+**এখনো বাকি:** live PostgreSQL database integration, full API runtime composition/production readiness, migration + data import rehearsal এবং end-to-end browser validation। এই PR-এর adapter-level tests real PostgreSQL server-এর বিকল্প নয়। তাই এই branch production-ready নয়; merge/deploy করা হয়নি।
+
+
+## PostgreSQL workspace query-index migration (২০২৬-১১-০২)
+- `004_workspace_query_indexes.sql` যোগ করা হয়েছে; payout/refund queue, seller finance, order lifecycle, shipment, catalog filter, customer address, notification, review, audit এবং cart lookup-এর জন্য ১৮টি targeted index যুক্ত।
+- Migration-টি `CREATE INDEX IF NOT EXISTS` ব্যবহার করে, তাই আগে থেকে provision করা Neon database-এ 001–003-এর পর incremental ভাবে প্রয়োগ করা যাবে।
+- `tests/postgres-schema-indexes.test.mjs` migration-এ প্রত্যাশিত ১৮টি index উপস্থিত আছে কি না regression guard দেয়।
+- Index migration schema/query access path উন্নত করে; এটি PostgreSQL API runtime wiring বা live integration test-এর বিকল্প নয়।
