@@ -25,6 +25,8 @@ test('PostgreSQL shared helpers load without importing the SQLite core', async (
   assert.doesNotMatch(shared, /from ['"]\.\/core\.mjs['"]/);
   assert.doesNotMatch(auth, /from ['"]\.\/core\.mjs['"]/);
   assert.match(auth, /from ['"]\.\/postgres-shared\.mjs['"]/);
+  const postgresAuth = await import('../apps/api/src/postgres-auth.mjs');
+  assert.equal(typeof postgresAuth.createPostgresAuthRepository, 'function');
 });
 
 test('shared identifiers, hashes and password verification retain expected behavior', () => {
