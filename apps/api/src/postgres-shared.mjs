@@ -1,10 +1,19 @@
-import { randomUUID, randomBytes, scryptSync, timingSafeEqual, createHash } from 'node:crypto';
+import { randomUUID, randomBytes, scryptSync, timingSafeEqual, createHash, createHmac } from 'node:crypto';
 
 // SQLite-independent helpers shared by PostgreSQL repositories.
 const env = process.env;
+const production = env.NODE_ENV === 'production';
+const webhookSecret = env.PAYMENT_WEBHOOK_SECRET || (production ? '' : 'dev-sandbox-secret');
+if (production && !webhookSecret) {
+  throw new Error('PAYMENT_WEBHOOK_SECRET is required in production');
+}
 export const config = Object.freeze({
   sessionDays: Number(env.SESSION_DAYS || 7),
-  exposeDevCodes: env.NODE_ENV !== 'production'
+  exposeDevCodes: !production,
+  paymentMode: env.PAYMENT_MODE || 'sandbox',
+  courierMode: env.COURIER_MODE || 'sandbox',
+  webhookSecret,
+  freeShippingPaisa: Number(env.FREE_SHIPPING_OVER_BDT || 0) * 100
 });
 
 export class HttpError extends Error {
@@ -20,6 +29,7 @@ export const bad = message => new HttpError(400, message);
 export const now = () => new Date().toISOString();
 export const id = () => randomUUID();
 export const sha256 = value => createHash('sha256').update(String(value)).digest('hex');
+export const hmac = (secret, value) => createHmac('sha256', secret).update(value).digest('hex');
 export const hashPassword = password => {
   const salt = randomBytes(16).toString('hex');
   return salt + ':' + scryptSync(String(password), salt, 64).toString('hex');
