@@ -20,8 +20,8 @@ test('price and stock sorting operate on a filtered copy, not the source catalog
 });
 
 test('every product card offers a product-specific details action', () => {
-  assert.match(html, /data-detail="\'+p\.id\+'/);
-  assert.match(html, /aria-label="\'+p\.bn\+' বিস্তারিত দেখুন"/);
+  assert.ok(html.includes('data-detail="'+p.id+'"'));
+  assert.ok(html.includes('aria-label="'+p.bn+' বিস্তারিত দেখুন"'));
   assert.match(html, /function openProduct\(id\)/);
   assert.match(html, /productDescriptions/);
 });
