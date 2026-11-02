@@ -21,6 +21,10 @@ function createInMemoryPostgresAdapter() {
       const trimmed = sql.trim();
       return {
         get: async (...params) => {
+          if (/SELECT id FROM users WHERE id=\? FOR UPDATE/i.test(trimmed)) {
+            const user = [...tables.users.values()].find(u => u.id === params[0]);
+            return user ? { id: user.id } : null;
+          }
           if (/SELECT \* FROM users WHERE lower\(email\)=lower\(\?\)/i.test(trimmed)) {
             const email = String(params[0]).toLowerCase();
             return [...tables.users.values()].find(u => u.email && u.email.toLowerCase() === email);
