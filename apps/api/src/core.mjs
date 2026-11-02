@@ -3,6 +3,7 @@ import { randomUUID, randomBytes, scryptSync, timingSafeEqual, createHash, creat
 import { mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { HttpError } from './postgres-shared.mjs';
 
 const env = process.env;
 export const prod = env.NODE_ENV === 'production';
@@ -23,7 +24,6 @@ if (prod) {
 }
 
 
-export class HttpError extends Error { constructor(status, message, extra) { super(message); this.status = status; this.extra = extra; } }
 export const bad = m => new HttpError(400, m);
 export const now = () => new Date().toISOString();
 export const id = () => randomUUID();
