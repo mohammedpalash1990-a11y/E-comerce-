@@ -25,11 +25,11 @@ test.after(async () => { web?.kill(); await new Promise(resolve => api.close(res
 test('static responses include browser security headers', async () => {
   const response = await fetch('http://127.0.0.1:' + webPort + '/');
   assert.equal(response.status, 200);
-  assert.match(response.headers.get('content-type'), /text\\/html/);
+  assert.ok(response.headers.get('content-type').includes('text/html'));
   assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
   assert.equal(response.headers.get('x-frame-options'), 'DENY');
   assert.equal(response.headers.get('referrer-policy'), 'strict-origin-when-cross-origin');
-  assert.match(response.headers.get('content-security-policy'), /object-src 'none'/);
+  assert.ok(response.headers.get('content-security-policy').includes("object-src 'none'"));
 });
 test('static server rejects traversal and unsupported methods', async () => {
   const traversal = await fetch('http://127.0.0.1:' + webPort + '/..%2f..%2fetc%2fpasswd');
