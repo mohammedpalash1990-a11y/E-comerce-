@@ -6,10 +6,10 @@ export class HttpError extends Error {
 export const bad = message => new HttpError(400, message);
 export const id = () => randomUUID();
 export const now = () => new Date().toISOString();
-export const normPhone = value => String(value || '').replace(/[\\s-]/g, '').replace(/^\\+?88/, '');
-export const validPhone = value => /^01[3-9]\\d{8}$/.test(value);
+export const normPhone = value => String(value || '').replace(/[\s-]/g, '').replace(/^\+?88/, '');
+export const validPhone = value => /^01[3-9]\d{8}$/.test(value);
 export function text(value, max, label, { required = true } = {}) {
-  const clean = String(value ?? '').replace(/[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]/g, '').trim();
+  const clean = String(value ?? '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim();
   if (required && !clean) throw bad(label + ' দিতে হবে');
   if (clean.length > max) throw bad(label + ' অনেক লম্বা');
   return clean;
@@ -27,8 +27,8 @@ export function parseImages(list) {
   if (!Array.isArray(list) || list.length > 6) throw bad('সর্বোচ্চ ৬টি ছবি দেওয়া যায়');
   return list.map(value => {
     const url = String(value);
-    if (/^https:\\/\\/[^\\s"'<>]+$/i.test(url) && url.length <= 500) return url;
-    if (/^data:image\\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(url) && url.length <= 400000) return url;
+    if (/^https:\/\/[^\s"'<>]+$/i.test(url) && url.length <= 500) return url;
+    if (/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(url) && url.length <= 400000) return url;
     throw bad('ছবি শুধু https লিংক বা ছোট PNG/JPEG/WebP হতে পারে');
   });
 }
