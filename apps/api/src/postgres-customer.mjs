@@ -43,18 +43,42 @@ export function createPostgresCustomerRepository(database) {
   async function updateAddress({ user, addressId, body }) {
     const fields = addressFields(body, user);
     return database.tx(async () => {
-      const existing = await query('SELECT id FROM addresses WHERE id=? AND user_id=? FOR UPDATE').get(addressId, user.id);
+      // All default-address mutations lock the customer row first. This gives
+      // create/update/delete one consistent lock order and prevents two
+      // concurrent requests from leaving multiple defaults behind.
+      const owner = await query('SELECT id FROM users WHERE id=? FOR UPDATE').get(user.id);
+      if (!owner) throw new HttpError(404, 'Customer not found');
+      const existing = await query('SELECT id,is_default FROM addresses WHERE id=? AND user_id=? FOR UPDATE').get(addressId, user.id);
       if (!existing) throw new HttpError(404, 'Address not found');
-      if (body.is_default) await query('UPDATE addresses SET is_default=0 WHERE user_id=?').run(user.id);
+      if (body.is_default === true) {
+        await query('UPDATE addresses SET is_default=0 WHERE user_id=?').run(user.id);
+      }
+      const defaultValue = body.is_default === undefined ? null : body.is_default ? 1 : 0;
       await query('UPDATE addresses SET label=?,name=?,phone=?,address=?,area=?,is_default=COALESCE(?,is_default) WHERE id=? AND user_id=?')
-        .run(...fields, body.is_default ? 1 : null, addressId, user.id);
+        .run(...fields, defaultValue, addressId, user.id);
+      if (body.is_default === false && existing.is_default) {
+        await query(`UPDATE addresses SET is_default=1
+          WHERE user_id=? AND id=(SELECT id FROM addresses WHERE user_id=? AND id<>? ORDER BY id LIMIT 1)`)
+          .run(user.id, user.id, addressId);
+      }
       return { id: addressId };
     });
   }
 
   async function deleteAddress(userId, addressId) {
-    await query('DELETE FROM addresses WHERE id=? AND user_id=?').run(addressId, userId);
-    return { deleted: true };
+    return database.tx(async () => {
+      const owner = await query('SELECT id FROM users WHERE id=? FOR UPDATE').get(userId);
+      if (!owner) throw new HttpError(404, 'Customer not found');
+      const existing = await query('SELECT id,is_default FROM addresses WHERE id=? AND user_id=? FOR UPDATE').get(addressId, userId);
+      if (!existing) return { deleted: true };
+      await query('DELETE FROM addresses WHERE id=? AND user_id=?').run(addressId, userId);
+      if (existing.is_default) {
+        await query(`UPDATE addresses SET is_default=1
+          WHERE user_id=? AND id=(SELECT id FROM addresses WHERE user_id=? ORDER BY id LIMIT 1)`)
+          .run(userId, userId);
+      }
+      return { deleted: true };
+    });
   }
 
   async function listWishlist(userId) {
