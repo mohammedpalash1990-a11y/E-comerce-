@@ -24,6 +24,11 @@ function createRouteHarness() {
         return { rows: [], rowCount: 0 };
       }
 
+      if (/^SELECT id FROM users WHERE id=\? FOR UPDATE/i.test(trimmed)) {
+        const user = state.users.get(params[0]);
+        return { rows: user ? [{ id: user.id }] : [], rowCount: user ? 1 : 0 };
+      }
+
       if (/^INSERT INTO users/i.test(trimmed)) {
         const [id, phone, email, name, password, role, status, createdAt] = params;
         state.users.set(id, { id, phone, email, name, password, role, status, phone_verified: 0, email_verified: 0, created_at: createdAt });
