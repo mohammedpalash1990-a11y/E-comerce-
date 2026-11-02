@@ -28,7 +28,8 @@
 - Sandbox payment and courier adapters only
 
 ## Still required before production
-- Production PostgreSQL runtime adapter and verified migration process
+- PostgreSQL-only API composition that does not import or execute SQLite-backed routes or seed data
+- Live PostgreSQL migration and checkout/order/payment/inventory integration verification
 - Public Node.js API hosting, persistent production database, secrets and monitoring
 - Live payment/courier credentials and provider webhook verification
 - Full browser E2E, security, privacy and operational review
@@ -48,6 +49,16 @@ npm run dev
 - Seller placeholder: http://localhost:3000/seller.html
 - Admin placeholder: http://localhost:3000/admin.html
 - API health: http://localhost:4000/health
+
+## PostgreSQL migration bootstrap (staging/development only)
+
+Set `DATABASE_URL` and the PostgreSQL TLS/pool variables from `.env.example`, then run:
+
+```bash
+npm run db:migrate:postgres
+```
+
+This command verifies the PostgreSQL connection and applies ordered SQL files from `apps/api/migrations/postgres` under the database advisory lock. It does not start the API in PostgreSQL mode. Production API startup remains deliberately blocked until PostgreSQL-only route composition and end-to-end validation are complete. Do not point a live API at a PostgreSQL database yet.
 
 ## Development demo accounts
 | Role | Phone | Password |
@@ -72,14 +83,14 @@ npm run check
 ## Repository map
 - `apps/web` — customer storefront and seller/admin placeholder pages
 - `apps/api` — Node.js API + local SQLite development adapter
+- `apps/api/migrations/postgres` — PostgreSQL target schema migrations
 - `prisma` — initial PostgreSQL target schema
 - `docs` — architecture, status and deployment notes
 - `infra/docker` — container scaffolding
-- `tests` — API smoke test
+- `tests` — API and adapter tests
 
 ## Production warning
 Do not process real customer data or payments with this scaffold. See [docs/STATUS_BN.md](docs/STATUS_BN.md), [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) and [SECURITY.md](SECURITY.md).
-
 
 ## Preview and demo access
 
@@ -92,4 +103,4 @@ Demo credentials (development only):
 - Seller: `01700000002` / `Seller@12345`
 - Admin: `01700000001` / `Admin@12345`
 
-GitHub Pages is static hosting, so these portal pages cannot reach the API there yet. The storefront now intentionally hides the old hard-coded sample products when the API is offline and displays a clear connection status; it will show only products returned by the live API. Run the web and API services together (or deploy the API and web server to a supported host) to exercise login, seller submission, moderation and COD checkout. Never use the demo credentials in a production deployment.
+GitHub Pages is static hosting, so these portal pages cannot reach the API there yet. Never use demo credentials in a production deployment.
