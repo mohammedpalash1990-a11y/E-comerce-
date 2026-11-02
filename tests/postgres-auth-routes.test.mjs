@@ -24,7 +24,7 @@ function createRouteHarness() {
         return { rows: [], rowCount: 0 };
       }
 
-      if (/^SELECT id FROM users WHERE id=\\? FOR UPDATE/i.test(trimmed)) {
+      if (trimmed.startsWith('SELECT id FROM users WHERE id=? FOR UPDATE')) {
         const user = state.users.get(params[0]);
         return { rows: user ? [{ id: user.id }] : [], rowCount: user ? 1 : 0 };
       }
