@@ -109,3 +109,52 @@ test('reviews reject invalid ratings and purchases that were not delivered', asy
 test('repository requires the async PostgreSQL database adapter', () => {
   assert.throws(() => createPostgresCustomerRepository({}), /q\(\) and tx\(\)/);
 });
+
+
+test('address default can be explicitly cleared and another saved address is promoted', async () => {
+  const db = fakeDatabase((method, sql) => {
+    if (sql.includes('FROM users WHERE id=? FOR UPDATE')) return { id: customer.id };
+    if (sql.includes('SELECT id,is_default FROM addresses')) return { id: 'address-1', is_default: 1 };
+    return { changes: 1 };
+  });
+  const repo = createPostgresCustomerRepository(db);
+  await repo.updateAddress({
+    user: customer,
+    addressId: 'address-1',
+    body: { ...validAddress, is_default: false }
+  });
+  const ownerLock = db.calls.findIndex(call => call.sql?.includes('FROM users WHERE id=? FOR UPDATE'));
+  const addressLock = db.calls.findIndex(call => call.sql?.includes('SELECT id,is_default FROM addresses'));
+  const update = db.calls.find(call => call.sql?.includes('SET label=?,name=?,phone=?,address=?,area=?,is_default=COALESCE'));
+  const promote = db.calls.find(call => call.sql?.includes('ORDER BY id LIMIT 1'));
+  assert.ok(ownerLock >= 0 && addressLock > ownerLock, 'customer lock must be acquired before address lock');
+  assert.equal(update.values[5], 0, 'explicit false must be persisted, not treated as undefined');
+  assert.ok(promote, 'another saved address should become the default');
+});
+
+test('deleting the default address promotes a remaining saved address under the customer lock', async () => {
+  const db = fakeDatabase((method, sql) => {
+    if (sql.includes('FROM users WHERE id=? FOR UPDATE')) return { id: customer.id };
+    if (sql.includes('SELECT id,is_default FROM addresses')) return { id: 'address-default', is_default: 1 };
+    return { changes: 1 };
+  });
+  const repo = createPostgresCustomerRepository(db);
+  assert.deepEqual(await repo.deleteAddress(customer.id, 'address-default'), { deleted: true });
+  const ownerLock = db.calls.findIndex(call => call.sql?.includes('FROM users WHERE id=? FOR UPDATE'));
+  const addressLock = db.calls.findIndex(call => call.sql?.includes('SELECT id,is_default FROM addresses'));
+  const deletion = db.calls.findIndex(call => call.sql?.startsWith('DELETE FROM addresses'));
+  const promote = db.calls.findIndex(call => call.sql?.includes('ORDER BY id LIMIT 1'));
+  assert.ok(ownerLock >= 0 && addressLock > ownerLock && deletion > addressLock);
+  assert.ok(promote > deletion, 'default replacement must happen after deletion');
+});
+
+test('deleting a non-default address does not rewrite the remaining default', async () => {
+  const db = fakeDatabase((method, sql) => {
+    if (sql.includes('FROM users WHERE id=? FOR UPDATE')) return { id: customer.id };
+    if (sql.includes('SELECT id,is_default FROM addresses')) return { id: 'address-secondary', is_default: 0 };
+    return { changes: 1 };
+  });
+  const repo = createPostgresCustomerRepository(db);
+  await repo.deleteAddress(customer.id, 'address-secondary');
+  assert.equal(db.calls.some(call => call.sql?.includes('ORDER BY id LIMIT 1')), false);
+});
