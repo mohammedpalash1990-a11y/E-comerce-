@@ -6,7 +6,15 @@ import registerSeller from './routes_seller.mjs';
 import registerAdmin from './routes_admin.mjs';
 import registerPayments from './routes_payments.mjs';
 import { createPostgresCatalogRepository } from './postgres-catalog.mjs';
-import { createPostgresAuthRepository } from './postgres-auth.mjs';
+let createPostgresAuthRepository = null;
+try {
+  ({ createPostgresAuthRepository } = await import('./postgres-auth.mjs'));
+} catch (error) {
+  // Auth/session repository is a separate Jules task. Keep the SQLite development entrypoint bootable until it is committed.
+  if (error?.code !== 'ERR_MODULE_NOT_FOUND' || !String(error.message).includes('postgres-auth.mjs')) throw error;
+}
+import registerPostgresDomain, { createPostgresDomainRepositories } from './routes_postgres_domain.mjs';
+import { shippingFor } from './gateways.mjs';
 import './seed.mjs';
 
 export const ok = (data, status = 200) => ({ status, body: { data } });
@@ -19,14 +27,35 @@ export function createApiApp(options = {}) {
   }
 
   const catalogRepository = options.catalogRepository || (options.postgresDatabase ? createPostgresCatalogRepository(options.postgresDatabase) : createSqliteCatalogRepository());
+  if (options.postgresDatabase && !options.authRepository && !createPostgresAuthRepository) {
+    throw new Error('PostgreSQL auth/session repository is not yet available; refusing to use SQLite sessions with PostgreSQL data');
+  }
   const authRepository = options.authRepository || (options.postgresDatabase ? createPostgresAuthRepository(options.postgresDatabase) : createSqliteAuthRepository());
+  const domainRepositories = options.domainRepositories || (options.postgresDatabase
+    ? createPostgresDomainRepositories(options.postgresDatabase, {
+        shippingForPaisa: options.shippingForPaisa || shippingFor,
+        inventoryRepository: options.inventoryRepository,
+        checkoutRepository: options.checkoutRepository,
+        ordersRepository: options.ordersRepository,
+        inventoryOptions: options.inventoryOptions,
+        checkoutOptions: options.checkoutOptions,
+        ordersOptions: options.ordersOptions
+      })
+    : null);
   registerPublic(route, ok, { catalogRepository, authRepository });
+  if (domainRepositories) registerPostgresDomain(route, ok, {
+    repositories: domainRepositories,
+    gatewayInitiate: options.gatewayInitiate,
+    gatewayVerify: options.gatewayVerify,
+    gatewaySign: options.gatewaySign,
+    paymentMode: options.paymentMode || config.paymentMode
+  });
   registerCustomer(route, ok);
   registerSeller(route, ok);
   registerAdmin(route, ok);
   registerPayments(route, ok);
 
-  return { routes, catalogRepository, authRepository };
+  return { routes, catalogRepository, authRepository, domainRepositories };
 }
 
 const defaultApp = createApiApp();
