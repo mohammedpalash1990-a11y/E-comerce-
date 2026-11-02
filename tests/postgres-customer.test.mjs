@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPostgresCustomerRepository } from '../apps/api/src/postgres-customer.mjs';
-import { HttpError } from '../apps/api/src/core.mjs';
+import { HttpError } from '../apps/api/src/postgres-domain-helpers.mjs';
 
 function fakeDatabase(handler) {
   const calls = [];
