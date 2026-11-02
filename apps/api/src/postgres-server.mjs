@@ -6,6 +6,7 @@ import { createPostgresDatabase } from './postgres-runtime.mjs';
 import { createPostgresCatalogRepository } from './postgres-catalog.mjs';
 import { createPostgresAuthRepository } from './postgres-auth.mjs';
 import { createPostgresCustomerRepository } from './postgres-customer.mjs';
+import { handlePostgresInventoryWorkspace } from './postgres-inventory-workspace.mjs';
 import { runPostgresMigrations } from './postgres-migrations.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -189,6 +190,16 @@ export function createPostgresApiServer({ database, catalogRepository, authRepos
           return json(res, 200, { data: await customerRepository.removeWishlist(user.id, wishlistProductId) }, headers);
         }
         return json(res, 201, { data: await customerRepository.saveReview({ userId: user.id, productId, body }) }, headers);
+      }
+
+      if (path.startsWith('/api/v1/seller/inventory') || path.startsWith('/api/v1/admin/inventory')) {
+        const token = bearerToken(req);
+        if (!token) return json(res, 401, { error: 'Authentication required' }, headers);
+        const user = await authRepository.getSessionUser(token);
+        if (!user) return json(res, 401, { error: 'Authentication required' }, headers);
+        const body = method === 'POST' ? await readJsonBody(req) : {};
+        const result = await handlePostgresInventoryWorkspace({ database, user, method, path, url, body });
+        if (result) return json(res, result.status || 200, result, headers);
       }
 
       const knownPath = path === '/health' ||
