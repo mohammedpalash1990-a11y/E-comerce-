@@ -6,6 +6,7 @@ import {
   bad,
   id,
   sha256,
+  hmac,
   hashPassword,
   verifyPassword,
   safeEq,
@@ -32,6 +33,7 @@ test('PostgreSQL shared helpers load without importing the SQLite core', async (
 test('shared identifiers, hashes and password verification retain expected behavior', () => {
   assert.match(id(), /^[0-9a-f-]{36}$/i);
   assert.match(sha256('marketplace'), /^[a-f0-9]{64}$/);
+  assert.match(hmac('secret', 'payload'), /^[a-f0-9]{64}$/);
   const passwordHash = hashPassword('SecurePass123');
   assert.equal(verifyPassword('SecurePass123', passwordHash), true);
   assert.equal(verifyPassword('WrongPass123', passwordHash), false);
