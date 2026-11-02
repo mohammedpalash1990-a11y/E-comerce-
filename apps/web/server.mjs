@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const publicRoot = fileURLToPath(new URL('./public/', import.meta.url));
+const publicRoot = resolve(fileURLToPath(new URL('./public/', import.meta.url)));
 const port = Number(process.env.WEB_PORT || 3000);
 const apiPort = Number(process.env.PORT || 4000);
 const apiHost = process.env.API_HOST || '127.0.0.1';
