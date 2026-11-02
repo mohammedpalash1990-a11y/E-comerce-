@@ -46,9 +46,12 @@ export function createPostgresAuthRepository(database, overrides = {}) {
   async function createSession(userId) {
     const token = generateRandomBytes(32).toString('hex');
     const tokenHash = hash(token);
-    const expiresAt = new Date(Date.now() + config.sessionDays * 864e5).toISOString();
-    await query('INSERT INTO sessions(token_hash, user_id, expires_at, created_at) VALUES(?, ?, ?, ?)')
-      .run(tokenHash, userId, expiresAt, getNow());
+    const createdAt = getNow();
+    const expiresAt = new Date(Date.parse(createdAt) + config.sessionDays * 864e5).toISOString();
+    await transaction(async () => {
+      await query('INSERT INTO sessions(token_hash, user_id, expires_at, created_at) VALUES(?, ?, ?, ?)')
+        .run(tokenHash, userId, expiresAt, createdAt);
+    });
     return token;
   }
 
@@ -80,14 +83,16 @@ export function createPostgresAuthRepository(database, overrides = {}) {
 
   async function issueOtp(userId, purpose) {
     const code = String(generateRandomInt(100000, 1000000));
-    const timestamp = getNow();
-    await query('UPDATE otp_codes SET used_at=? WHERE user_id=? AND purpose=? AND used_at IS NULL')
-      .run(timestamp, userId, purpose);
-    const codeHash = hash(code + userId);
-    const expiresAt = new Date(Date.now() + 15 * 60000).toISOString();
-    await query('INSERT INTO otp_codes(id, user_id, purpose, code_hash, attempts, expires_at, used_at, created_at) VALUES(?, ?, ?, ?, 0, ?, NULL, ?)')
-      .run(generateId(), userId, purpose, codeHash, expiresAt, timestamp);
-    return code;
+    return transaction(async () => {
+      const timestamp = getNow();
+      await query('UPDATE otp_codes SET used_at=? WHERE user_id=? AND purpose=? AND used_at IS NULL')
+        .run(timestamp, userId, purpose);
+      const codeHash = hash(code + userId);
+      const expiresAt = new Date(Date.parse(timestamp) + 15 * 60000).toISOString();
+      await query('INSERT INTO otp_codes(id, user_id, purpose, code_hash, attempts, expires_at, used_at, created_at) VALUES(?, ?, ?, ?, 0, ?, NULL, ?)')
+        .run(generateId(), userId, purpose, codeHash, expiresAt, timestamp);
+      return code;
+    });
   }
 
   // Must be called inside a transaction. The row lock serializes all attempts
