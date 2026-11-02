@@ -1,6 +1,7 @@
 import { id, now, HttpError, text } from './postgres-shared.mjs';
 import { createPostgresCheckoutRepository } from './postgres-checkout.mjs';
 import { createPostgresOrderLifecycleRepository } from './postgres-orders.mjs';
+import { registerPostgresInventoryRoutes } from './postgres-inventory-routes.mjs';
 
 const money = value => Number(value || 0) / 100;
 const orderNumber = id => 'HAAT-' + String(id).replace(/-/g, '').slice(0, 10).toUpperCase();
@@ -93,6 +94,11 @@ export function registerPostgresCommerceRoutes(route, ok, options = {}) {
     const note = text(body.note, 300, 'নোট', { required: false });
     const status = await lifecycle.applyParentStatus(order.id, next, user.id, note);
     return ok({ id: order.id, status });
+  });
+
+  registerPostgresInventoryRoutes(route, ok, {
+    database,
+    inventoryRepository: options.inventoryRepository
   });
 
   return Object.freeze({ checkout, lifecycle });
