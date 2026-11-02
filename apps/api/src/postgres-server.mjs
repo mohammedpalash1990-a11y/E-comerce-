@@ -5,6 +5,7 @@ import { createPostgresPool, postgresPoolOptions, verifyPostgresConnection, clos
 import { createPostgresDatabase } from './postgres-runtime.mjs';
 import { createPostgresCatalogRepository } from './postgres-catalog.mjs';
 import { createPostgresAuthRepository } from './postgres-auth.mjs';
+import { createPostgresCustomerRepository } from './postgres-customer.mjs';
 import { runPostgresMigrations } from './postgres-migrations.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -27,7 +28,7 @@ function safeHeaders(origin, env) {
   const allowed = String(env.CORS_ORIGINS || '').split(',').map(value => value.trim()).filter(Boolean);
   if (origin && allowed.includes(origin)) Object.assign(headers, {
     'access-control-allow-origin': origin, vary: 'Origin',
-    'access-control-allow-methods': 'GET,POST,PATCH,OPTIONS',
+    'access-control-allow-methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
     'access-control-allow-headers': 'authorization,content-type', 'access-control-max-age': '600'
   });
   return headers;
@@ -88,10 +89,11 @@ function decodePathPart(value) {
   catch { throw Object.assign(new Error('Invalid URL encoding'), { status: 400 }); }
 }
 
-export function createPostgresApiServer({ database, catalogRepository, authRepository, env = process.env } = {}) {
+export function createPostgresApiServer({ database, catalogRepository, authRepository, customerRepository, env = process.env } = {}) {
   if (!database || typeof database.q !== 'function') throw new TypeError('A PostgreSQL database adapter is required');
   if (!catalogRepository) throw new TypeError('A PostgreSQL catalog repository is required');
   if (!authRepository) throw new TypeError('A PostgreSQL auth repository is required');
+  if (!customerRepository) throw new TypeError('A PostgreSQL customer repository is required');
   const allowAuthRequest = createAuthRateLimiter();
 
   return http.createServer(async (req, res) => {
@@ -156,6 +158,39 @@ export function createPostgresApiServer({ database, catalogRepository, authRepos
         return json(res, result.status || 200, result.body || result, headers);
       }
 
+      const addressMatch = path.match(/^\/api\/v1\/customer\/addresses(?:\/([^/]+))?$/);
+      const wishlistMatch = path.match(/^\/api\/v1\/customer\/wishlist(?:\/([^/]+))?$/);
+      const reviewMatch = path.match(/^\/api\/v1\/customer\/products\/([^/]+)\/reviews$/);
+      if (addressMatch || wishlistMatch || reviewMatch) {
+        const addressId = addressMatch?.[1] ? decodePathPart(addressMatch[1]) : null;
+        const productId = reviewMatch?.[1] ? decodePathPart(reviewMatch[1]) : null;
+        const wishlistProductId = wishlistMatch?.[1] ? decodePathPart(wishlistMatch[1]) : null;
+        const supported = addressMatch
+          ? (method === 'GET' && !addressId) || (method === 'POST' && !addressId) || (method === 'PUT' && !!addressId) || (method === 'DELETE' && !!addressId)
+          : wishlistMatch
+            ? (method === 'GET' && !wishlistProductId) || (method === 'POST' && !wishlistProductId) || (method === 'DELETE' && !!wishlistProductId)
+            : method === 'POST';
+        if (!supported) return json(res, 405, { error: 'Method not allowed' }, headers);
+        const token = bearerToken(req);
+        if (!token) return json(res, 401, { error: 'Authentication required' }, headers);
+        const user = await authRepository.getSessionUser(token);
+        if (!user) return json(res, 401, { error: 'Authentication required' }, headers);
+        if (user.role !== 'CUSTOMER') return json(res, 403, { error: 'এই অপারেশন শুধু গ্রাহকের জন্য' }, headers);
+        const body = ['POST', 'PUT'].includes(method) ? await readJsonBody(req) : {};
+        if (addressMatch) {
+          if (method === 'GET') return json(res, 200, { data: await customerRepository.listAddresses(user.id) }, headers);
+          if (method === 'POST') return json(res, 201, { data: await customerRepository.createAddress({ user, body }) }, headers);
+          if (method === 'PUT') return json(res, 200, { data: await customerRepository.updateAddress({ user, addressId, body }) }, headers);
+          return json(res, 200, { data: await customerRepository.deleteAddress(user.id, addressId) }, headers);
+        }
+        if (wishlistMatch) {
+          if (method === 'GET') return json(res, 200, { data: await customerRepository.listWishlist(user.id) }, headers);
+          if (method === 'POST') return json(res, 201, { data: await customerRepository.addWishlist(user.id, body.productId) }, headers);
+          return json(res, 200, { data: await customerRepository.removeWishlist(user.id, wishlistProductId) }, headers);
+        }
+        return json(res, 201, { data: await customerRepository.saveReview({ userId: user.id, productId, body }) }, headers);
+      }
+
       const knownPath = path === '/health' ||
         ['/api/v1/categories', '/api/v1/brands', '/api/v1/products', '/api/v1/products/suggest',
           '/api/v1/auth/register', '/api/v1/auth/register-seller', '/api/v1/auth/login',
@@ -174,10 +209,10 @@ export async function createPostgresApi({
   verifyConnection = verifyPostgresConnection, migrate = runPostgresMigrations,
   createServer = createPostgresApiServer
 } = {}) {
-  // Auth is the first additional domain; customer/seller/admin/commerce/payment/delivery
-  // routes are still incomplete, so this API must remain unavailable in production.
+  // Customer accounts are now mounted, but seller/admin workspaces, commerce,
+  // payment and delivery routes remain incomplete. Keep production fail-closed.
   if (env.NODE_ENV === 'production') {
-    throw new Error('PostgreSQL API is incomplete; production startup remains blocked until customer, seller, admin, commerce, payment and delivery routes are integrated and verified');
+    throw new Error('PostgreSQL API is incomplete; production startup remains blocked until seller, admin, commerce, payment and delivery routes are integrated and verified');
   }
   postgresPoolOptions(env);
   const pool = await createPool({ env });
@@ -187,7 +222,8 @@ export async function createPostgresApi({
     const database = createPostgresDatabase(pool);
     const catalogRepository = createPostgresCatalogRepository(database);
     const authRepository = createPostgresAuthRepository(database);
-    const server = createServer({ database, catalogRepository, authRepository, env });
+    const customerRepository = createPostgresCustomerRepository(database);
+    const server = createServer({ database, catalogRepository, authRepository, customerRepository, env });
     return { pool, server, connection, migrationResult };
   } catch (error) {
     await closePostgresPool(pool);
