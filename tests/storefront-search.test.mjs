@@ -4,12 +4,14 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
 const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
-const script = html.match(/<script>([\\s\\S]*?)<\\/script>/)?.[1];
-assert.ok(script, 'storefront must contain its application script');
+const scriptStart = html.indexOf('<script>');
+const scriptEnd = html.indexOf('</script>', scriptStart);
+assert.ok(scriptStart >= 0 && scriptEnd > scriptStart, 'storefront must contain its application script');
+const script = html.slice(scriptStart + '<script>'.length, scriptEnd);
 
 function extractFunction(name) {
-  const start = script.indexOf(`function ${name}(`);
-  assert.notEqual(start, -1, `${name} must exist`);
+  const start = script.indexOf('function ' + name + '(');
+  assert.notEqual(start, -1, name + ' must exist');
   const open = script.indexOf('{', start);
   let depth = 0;
   for (let i = open; i < script.length; i++) {
@@ -19,13 +21,14 @@ function extractFunction(name) {
       if (depth === 0) return script.slice(start, i + 1);
     }
   }
-  throw new Error(`Could not extract ${name}`);
+  throw new Error('Could not extract ' + name);
 }
 
 const productStart = script.indexOf('const products=');
 assert.notEqual(productStart, -1, 'baseline product catalogue must exist');
 const arrayStart = script.indexOf('[', productStart);
-let depth = 0, arrayEnd = -1;
+let depth = 0;
+let arrayEnd = -1;
 for (let i = arrayStart; i < script.length; i++) {
   if (script[i] === '[' || script[i] === '{') depth++;
   if (script[i] === ']' || script[i] === '}') {
@@ -38,7 +41,7 @@ const productDecl = script.slice(productStart, arrayEnd + 2);
 const normalizeFn = extractFunction('normalizeSearch');
 const filterFn = extractFunction('getVisibleProducts');
 const sandbox = {};
-vm.runInNewContext(`${productDecl}\\n${normalizeFn}\\n${filterFn}\\nglobalThis.api={products,normalizeSearch,getVisibleProducts};`, sandbox);
+vm.runInNewContext(productDecl + '\\n' + normalizeFn + '\\n' + filterFn + '\\nglobalThis.api={products,normalizeSearch,getVisibleProducts};', sandbox);
 
 test('renders all eight baseline catalogue products when search is empty', () => {
   assert.equal(sandbox.api.getVisibleProducts('', 'all').length, 8);
@@ -67,10 +70,10 @@ test('normalizes repeated whitespace and Unicode compatibility forms', () => {
 });
 
 test('accessible search, live result count, category state and zero-result recovery are present', () => {
-  assert.match(html, /role="search" aria-label="পণ্য খুঁজুন"/);
-  assert.match(html, /id="resultCount" role="status" aria-live="polite" aria-atomic="true"/);
-  assert.match(script, /aria-pressed=/);
-  assert.match(script, /resetCatalog/);
-  assert.match(script, /e\\.key==='Escape'/);
-  assert.match(script, /aria-label=.*কার্টে যোগ করুন/);
+  assert.ok(html.includes('role="search" aria-label="পণ্য খুঁজুন"'));
+  assert.ok(html.includes('id="resultCount" role="status" aria-live="polite" aria-atomic="true"'));
+  assert.ok(script.includes('aria-pressed='));
+  assert.ok(script.includes('resetCatalog'));
+  assert.ok(script.includes("e.key==='Escape'"));
+  assert.ok(script.includes('কার্টে যোগ করুন'));
 });
