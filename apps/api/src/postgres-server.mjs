@@ -28,7 +28,7 @@ function safeHeaders(origin, env) {
   const allowed = String(env.CORS_ORIGINS || '').split(',').map(value => value.trim()).filter(Boolean);
   if (origin && allowed.includes(origin)) Object.assign(headers, {
     'access-control-allow-origin': origin, vary: 'Origin',
-    'access-control-allow-methods': 'GET,POST,PATCH,OPTIONS',
+    'access-control-allow-methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
     'access-control-allow-headers': 'authorization,content-type', 'access-control-max-age': '600'
   });
   return headers;
