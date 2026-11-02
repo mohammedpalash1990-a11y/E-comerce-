@@ -9,7 +9,7 @@ test('homepage renders the canonical Bangla-first storefront and all demo produc
   await expect(page.getByRole('heading', { name: /পছন্দের সবকিছু/ })).toBeVisible();
   await expect(page.locator('#grid .card')).toHaveCount(8);
   await expect(page.locator('#resultCount')).toContainText('8');
-  await expect(page.getByRole('button', { name: /কার্ট/ })).toBeVisible();
+  await expect(page.locator('#openCart')).toBeVisible();
 });
 
 test('catalog search filters English and Bangla product names', async ({ page }) => {
