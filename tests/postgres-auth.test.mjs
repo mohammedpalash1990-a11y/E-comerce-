@@ -23,6 +23,11 @@ function createMockDatabase() {
         return { rows: [], rowCount: 0 };
       }
 
+      if (/^SELECT id FROM users WHERE id=\? FOR UPDATE/i.test(trimmed)) {
+        const user = state.users.get(params[0]);
+        return { rows: user ? [{ id: user.id }] : [], rowCount: user ? 1 : 0 };
+      }
+
       // INSERT INTO users
       if (/^INSERT INTO users/i.test(trimmed)) {
         const [id, phone, email, name, password, role, status, createdAt] = params;
