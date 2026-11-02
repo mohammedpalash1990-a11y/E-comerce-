@@ -27,18 +27,18 @@ test.before(async () => {
     env: { ...process.env, WEB_PORT: String(webPort), PORT: String(apiPort), API_HOST: '127.0.0.1' },
     stdio: ['ignore', 'ignore', 'pipe']
   });
-  let ready = false, startupError = '';
+  let ready = false, startupError = '', startupResponse = '';
   web.stderr.setEncoding('utf8');
   web.stderr.on('data', chunk => { startupError += chunk; });
   for (let i = 0; i < 60; i++) {
     try {
       const response = await fetch('http://127.0.0.1:' + webPort + '/');
-      if (response.ok) { ready = true; break; }
+      startupResponse = 'status=' + response.status + ' body=' + (await response.text()).slice(0, 100);\n      if (response.ok) { ready = true; break; }
     } catch {}
     if (web.exitCode !== null) break;
     await delay(100);
   }
-  assert.ok(ready, 'web server should start: ' + startupError);
+  assert.ok(ready, 'web server should start: ' + startupError + ' ' + startupResponse);
 });
 test.after(async () => {
   web?.kill();
