@@ -58,3 +58,38 @@ test('real PostgreSQL runtime migrates and exercises catalog plus auth/session r
     await closePostgresPool(pool);
   }
 });
+
+test('real PostgreSQL enforces case-insensitive seller shop uniqueness under concurrent registration', {
+  skip: databaseUrl ? false : 'POSTGRES_TEST_DATABASE_URL is not configured; concurrent uniqueness integration test not run'
+}, async () => {
+  const env = { ...process.env, DATABASE_URL: databaseUrl };
+  const pool = await createPostgresPool({ env });
+  const suffix = String(randomInt(10_000_000, 99_999_999));
+  const phones = ['017' + suffix, '018' + suffix];
+  const shopName = 'Concurrent Shop ' + suffix;
+  try {
+    await verifyPostgresConnection(pool);
+    await runPostgresMigrations(pool, migrationDirectory);
+    const auth = createPostgresAuthRepository(createPostgresDatabase(pool));
+    const registrations = phones.map((phone, index) => auth.registerSeller({
+      name: 'Concurrent Seller ' + index,
+      phone,
+      email: 'pg-shop-' + suffix + '-' + index + '@example.test',
+      password: 'Integration@123',
+      confirm_password: 'Integration@123',
+      shop_name: index === 0 ? shopName : shopName.toLowerCase(),
+      shop_address: 'Dhaka',
+      business_info: 'Disposable PostgreSQL integration fixture',
+      kyc_nid: '1234567890123'
+    }));
+    const results = await Promise.allSettled(registrations);
+    const fulfilled = results.filter(result => result.status === 'fulfilled');
+    const rejected = results.filter(result => result.status === 'rejected');
+    assert.equal(fulfilled.length, 1, 'exactly one concurrent registration should create the case-insensitive shop name');
+    assert.equal(rejected.length, 1, 'the competing registration should be rejected by the unique index');
+    assert.equal(rejected[0].reason.code, '23505');
+  } finally {
+    await pool.query('DELETE FROM users WHERE phone = ANY($1::text[])', [phones]);
+    await closePostgresPool(pool);
+  }
+});
