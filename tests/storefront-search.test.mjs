@@ -41,7 +41,7 @@ const productDecl = script.slice(productStart, arrayEnd + 2);
 const normalizeFn = extractFunction('normalizeSearch');
 const filterFn = extractFunction('getVisibleProducts');
 const sandbox = {};
-vm.runInNewContext(productDecl + '\\n' + normalizeFn + '\\n' + filterFn + '\\nglobalThis.api={products,normalizeSearch,getVisibleProducts};', sandbox);
+vm.runInNewContext([productDecl, normalizeFn, filterFn, 'globalThis.api={products,normalizeSearch,getVisibleProducts};'].join(String.fromCharCode(10)), sandbox);', sandbox);
 
 test('renders all eight baseline catalogue products when search is empty', () => {
   assert.equal(sandbox.api.getVisibleProducts('', 'all').length, 8);
