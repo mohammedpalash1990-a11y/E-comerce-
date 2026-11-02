@@ -115,10 +115,15 @@ export function createPostgresInventoryWorkspace(database, options = {}) {
   async function alerts({ sellerId = null, threshold = 5 } = {}) {
     const limit = Number(threshold);
     if (!Number.isInteger(limit) || limit < 0 || limit > 1000) throw new HttpError(400, 'সতর্কতার threshold ০–১০০০ হতে হবে');
-    const rows = await q(`SELECT p.id,p.name_bn,p.name_en,p.stock,p.price_paisa,p.seller_id,s.shop_name
-      FROM products p LEFT JOIN seller_profiles s ON s.user_id=p.seller_id
-      WHERE p.active=1 AND p.stock<=? AND (? IS NULL OR p.seller_id=?)
-      ORDER BY p.stock ASC,p.name_bn ASC LIMIT 500`).all(limit, sellerId, sellerId);
+    const rows = sellerId
+      ? await q(`SELECT p.id,p.name_bn,p.name_en,p.stock,p.price_paisa,p.seller_id,s.shop_name
+        FROM products p LEFT JOIN seller_profiles s ON s.user_id=p.seller_id
+        WHERE p.active=1 AND p.stock<=? AND p.seller_id=?
+        ORDER BY p.stock ASC,p.name_bn ASC LIMIT 500`).all(limit, sellerId)
+      : await q(`SELECT p.id,p.name_bn,p.name_en,p.stock,p.price_paisa,p.seller_id,s.shop_name
+        FROM products p LEFT JOIN seller_profiles s ON s.user_id=p.seller_id
+        WHERE p.active=1 AND p.stock<=?
+        ORDER BY p.stock ASC,p.name_bn ASC LIMIT 500`).all(limit);
     return rows.map(row => ({ ...row, price_bdt: money(row.price_paisa), low_stock: true }));
   }
 
@@ -133,7 +138,7 @@ export function createPostgresInventoryWorkspace(database, options = {}) {
       COUNT(*) FILTER (WHERE stock<=5)::int AS low_stock_products
       FROM products WHERE active=1${filter}`).get(...params);
     const movementParams = [];
-    let movementWhere = 'WHERE created_at >= COALESCE(?, \'0001-01-01\') AND created_at < COALESCE(?::date + INTERVAL \'1 day\', \'9999-12-31\'::timestamp)';
+    let movementWhere = 'WHERE created_at >= COALESCE(?, \'0001-01-01\') AND created_at < COALESCE(to_char(?::date + INTERVAL \'1 day\', \'YYYY-MM-DD\'), \'9999-12-31\')';
     movementParams.push(start, end);
     if (sellerId) { movementWhere += ' AND seller_id=?'; movementParams.push(sellerId); }
     const totals = await q(`SELECT COUNT(*)::int AS movement_count,
