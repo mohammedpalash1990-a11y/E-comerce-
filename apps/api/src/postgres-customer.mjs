@@ -7,6 +7,7 @@ export function createPostgresCustomerRepository(database) {
   const query = sql => database.q(sql);
 
   function addressFields(body, user) {
+    if (body.is_default !== undefined && typeof body.is_default !== 'boolean') throw bad('ডিফল্ট ঠিকানা নির্বাচন সঠিক নয়');
     const phone = normPhone(body.phone);
     if (!validPhone(phone)) throw bad('সঠিক মোবাইল নম্বর দিন');
     return [
