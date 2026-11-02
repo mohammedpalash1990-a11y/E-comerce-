@@ -5,6 +5,11 @@ import vm from 'node:vm';
 
 const admin = await readFile(new URL('../apps/web/public/admin.html', import.meta.url), 'utf8');
 
+test('admin logout revokes the server session before clearing the local token', () => {
+  assert.ok(admin.includes("call('/auth/logout'"));
+  assert.ok(admin.includes("localStorage.removeItem('haat_admin_token')"));
+});
+
 test('admin console exposes customer search, account controls and order history', () => {
   for (const id of ['customerQuery','customerRows','customerDetail','customerSearchBtn']) assert.match(admin, new RegExp('id="'+id+'"'));
   for (const path of ['/admin/customers','/orders']) assert.ok(admin.includes(path));

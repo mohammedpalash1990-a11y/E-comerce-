@@ -106,6 +106,36 @@ test('catalog: search, suggestions, sorting, price filter, category', async () =
   assert.ok((await R('/api/v1/products?category=fashion')).data.data.every(p => p.category_slug === 'fashion'));
 });
 
+test('customer cart sync: PUT replaces quantity, validates stock, removes zero and preserves cart on rejected checkout', async () => {
+  const lamp = await prodByName('Desk Lamp');
+  const initialStock = lamp.stock;
+  assert.equal((await R('/api/v1/customer/cart', { method: 'PUT', token: state.cust, body: { productId: lamp.id, quantity: 1 } })).status, 200);
+  assert.equal((await R('/api/v1/customer/cart', { method: 'PUT', token: state.cust, body: { productId: lamp.id, quantity: 2 } })).status, 200);
+  let cart = (await R('/api/v1/customer/cart', { token: state.cust })).data.data;
+  assert.equal(cart.items.find(x => x.product_id === lamp.id).quantity, 2, 'PUT is replacement, not additive');
+  assert.equal((await R('/api/v1/customer/cart', { method: 'PUT', token: state.cust, body: { productId: lamp.id, quantity: 1.5 } })).status, 400);
+  assert.equal((await R('/api/v1/customer/cart', { method: 'PUT', token: state.cust, body: { productId: lamp.id, quantity: initialStock + 1 } })).status, 409);
+  cart = (await R('/api/v1/customer/cart', { token: state.cust })).data.data;
+  assert.equal(cart.items.find(x => x.product_id === lamp.id).quantity, 2, 'rejected update leaves previous quantity intact');
+  const rejected = await R('/api/v1/checkout', { method: 'POST', token: state.cust, body: { delivery: delivery(), coupon_code: 'NOT-A-REAL-COUPON' } });
+  assert.equal(rejected.status, 400, 'invalid coupon rejects checkout');
+  assert.equal(await stockOf('Desk Lamp'), initialStock, 'rejected checkout does not reserve stock');
+  cart = (await R('/api/v1/customer/cart', { token: state.cust })).data.data;
+  assert.equal(cart.items.find(x => x.product_id === lamp.id).quantity, 2, 'rejected checkout preserves cart');
+  assert.equal((await R('/api/v1/customer/cart', { method: 'PUT', token: state.cust, body: { productId: lamp.id, quantity: 0 } })).status, 200);
+  assert.equal((await R('/api/v1/customer/cart', { token: state.cust })).data.data.items.length, 0, 'zero quantity removes item');
+});
+
+test('checkout rejects unsupported payment methods without reserving stock or creating an order', async () => {
+  const lamp = await prodByName('Desk Lamp');
+  const before = lamp.stock;
+  const response = await R('/api/v1/checkout', { method: 'POST', token: state.cust, body: { delivery: delivery(), items: [{ productId: lamp.id, quantity: 1 }], payment_method: 'BITCOIN' } });
+  assert.equal(response.status, 400);
+  assert.equal(await stockOf('Desk Lamp'), before);
+  const orders = (await R('/api/v1/customer/orders', { token: state.cust })).data.data;
+  assert.equal(orders.some(o => o.id === response.data?.data?.id), false);
+});
+
 test('multi-seller cart, coupon, COD checkout, seller isolation, fulfilment, finance', async () => {
   const earbuds = await prodByName('Wireless Earbuds'), mug = await prodByName('Karim Mug');
   assert.equal((await R('/api/v1/admin/coupons', { method: 'POST', token: state.admin, body: { code: 'save10', type: 'PERCENT', value: 10, min_order_bdt: 1000 } })).status, 201);
@@ -212,6 +242,30 @@ test('online payment: sandbox flow, failure, retry, replay protection, signature
   const f1 = (await R('/api/v1/seller/finance', { token: state.seller1 })).data.data.net_earnings_bdt;
   assert.ok(f1 < f0, 'seller earnings reduced by proportional reversal');
   assert.equal((await R('/api/v1/customer/orders/' + state.online.id, { token: state.cust })).data.data.payment.status, 'PARTIALLY_REFUNDED');
+});
+
+test('ROCKET sandbox payment: success confirms order and admin cancellation refunds exactly once', async () => {
+  const lamp = await prodByName('Desk Lamp');
+  const before = lamp.stock;
+  const created = await R('/api/v1/checkout', { method: 'POST', token: state.cust, body: { delivery: delivery('Dhaka'), items: [{ productId: lamp.id, quantity: 1 }], payment_method: 'ROCKET' } });
+  assert.equal(created.status, 201);
+  assert.equal(created.data.data.status, 'AWAITING_PAYMENT');
+  assert.equal(created.data.data.payment.method, 'ROCKET');
+  assert.equal(await stockOf('Desk Lamp'), before - 1);
+  const paid = await R('/api/v1/payments/sandbox/' + created.data.data.payment.payment_id + '/simulate', { method: 'POST', token: state.cust, body: {} });
+  assert.equal(paid.status, 200);
+  assert.equal(paid.data.data.status, 'PAID');
+  const customerOrder = await R('/api/v1/customer/orders/' + created.data.data.id, { token: state.cust });
+  assert.equal(customerOrder.data.data.status, 'CONFIRMED');
+  assert.equal(customerOrder.data.data.payment.method, 'ROCKET');
+  assert.equal((await R('/api/v1/admin/orders/' + created.data.data.id + '/status', { method: 'POST', token: state.admin, body: { status: 'CANCELLED' } })).status, 200);
+  assert.equal(await stockOf('Desk Lamp'), before, 'cancelled paid order restores reserved stock');
+  const refunds = (await R('/api/v1/admin/refunds', { token: state.admin })).data.data.filter(x => x.order_id === created.data.data.id);
+  assert.equal(refunds.length, 1);
+  assert.equal(refunds[0].amount_bdt, created.data.data.total_bdt);
+  assert.equal((await R('/api/v1/admin/refunds/' + refunds[0].id + '/approve', { method: 'POST', token: state.admin })).status, 200);
+  assert.equal((await R('/api/v1/admin/refunds/' + refunds[0].id + '/approve', { method: 'POST', token: state.admin })).status, 404);
+  assert.equal((await R('/api/v1/customer/orders/' + created.data.data.id, { token: state.cust })).data.data.payment.status, 'REFUNDED');
 });
 
 test('cancellation: customer & admin cancel restore stock exactly once, paid cancel raises refund', async () => {

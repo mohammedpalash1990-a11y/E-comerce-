@@ -36,7 +36,7 @@ $('#sellerRows').onclick=async e=>{const b=e.target.closest('button[data-seller]
 $('#pendingRows').onclick=async e=>{const b=e.target.closest('button[data-id]');if(!b)return;try{await call('/admin/products/'+encodeURIComponent(b.dataset.id)+'/'+b.dataset.action,{method:'POST'});notify(b.dataset.action==='approve'?'পণ্য অনুমোদন করা হয়েছে।':'পণ্য বাতিল করা হয়েছে।');await load()}catch(err){notify(err)}};
 $('#orderRows').onchange=async e=>{const s=e.target.closest('[data-order-status]');if(!s||!s.value)return;try{await call('/admin/orders/'+encodeURIComponent(s.dataset.orderStatus)+'/status',{method:'POST',body:JSON.stringify({status:s.value})});$('#orderMsg').textContent='অর্ডারের অবস্থা আপডেট হয়েছে।';$('#orderMsg').classList.remove('hidden');await loadOrders()}catch(err){$('#orderMsg').textContent=err.message;$('#orderMsg').classList.remove('hidden')}};
 $('#refreshOrders').onclick=()=>loadOrders().catch(e=>{ $('#orderMsg').textContent=e.message;$('#orderMsg').classList.remove('hidden')});
-$('#refresh').onclick=()=>load().catch(notify);$('#logout').onclick=()=>{token='';localStorage.removeItem('haat_admin_token');show()};
+$('#refresh').onclick=()=>load().catch(notify);$('#logout').onclick=async()=>{try{await call('/auth/logout',{method:'POST',body:JSON.stringify({})})}catch{}token='';localStorage.removeItem('haat_admin_token');show()};
 function adminTab(name){document.querySelectorAll('.admin-extra').forEach(x=>x.classList.toggle('hidden',x.id!=='admin-'+name));document.querySelectorAll('[data-admin-tab]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.adminTab===name)))}
 document.querySelectorAll('[data-admin-tab]').forEach(b=>b.onclick=()=>adminTab(b.dataset.adminTab));
 const dateText=s=>s?new Date(s).toLocaleString('bn-BD'):'—';
