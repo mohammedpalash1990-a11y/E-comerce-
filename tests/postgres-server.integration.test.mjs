@@ -7,6 +7,7 @@ import { createPostgresPool, verifyPostgresConnection, closePostgresPool } from 
 import { createPostgresDatabase } from '../apps/api/src/postgres-runtime.mjs';
 import { createPostgresCatalogRepository } from '../apps/api/src/postgres-catalog.mjs';
 import { createPostgresAuthRepository } from '../apps/api/src/postgres-auth.mjs';
+import { sha256 } from '../apps/api/src/postgres-shared.mjs';
 import { runPostgresMigrations } from '../apps/api/src/postgres-migrations.mjs';
 
 const databaseUrl = process.env.POSTGRES_TEST_DATABASE_URL;
@@ -55,6 +56,77 @@ test('real PostgreSQL runtime migrates and exercises catalog plus auth/session r
     assert.equal(await auth.getSessionUser(registered.token), null);
   } finally {
     if (createdUserId) await pool.query('DELETE FROM users WHERE id=$1', [createdUserId]);
+    await closePostgresPool(pool);
+  }
+});
+
+test('real PostgreSQL enforces case-insensitive seller shop uniqueness under concurrent registration', {
+  skip: databaseUrl ? false : 'POSTGRES_TEST_DATABASE_URL is not configured; concurrent uniqueness integration test not run'
+}, async () => {
+  const env = { ...process.env, DATABASE_URL: databaseUrl };
+  const pool = await createPostgresPool({ env });
+  const suffix = String(randomInt(10_000_000, 99_999_999));
+  const phones = ['017' + suffix, '018' + suffix];
+  const shopName = 'Concurrent Shop ' + suffix;
+  try {
+    await verifyPostgresConnection(pool);
+    await runPostgresMigrations(pool, migrationDirectory);
+    const auth = createPostgresAuthRepository(createPostgresDatabase(pool));
+    const registrations = phones.map((phone, index) => auth.registerSeller({
+      name: 'Concurrent Seller ' + index,
+      phone,
+      email: 'pg-shop-' + suffix + '-' + index + '@example.test',
+      password: 'Integration@123',
+      confirm_password: 'Integration@123',
+      shop_name: index === 0 ? shopName : shopName.toLowerCase(),
+      shop_address: 'Dhaka',
+      business_info: 'Disposable PostgreSQL integration fixture',
+      kyc_nid: '1234567890123'
+    }));
+    const results = await Promise.allSettled(registrations);
+    const fulfilled = results.filter(result => result.status === 'fulfilled');
+    const rejected = results.filter(result => result.status === 'rejected');
+    assert.equal(fulfilled.length, 1, 'exactly one concurrent registration should create the case-insensitive shop name');
+    assert.equal(rejected.length, 1, 'the competing registration should be rejected by the unique index');
+    assert.equal(rejected[0].reason.code, '23505');
+  } finally {
+    await pool.query('DELETE FROM users WHERE phone = ANY($1::text[])', [phones]);
+    await closePostgresPool(pool);
+  }
+});
+
+test('real PostgreSQL serializes concurrent OTP issuance so only one unused code remains', {
+  skip: databaseUrl ? false : 'POSTGRES_TEST_DATABASE_URL is not configured; concurrent OTP issuance integration test not run'
+}, async () => {
+  const env = { ...process.env, DATABASE_URL: databaseUrl };
+  const pool = await createPostgresPool({ env });
+  let userId = null;
+  try {
+    await verifyPostgresConnection(pool);
+    await runPostgresMigrations(pool, migrationDirectory);
+    const database = createPostgresDatabase(pool);
+    const auth = createPostgresAuthRepository(database);
+    const phone = '017' + String(randomInt(10_000_000, 99_999_999));
+    const registered = await auth.registerCustomer({
+      name: 'OTP Concurrency Integration',
+      phone,
+      password: 'Integration@123',
+      confirm_password: 'Integration@123'
+    });
+    userId = registered.data.id;
+    const codes = await Promise.all([
+      auth.issueOtp(userId, 'PHONE'),
+      auth.issueOtp(userId, 'PHONE')
+    ]);
+    const active = await pool.query(
+      "SELECT code_hash FROM otp_codes WHERE user_id=$1 AND purpose='PHONE' AND used_at IS NULL",
+      [userId]
+    );
+    assert.equal(active.rows.length, 1, 'exactly one active OTP may remain after concurrent issuance');
+    assert.equal(codes.map(code => sha256(code + userId)).filter(hash => hash === active.rows[0].code_hash).length, 1,
+      'the single active row must match exactly one returned code');
+  } finally {
+    if (userId) await pool.query('DELETE FROM users WHERE id=$1', [userId]);
     await closePostgresPool(pool);
   }
 });
