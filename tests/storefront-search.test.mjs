@@ -41,7 +41,8 @@ const productDecl = script.slice(productStart, arrayEnd + 2);
 const normalizeFn = extractFunction('normalizeSearch');
 const filterFn = extractFunction('getVisibleProducts');
 const sandbox = {};
-vm.runInNewContext([productDecl, normalizeFn, filterFn, 'globalThis.api={products,normalizeSearch,getVisibleProducts};'].join(String.fromCharCode(10)), sandbox);', sandbox);
+const executable = [productDecl, normalizeFn, filterFn, 'globalThis.api={products,normalizeSearch,getVisibleProducts};'].join(String.fromCharCode(10));
+vm.runInNewContext(executable, sandbox);
 
 test('renders all eight baseline catalogue products when search is empty', () => {
   assert.equal(sandbox.api.getVisibleProducts('', 'all').length, 8);
@@ -72,6 +73,7 @@ test('normalizes repeated whitespace and Unicode compatibility forms', () => {
 test('accessible search, live result count, category state and zero-result recovery are present', () => {
   assert.ok(html.includes('role="search" aria-label="পণ্য খুঁজুন"'));
   assert.ok(html.includes('id="resultCount" role="status" aria-live="polite" aria-atomic="true"'));
+  assert.ok(script.includes("$('#resultCount').textContent=list.length+' টি পণ্য পাওয়া গেছে'"));
   assert.ok(script.includes('aria-pressed='));
   assert.ok(script.includes('resetCatalog'));
   assert.ok(script.includes("e.key==='Escape'"));
