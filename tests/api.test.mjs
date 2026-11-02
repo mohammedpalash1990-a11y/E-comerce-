@@ -7,11 +7,8 @@ const port = 4417;
 const base = 'http://127.0.0.1:' + port;
 const child = spawn(process.execPath, ['apps/api/src/server.mjs'], {
   env: { ...process.env, PORT: String(port), SQLITE_FILE: ':memory:' },
-  stdio: ['ignore', 'pipe', 'pipe']
+  stdio: 'ignore'
 });
-let startupOutput = '';
-child.stdout.setEncoding('utf8').on('data', chunk => { startupOutput += chunk; });
-child.stderr.setEncoding('utf8').on('data', chunk => { startupOutput += chunk; });
 async function request(path, { method = 'GET', token, body } = {}) {
   const response = await fetch(base + path, {
     method,
@@ -33,7 +30,7 @@ test('catalog, seller product submission and admin moderation work with role che
     } catch {}
     await delay(100);
   }
-  assert.equal(ready, true, 'API should start. Child process output: ' + startupOutput);
+  assert.equal(ready, true, 'API should start');
   const categoryResponse = await request('/api/v1/categories');
   assert.equal(categoryResponse.status, 200);
   const categorySlugs = categoryResponse.data.data.map(category => category.slug).sort();

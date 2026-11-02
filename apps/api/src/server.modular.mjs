@@ -7,8 +7,6 @@ import registerAdmin from './routes_admin.mjs';
 import registerPayments from './routes_payments.mjs';
 import { createPostgresCatalogRepository } from './postgres-catalog.mjs';
 import { createPostgresAuthRepository } from './postgres-auth.mjs';
-import registerPostgresDomain, { createPostgresDomainRepositories } from './routes_postgres_domain.mjs';
-import { shippingFor } from './gateways.mjs';
 import './seed.mjs';
 
 export const ok = (data, status = 200) => ({ status, body: { data } });
@@ -22,31 +20,13 @@ export function createApiApp(options = {}) {
 
   const catalogRepository = options.catalogRepository || (options.postgresDatabase ? createPostgresCatalogRepository(options.postgresDatabase) : createSqliteCatalogRepository());
   const authRepository = options.authRepository || (options.postgresDatabase ? createPostgresAuthRepository(options.postgresDatabase) : createSqliteAuthRepository());
-  const domainRepositories = options.domainRepositories || (options.postgresDatabase
-    ? createPostgresDomainRepositories(options.postgresDatabase, {
-        shippingForPaisa: options.shippingForPaisa || shippingFor,
-        inventoryRepository: options.inventoryRepository,
-        checkoutRepository: options.checkoutRepository,
-        ordersRepository: options.ordersRepository,
-        inventoryOptions: options.inventoryOptions,
-        checkoutOptions: options.checkoutOptions,
-        ordersOptions: options.ordersOptions
-      })
-    : null);
   registerPublic(route, ok, { catalogRepository, authRepository });
-  if (domainRepositories) registerPostgresDomain(route, ok, {
-    repositories: domainRepositories,
-    gatewayInitiate: options.gatewayInitiate,
-    gatewayVerify: options.gatewayVerify,
-    gatewaySign: options.gatewaySign,
-    paymentMode: options.paymentMode || config.paymentMode
-  });
   registerCustomer(route, ok);
   registerSeller(route, ok);
   registerAdmin(route, ok);
   registerPayments(route, ok);
 
-  return { routes, catalogRepository, authRepository, domainRepositories };
+  return { routes, catalogRepository, authRepository };
 }
 
 const defaultApp = createApiApp();
