@@ -1,5 +1,4 @@
-import { HttpError, bad, id, now, normPhone, validPhone, text } from './core.mjs';
-import { productView, LIVE } from './routes_public.mjs';
+import { HttpError, bad, id, now, normPhone, validPhone, text, productView, LIVE } from './postgres-domain-helpers.mjs';
 
 export function createPostgresCustomerRepository(database) {
   if (!database || typeof database.q !== 'function' || typeof database.tx !== 'function') {
