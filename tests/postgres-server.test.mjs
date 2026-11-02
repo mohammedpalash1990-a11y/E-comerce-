@@ -37,12 +37,13 @@ function fakeCatalog() {
   };
 }
 const validToken = 'a'.repeat(40);
+const validSellerToken = 'b'.repeat(40);
 function fakeAuth() {
   const calls = [];
   const user = { id: 'u1', name: 'Test User', role: 'CUSTOMER', token_hash: 'hash' };
   return {
     calls,
-    async getSessionUser(token) { calls.push(['getSessionUser', token]); return token === validToken ? user : null; },
+    async getSessionUser(token) { calls.push(['getSessionUser', token]); return token === validToken ? user : token === validSellerToken ? { ...user, id: 's1', role: 'SELLER' } : null; },
     async registerCustomer(body) { calls.push(['registerCustomer', body]); return { token: validToken, data: { id: 'u1', role: 'CUSTOMER' } }; },
     async registerSeller(body) { calls.push(['registerSeller', body]); return { token: validToken, data: { id: 's1', role: 'SELLER', status: 'PENDING' } }; },
     async login(body) { calls.push(['login', body]); return { token: validToken, data: { id: 'u1', role: 'CUSTOMER' } }; },
@@ -58,9 +59,23 @@ function fakeAuth() {
     async markNotificationsRead(id) { calls.push(['markNotificationsRead', id]); return { read: true }; }
   };
 }
-async function withServer({ authRepository = fakeAuth(), env = {} } = {}, run) {
+function fakeCustomer() {
+  const calls = [];
+  return {
+    calls,
+    async listAddresses(userId) { calls.push(['listAddresses', userId]); return [{ id: 'a1' }]; },
+    async createAddress(input) { calls.push(['createAddress', input.user.id, input.body]); return { id: 'a2' }; },
+    async updateAddress(input) { calls.push(['updateAddress', input.user.id, input.addressId]); return { id: input.addressId }; },
+    async deleteAddress(userId, addressId) { calls.push(['deleteAddress', userId, addressId]); return { deleted: true }; },
+    async listWishlist(userId) { calls.push(['listWishlist', userId]); return [{ id: 'p1' }]; },
+    async addWishlist(userId, productId) { calls.push(['addWishlist', userId, productId]); return { added: true }; },
+    async removeWishlist(userId, productId) { calls.push(['removeWishlist', userId, productId]); return { removed: true }; },
+    async saveReview(input) { calls.push(['saveReview', input.userId, input.productId]); return { saved: true }; }
+  };
+}
+async function withServer({ authRepository = fakeAuth(), customerRepository = fakeCustomer(), env = {} } = {}, run) {
   const database = { q(sql) { return { async get() { assert.equal(sql, 'SELECT 1 AS ok'); return { ok: 1 }; } }; } };
-  const server = createPostgresApiServer({ database, catalogRepository: fakeCatalog(), authRepository, env });
+  const server = createPostgresApiServer({ database, catalogRepository: fakeCatalog(), authRepository, customerRepository, env });
   await new Promise(resolveListen => server.listen(0, '127.0.0.1', resolveListen));
   const base = 'http://127.0.0.1:' + server.address().port;
   try { await run(base, authRepository); }
@@ -80,6 +95,7 @@ test('PostgreSQL HTTP import graph is SQLite-free', async () => {
   }
   assert.ok([...files].some(file => file.endsWith('/postgres-catalog.mjs')));
   assert.ok([...files].some(file => file.endsWith('/postgres-auth.mjs')));
+  assert.ok([...files].some(file => file.endsWith('/postgres-customer.mjs')));
   assert.ok([...files].some(file => file.endsWith('/postgres-runtime.mjs')));
 });
 
@@ -157,6 +173,46 @@ test('public authentication endpoints apply per-IP rate limits', async () => {
     }
     assert.equal(last.status, 429);
     assert.equal(last.headers.get('retry-after'), '60');
+  });
+});
+
+
+test('PostgreSQL customer routes enforce CUSTOMER role and delegate addresses, wishlist and reviews', async () => {
+  const customerRepository = fakeCustomer();
+  await withServer({ customerRepository }, async base => {
+    const auth = { authorization: 'Bearer ' + validToken };
+    const get = path => fetch(base + path, { headers: auth });
+    const addresses = await get('/api/v1/customer/addresses');
+    assert.deepEqual(await addresses.json(), { data: [{ id: 'a1' }] });
+    const created = await fetch(base + '/api/v1/customer/addresses', {
+      method: 'POST', headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ label: 'Home', phone: '01711111111', address: 'Dhaka', area: 'Dhaka' })
+    });
+    assert.equal(created.status, 201);
+    const updated = await fetch(base + '/api/v1/customer/addresses/a2', {
+      method: 'PUT', headers: { ...auth, 'content-type': 'application/json' }, body: JSON.stringify({ phone: '01711111111' })
+    });
+    assert.equal(updated.status, 200);
+    const wishlist = await get('/api/v1/customer/wishlist');
+    assert.deepEqual(await wishlist.json(), { data: [{ id: 'p1' }] });
+    const added = await fetch(base + '/api/v1/customer/wishlist', {
+      method: 'POST', headers: { ...auth, 'content-type': 'application/json' }, body: JSON.stringify({ productId: 'p1' })
+    });
+    assert.equal(added.status, 201);
+    const review = await fetch(base + '/api/v1/customer/products/p1/reviews', {
+      method: 'POST', headers: { ...auth, 'content-type': 'application/json' }, body: JSON.stringify({ rating: 5 })
+    });
+    assert.equal(review.status, 201);
+    assert.ok(customerRepository.calls.some(call => call[0] === 'saveReview'));
+  });
+});
+
+test('seller sessions cannot access customer-only routes', async () => {
+  await withServer({}, async base => {
+    const response = await fetch(base + '/api/v1/customer/addresses', {
+      headers: { authorization: 'Bearer ' + validSellerToken }
+    });
+    assert.equal(response.status, 403);
   });
 });
 
