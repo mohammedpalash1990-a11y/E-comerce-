@@ -1,8 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPostgresAuthRepository } from '../apps/api/src/postgres-auth.mjs';
-import { createApiApp, createHttpServer } from '../apps/api/src/server.modular.mjs';
-import { sha256, hashPassword } from '../apps/api/src/core.mjs';
+
+// Keep this integration-style SQLite test isolated from parallel test files.
+process.env.SQLITE_FILE = ':memory:';
+const [{ createApiApp, createHttpServer }, { sha256, hashPassword }] = await Promise.all([
+  import('../apps/api/src/server.modular.mjs'),
+  import('../apps/api/src/core.mjs')
+]);
 
 function createInMemoryPostgresAdapter() {
   const tables = {
