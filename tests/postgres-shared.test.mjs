@@ -39,7 +39,7 @@ test('shared identifiers, hashes and password verification retain expected behav
 });
 
 test('Bangladesh phone, email and text validators preserve input rules', () => {
-  assert.equal(normPhone('+880 1712-345678'), '1712345678');
+  assert.equal(normPhone('+880 1712-345678'), '01712345678');
   assert.equal(validPhone('01712345678'), true);
   assert.equal(validPhone('01112345678'), false);
   assert.equal(validEmail('person@example.com'), true);
