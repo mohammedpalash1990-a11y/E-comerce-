@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { HttpError } from '../apps/api/src/postgres-shared.mjs';
 import {
   PAYMENT_METHODS,
   COURIERS,
@@ -35,6 +36,7 @@ test('sandbox payment and courier adapters retain supported contracts', () => {
   assert.equal(shipment.charge, 6000);
   assert.match(shipment.trackingId, /^PA-/);
   assert.ok(SHIPMENT_STATUSES.includes('DELIVERED'));
+  assert.throws(() => courierQuote('UNKNOWN', 'Dhaka'), error => error instanceof HttpError && error.status === 400);
 });
 
 test('gateway callback signature is deterministic and rejects tampering', () => {
