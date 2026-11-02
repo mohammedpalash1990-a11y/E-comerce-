@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { productFields, parseImages } from './routes_seller.mjs';
-import { courierBook, COURIERS, SHIPMENT_STATUSES } from './gateways.mjs';
+import { productFields, parseImages } from './postgres-domain-helpers.mjs';
+import { courierBook, COURIERS, SHIPMENT_STATUSES } from './postgres-gateways.mjs';
 
 function fail(status, code, message) { const error = new Error(message); error.status=status; error.code=code; return error; }
 function integer(value,label) { const n=typeof value==='number'?value:Number(value); if(!Number.isSafeInteger(n)) throw fail(500,'INVALID_DATABASE_VALUE',label+' is not a safe integer'); return n; }
@@ -267,7 +267,7 @@ export function createPostgresAdminRepository(database,{createId=randomUUID,cloc
       const existing=await query("SELECT id,price_paisa,discount_paisa,status FROM products WHERE id=? AND status<>'ARCHIVED' FOR UPDATE").get(String(productId));
       if(!existing) throw fail(404,'PRODUCT_NOT_FOUND','পণ্য পাওয়া যায়নি');
       const clean={...body,category_slug:undefined,brand_slug:undefined};
-      const fields=productFields(clean,{partial:true}),images=parseImages(body.images),requestedStock=fields.stock;
+      const fields=await productFields(clean,{partial:true,query}),images=parseImages(body.images),requestedStock=fields.stock;
       delete fields.stock;
       const nextPrice=fields.price_paisa??integer(existing.price_paisa,'price_paisa');
       const nextDiscount=fields.discount_paisa!==undefined?fields.discount_paisa:existing.discount_paisa;
