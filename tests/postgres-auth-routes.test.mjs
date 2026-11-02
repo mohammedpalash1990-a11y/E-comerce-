@@ -20,8 +20,13 @@ function createRouteHarness() {
     async query(sql, params = []) {
       const trimmed = sql.trim().replace(/\$\d+/g, '?');
 
-      if (/^(BEGIN|COMMIT|ROLLBACK)/i.test(trimmed)) {
+      if (/^(BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE SAVEPOINT)/i.test(trimmed)) {
         return { rows: [], rowCount: 0 };
+      }
+
+      if (/^SELECT id FROM users WHERE id=\\? FOR UPDATE/i.test(trimmed)) {
+        const user = state.users.get(params[0]);
+        return { rows: user ? [{ id: user.id }] : [], rowCount: user ? 1 : 0 };
       }
 
       if (/^INSERT INTO users/i.test(trimmed)) {
