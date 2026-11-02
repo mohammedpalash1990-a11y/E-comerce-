@@ -78,3 +78,9 @@
 - Fake Pool-ভিত্তিক test-এ query binding, transaction isolation, nested savepoint, rollback, migration ordering/idempotence/failure, এবং BIGINT parsing যাচাই করা হয়েছে। GitHub Actions-এর test ও build check সর্বশেষ যাচাইকৃত adapter commit-এ pass করেছে।
 - **সীমাবদ্ধতা:** এই adapter এখনো `core.mjs` বা API server-এ wired নয়; route-গুলোর ২৪৯টি synchronous query call pattern ও ২৬টি synchronous transaction call pattern async conversion চায়। তাই production guard অপরিবর্তিত এবং PostgreSQL production runtime এখনো চালু নয়।
 - বিস্তারিত: `docs/POSTGRES_MIGRATION_AUDIT_BN.md` এবং `docs/POSTGRES_RUNTIME_ADAPTER_BN.md`।
+
+
+## PostgreSQL checkout ও inventory groundwork (২০২৬-১১-০২)
+- `apps/api/src/postgres-checkout.mjs`-এ async PostgreSQL checkout repository যোগ হয়েছে: cart বা request item validation, duplicate product quantity aggregation, deterministic product-row locking (`FOR UPDATE`), server-side price calculation, conditional stock reservation (`UPDATE ... WHERE stock>=? RETURNING`), seller-wise sub-order split, commission calculation, payment row, cart cleanup, event/audit/notification hooks—সব এক transaction-এ।
+- `tests/postgres-checkout.test.mjs`-এ COD checkout, stock reservation, duplicate line aggregation, insufficient stock rollback, online gateway missing guard এবং unapproved seller rejection-এর regression coverage যোগ হয়েছে।
+- **সীমাবদ্ধতা:** repository এখনো `routes_customer.mjs`-এ wired নয়; বর্তমান customer checkout route SQLite-নির্ভর। Coupon validation, shipping calculation এবং online gateway integration adapter হিসেবে inject করতে হবে। এটি production PostgreSQL enable করার অনুমতি নয়; route integration ও live PostgreSQL transaction tests বাকি।
