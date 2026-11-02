@@ -26,7 +26,7 @@ function createInMemoryPostgresAdapter() {
       const trimmed = sql.trim();
       return {
         get: async (...params) => {
-          if (/SELECT id FROM users WHERE id=\\? FOR UPDATE/i.test(trimmed)) {
+          if (trimmed.startsWith('SELECT id FROM users WHERE id=? FOR UPDATE')) {
             const user = [...tables.users.values()].find(u => u.id === params[0]);
             return user ? { id: user.id } : null;
           }
