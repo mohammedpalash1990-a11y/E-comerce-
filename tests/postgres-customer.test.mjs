@@ -51,7 +51,11 @@ test('customer cannot create an eleventh saved address', async () => {
 });
 
 test('address update is owner-scoped and cannot edit another customer address', async () => {
-  const db = fakeDatabase((method, sql) => sql.includes('SELECT id FROM addresses') ? undefined : { changes: 1 });
+  const db = fakeDatabase((method, sql) => {
+    if (sql.includes('FROM users WHERE id=? FOR UPDATE')) return { id: customer.id };
+    if (sql.includes('SELECT id,is_default FROM addresses')) return undefined;
+    return { changes: 1 };
+  });
   const repo = createPostgresCustomerRepository(db);
   await assert.rejects(repo.updateAddress({ user: customer, addressId: 'foreign-address', body: validAddress }),
     error => error instanceof HttpError && error.status === 404 && error.message === 'Address not found');
