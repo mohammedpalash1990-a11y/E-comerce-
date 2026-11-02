@@ -367,3 +367,25 @@ test('admin order note is saved under a row lock with audit trail',async()=>{
   assert.ok(db.calls.some(x=>x.sql?.includes('FROM orders WHERE id=')&&x.sql.includes('FOR UPDATE')));
   assert.ok(db.calls.some(x=>x.sql?.includes('UPDATE orders SET admin_note=')&&x.values[0]==='Check delivery'));
 });
+
+
+test('PostgreSQL admin product edit uses PostgreSQL-safe field validation without SQLite category lookups', async () => {
+  const db=fakeDatabase((method,sql)=>sql.includes("SELECT id,price_paisa,discount_paisa,status FROM products")
+    ? {id:'product-9',price_paisa:'10000',discount_paisa:null,status:'ACTIVE'}
+    : undefined);
+  const repo=createPostgresAdminRepository(db,{createId:()=> 'edit-event',clock:()=> '2026-11-02T10:00:00.000Z'});
+  assert.deepEqual(await repo.updateProduct({productId:'product-9',actorId:'admin-1',body:{name_bn:'নতুন পণ্য',price_bdt:125,description:'বিবরণ'}}),{id:'product-9'});
+  const update=db.calls.find(call=>call.sql?.startsWith('UPDATE products SET'));
+  assert.ok(update);
+  assert.deepEqual(update.values.slice(0,3),['নতুন পণ্য',12500,'বিবরণ']);
+  assert.ok(db.calls.some(call=>call.sql?.includes('INSERT INTO audit_logs')&&call.values[2]==='PRODUCT_ADMIN_EDIT'));
+});
+
+test('PostgreSQL admin product edit rejects invalid product fields before writing', async () => {
+  const db=fakeDatabase((method,sql)=>sql.includes("SELECT id,price_paisa,discount_paisa,status FROM products")
+    ? {id:'product-10',price_paisa:'10000',discount_paisa:null,status:'ACTIVE'}
+    : undefined);
+  const repo=createPostgresAdminRepository(db);
+  await assert.rejects(repo.updateProduct({productId:'product-10',actorId:'admin-1',body:{price_bdt:-1}}),error=>error.status===400);
+  assert.equal(db.calls.some(call=>call.sql?.startsWith('UPDATE products SET')),false);
+});
