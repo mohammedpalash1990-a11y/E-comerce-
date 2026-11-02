@@ -5,18 +5,19 @@ import net from 'node:net';
 import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 
-async function freePort() {
+async function freePort(exclude) {
   const probe = net.createServer();
   await new Promise((resolve, reject) => probe.once('error', reject).listen(0, '127.0.0.1', resolve));
   const { port } = probe.address();
   await new Promise(resolve => probe.close(resolve));
+  if (port === exclude) return freePort(exclude);
   return port;
 }
 let webPort, apiPort, web;
 let api;
 test.before(async () => {
   webPort = await freePort();
-  apiPort = await freePort();
+  apiPort = await freePort(webPort);
   api = http.createServer((req, res) => {
     res.writeHead(200, { 'content-type': 'application/json', 'x-api-test': 'ok' });
     res.end(JSON.stringify({ path: req.url, method: req.method }));
