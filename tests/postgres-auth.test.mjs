@@ -19,7 +19,7 @@ function createMockDatabase() {
     async query(sql, params = []) {
       const trimmed = sql.trim().replace(/\$\d+/g, '?');
 
-      if (/^(BEGIN|COMMIT|ROLLBACK)/i.test(trimmed)) {
+      if (/^(BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE SAVEPOINT)/i.test(trimmed)) {
         return { rows: [], rowCount: 0 };
       }
 
