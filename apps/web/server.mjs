@@ -43,7 +43,7 @@ const server = http.createServer((req, res) => {
   }
   try {
     const pathname = decodeURIComponent(url.pathname);
-    const route = pathname === '/' ? 'index.html' : pathname.replace(/^\\/+/, '');
+    const route = pathname === '/' ? 'index.html' : pathname.slice(1);
     const filePath = resolve(publicRoot, route);
     if (filePath !== publicRoot && !filePath.startsWith(publicRoot + sep)) {
       respond(res, 404, { 'content-type': 'text/plain; charset=utf-8' }, 'Not found'); return;
