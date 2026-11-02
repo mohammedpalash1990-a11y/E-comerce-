@@ -38,20 +38,20 @@ export const safeEq = (a, b) => {
   const right = Buffer.from(String(b));
   return left.length === right.length && timingSafeEqual(left, right);
 };
-export const normPhone = phone => String(phone || '').replace(/[\\s-]/g, '').replace(/^\\+?88/, '');
-export const validPhone = phone => /^01[3-9]\\d{8}$/.test(phone);
-export const validEmail = email => /^[^\\s@<>]+@[^\\s@<>]+\\.[^\\s@<>]+$/.test(email) && email.length <= 160;
+export const normPhone = phone => String(phone || '').replace(/[\s-]/g, '').replace(/^\+?88/, '');
+export const validPhone = phone => /^01[3-9]\d{8}$/.test(phone);
+export const validEmail = email => /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email) && email.length <= 160;
 
 export function checkPassword(password) {
   if (typeof password !== 'string' || password.length < 8 || password.length > 128 ||
-      !/[A-Za-z]/.test(password) || !/\\d/.test(password)) {
+      !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
     throw bad('পাসওয়ার্ড কমপক্ষে ৮ অক্ষরের হতে হবে এবং অক্ষর ও সংখ্যা থাকতে হবে');
   }
 }
 
 export function text(value, max, label, { required = true } = {}) {
   const result = String(value ?? '')
-    .replace(/[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]/g, '')
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '')
     .trim();
   if (required && !result) throw bad(label + ' দিতে হবে');
   if (result.length > max) throw bad(label + ' অনেক লম্বা');
