@@ -85,6 +85,9 @@ export function createPostgresAuthRepository(database, overrides = {}) {
     const code = String(generateRandomInt(100000, 1000000));
     return transaction(async () => {
       const timestamp = getNow();
+      // Serialize concurrent OTP issuance for one account, including the
+      // no-existing-OTP case where UPDATE alone would lock no rows.
+      await query('SELECT id FROM users WHERE id=? FOR UPDATE').get(userId);
       await query('UPDATE otp_codes SET used_at=? WHERE user_id=? AND purpose=? AND used_at IS NULL')
         .run(timestamp, userId, purpose);
       const codeHash = hash(code + userId);
