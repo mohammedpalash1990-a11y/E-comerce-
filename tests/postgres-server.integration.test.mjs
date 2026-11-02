@@ -7,6 +7,7 @@ import { createPostgresPool, verifyPostgresConnection, closePostgresPool } from 
 import { createPostgresDatabase } from '../apps/api/src/postgres-runtime.mjs';
 import { createPostgresCatalogRepository } from '../apps/api/src/postgres-catalog.mjs';
 import { createPostgresAuthRepository } from '../apps/api/src/postgres-auth.mjs';
+import { createPostgresCustomerRepository } from '../apps/api/src/postgres-customer.mjs';
 import { sha256 } from '../apps/api/src/postgres-shared.mjs';
 import { runPostgresMigrations } from '../apps/api/src/postgres-migrations.mjs';
 
@@ -34,6 +35,7 @@ test('real PostgreSQL runtime migrates and exercises catalog plus auth/session r
     assert.ok(Array.isArray(await catalog.listProducts(new URLSearchParams({ limit: '5' }))));
 
     const auth = createPostgresAuthRepository(database);
+    const customer = createPostgresCustomerRepository(database);
     const phone = '017' + String(randomInt(10_000_000, 99_999_999));
     const email = 'pg-integration-' + phone + '@example.test';
     const registered = await auth.registerCustomer({
@@ -48,6 +50,13 @@ test('real PostgreSQL runtime migrates and exercises catalog plus auth/session r
     const sessionUser = await auth.getSessionUser(registered.token);
     assert.equal(sessionUser.id, createdUserId);
     assert.equal(sessionUser.role, 'CUSTOMER');
+    const savedAddress = await customer.createAddress({
+      user: sessionUser,
+      body: { label: 'Integration', name: sessionUser.name, phone, address: 'Disposable test address', area: 'Dhaka', is_default: true }
+    });
+    assert.ok(savedAddress.id);
+    const addresses = await customer.listAddresses(createdUserId);
+    assert.ok(addresses.some(address => address.id === savedAddress.id));
 
     const login = await auth.login({ identifier: phone, password: 'Integration@123' });
     assert.ok(login.token);
