@@ -78,9 +78,3 @@
 - Fake Pool-ভিত্তিক test-এ query binding, transaction isolation, nested savepoint, rollback, migration ordering/idempotence/failure, এবং BIGINT parsing যাচাই করা হয়েছে। GitHub Actions-এর test ও build check সর্বশেষ যাচাইকৃত adapter commit-এ pass করেছে।
 - **সীমাবদ্ধতা:** এই adapter এখনো `core.mjs` বা API server-এ wired নয়; route-গুলোর ২৪৯টি synchronous query call pattern ও ২৬টি synchronous transaction call pattern async conversion চায়। তাই production guard অপরিবর্তিত এবং PostgreSQL production runtime এখনো চালু নয়।
 - বিস্তারিত: `docs/POSTGRES_MIGRATION_AUDIT_BN.md` এবং `docs/POSTGRES_RUNTIME_ADAPTER_BN.md`।
-
-
-## PostgreSQL OTP regression coverage (২০২৬-১১-০২)
-- `tests/postgres-auth-boundaries.test.mjs`-এ PostgreSQL auth repository-এর OTP boundary regression যোগ হয়েছে: valid code একবার consume, replay reject, পাঁচটি failed attempt-এর পর পরবর্তী attempt block, এবং expired code-এ attempt counter অপরিবর্তিত থাকা।
-- Test harness নিশ্চিত করে OTP lookup-এ `SELECT ... FOR UPDATE` আছে; এটি row-level locking query contract যাচাই করে, তবে live PostgreSQL concurrency integration test-এর বিকল্প নয়।
-- Production startup gate অপরিবর্তিত: Customer/Seller/Admin/Payment route-গুলোর SQLite-to-PostgreSQL async migration ও database-backed integration tests এখনো বাকি।
