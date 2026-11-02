@@ -10,6 +10,10 @@ function fixture() {
   const database = {
     q(sql) {
       return {
+        async get(...params) {
+          calls.push({ sql, params, inTransaction: transactionDepth > 0 });
+          return { id: params[0] };
+        },
         async run(...params) {
           calls.push({ sql, params, inTransaction: transactionDepth > 0 });
           return { rowCount: 1 };
@@ -39,12 +43,14 @@ test('OTP invalidation and replacement insert run inside one transaction using i
   const code = await f.auth.issueOtp('user-1', 'PHONE');
   assert.equal(code, '123456');
   assert.equal(f.transactionCount, 1);
-  assert.equal(f.calls.length, 2);
-  assert.match(f.calls[0].sql, /^UPDATE otp_codes SET used_at=/);
-  assert.match(f.calls[1].sql, /^INSERT INTO otp_codes/);
-  assert.ok(f.calls.every(call => call.inTransaction), 'both statements must share the transaction');
-  assert.deepEqual(f.calls[0].params, [f.now, 'user-1', 'PHONE']);
-  assert.deepEqual(f.calls[1].params, [
+  assert.equal(f.calls.length, 3);
+  assert.match(f.calls[0].sql, /^SELECT id FROM users WHERE id=\? FOR UPDATE$/);
+  assert.match(f.calls[1].sql, /^UPDATE otp_codes SET used_at=/);
+  assert.match(f.calls[2].sql, /^INSERT INTO otp_codes/);
+  assert.ok(f.calls.every(call => call.inTransaction), 'user lock and OTP replacement must share the transaction');
+  assert.deepEqual(f.calls[0].params, ['user-1']);
+  assert.deepEqual(f.calls[1].params, [f.now, 'user-1', 'PHONE']);
+  assert.deepEqual(f.calls[2].params, [
     'fixed-id', 'user-1', 'PHONE', 'sha256:123456user-1',
     new Date(Date.parse(f.now) + 15 * 60_000).toISOString(), f.now
   ]);
