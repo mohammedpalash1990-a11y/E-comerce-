@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "start:api": "node apps/api/src/server.mjs",
+    "start:api:postgres": "node apps/api/src/postgres-server.mjs",
     "start:web": "node apps/web/server.mjs",
     "db:migrate:postgres": "node scripts/migrate-postgres.mjs",
     "test": "node --test tests/*.test.mjs",
