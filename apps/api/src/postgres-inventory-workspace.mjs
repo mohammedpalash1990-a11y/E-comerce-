@@ -3,7 +3,7 @@ import { HttpError, text, now as defaultNow } from './postgres-shared.mjs';
 
 const MAX_STOCK = 1000000;
 const money = value => Number(value || 0) / 100;
-const isoDay = value => /^\\d{4}-\\d{2}-\\d{2}$/.test(String(value || '')) ? String(value) : null;
+const isoDay = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || '')) ? String(value) : null;
 
 function parseAdjustment(body = {}) {
   const delta = Number(body.delta);
@@ -156,9 +156,9 @@ export async function handlePostgresInventoryWorkspace({ database, user, method,
   const workspace = createPostgresInventoryWorkspace(database);
   const seller = user?.role === 'SELLER', admin = user?.role === 'ADMIN';
   if (!seller && !admin) throw new HttpError(403, 'এই অপারেশনের অনুমতি নেই');
-  const productMovement = path.match(/^\\/api\\/v1\\/seller\\/inventory\\/([^/]+)\\/movements$/);
-  const requestDecision = path.match(/^\\/api\\/v1\\/admin\\/inventory\\/adjustments\\/([^/]+)\\/decision$/);
-  const adjustmentRequest = path.match(/^\\/api\\/v1\\/seller\\/inventory\\/([^/]+)\\/adjust-requests$/);
+  const productMovement = path.match(/^\/api\/v1\/seller\/inventory\/([^/]+)\/movements$/);
+  const requestDecision = path.match(/^\/api\/v1\/admin\/inventory\/adjustments\/([^/]+)\/decision$/);
+  const adjustmentRequest = path.match(/^\/api\/v1\/seller\/inventory\/([^/]+)\/adjust-requests$/);
   if (seller && method === 'GET' && path === '/api/v1/seller/inventory') return { data: await workspace.sellerInventory(user.id) };
   if (seller && method === 'GET' && productMovement) return { data: await workspace.movements(user.id, decodeURIComponent(productMovement[1])) };
   if (seller && method === 'POST' && adjustmentRequest) return { data: await workspace.requestAdjustment(user, decodeURIComponent(adjustmentRequest[1]), body), status: 201 };
