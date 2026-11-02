@@ -33,7 +33,8 @@ test.before(async () => {
   for (let i = 0; i < 60; i++) {
     try {
       const response = await fetch('http://127.0.0.1:' + webPort + '/');
-      startupResponse = 'status=' + response.status + ' body=' + (await response.text()).slice(0, 100);\n      if (response.ok) { ready = true; break; }
+      startupResponse = 'status=' + response.status + ' body=' + (await response.text()).slice(0, 100);
+      if (response.ok) { ready = true; break; }
     } catch {}
     if (web.exitCode !== null) break;
     await delay(100);
