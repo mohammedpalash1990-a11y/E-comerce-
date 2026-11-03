@@ -88,7 +88,7 @@ test('inactive accounts and concurrent status changes cannot be approved', async
 });
 
 test('unknown seller returns 404 and status filters reject unknown values', async () => {
-  const missing = setup({ seller: undefined });
+  const missing = setup({ seller: null });
   await assert.rejects(route(missing, 'PATCH', '/api/v1/admin/sellers/:id/status').handler({
     user: { id: 'admin-1' }, params: ['missing'], body: { status: 'APPROVED' }
   }), error => error.status === 404);
