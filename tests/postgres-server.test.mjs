@@ -387,3 +387,26 @@ test('PostgreSQL CORS does not reflect an untrusted origin on ordinary API respo
     assert.equal(untrusted.headers.get('access-control-allow-origin'), null);
   });
 });
+
+
+test('PostgreSQL CORS treats wildcard and lookalike origins as untrusted', async () => {
+  await withServer({ env: env({ CORS_ORIGINS: '*,https://shop.example.com ' }) }, async base => {
+    const wildcard = await fetch(base + '/api/v1/categories', {
+      headers: { origin: 'https://random.example' }
+    });
+    assert.equal(wildcard.status, 200);
+    assert.equal(wildcard.headers.get('access-control-allow-origin'), null);
+
+    const lookalike = await fetch(base + '/api/v1/categories', {
+      headers: { origin: 'https://shop.example.com.attacker.test' }
+    });
+    assert.equal(lookalike.status, 200);
+    assert.equal(lookalike.headers.get('access-control-allow-origin'), null);
+
+    const exact = await fetch(base + '/api/v1/categories', {
+      headers: { origin: 'https://shop.example.com' }
+    });
+    assert.equal(exact.status, 200);
+    assert.equal(exact.headers.get('access-control-allow-origin'), 'https://shop.example.com');
+  });
+});
