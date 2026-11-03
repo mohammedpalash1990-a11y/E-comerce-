@@ -1,7 +1,7 @@
 import { q, tx, id, now, audit, notify, HttpError, bdt, orderNo } from './core.mjs';
 
-export const TRANSITIONS = { AWAITING_PAYMENT: ['CONFIRMED', 'CANCELLED'], CONFIRMED: ['PROCESSING', 'CANCELLED'], PROCESSING: ['SHIPPED', 'CANCELLED'], SHIPPED: ['DELIVERED'] };
-export const conflict = () => new HttpError(409, 'এই অর্ডারের বর্তমান অবস্থা থেকে এই পরিবর্তন করা যাবে না');
+import { TRANSITIONS, conflict } from './order-state.mjs';
+export { TRANSITIONS, conflict };
 
 export function addEvent(orderId, soId, status, note, actor) {
   q('INSERT INTO order_events VALUES(?,?,?,?,?,?,?)').run(id(), orderId, soId || null, status, note || '', actor || null, now());

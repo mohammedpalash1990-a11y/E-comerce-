@@ -13,7 +13,7 @@ function otpHarness() {
   async function query(sql, values = []) {
     statements.push(sql);
     if (/^(BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE SAVEPOINT)/i.test(sql)) return { rows: [], rowCount: 0 };
-    if (/^SELECT id FROM users WHERE id=\\$1 FOR UPDATE/i.test(sql)) return { rows: [{ id: values[0] }], rowCount: 1 };
+    if (sql.startsWith('SELECT id FROM users WHERE id=$1 FOR UPDATE')) return { rows: [{ id: values[0] }], rowCount: 1 };
     if (/UPDATE otp_codes SET used_at=\$1 WHERE user_id=\$2 AND purpose=\$3 AND used_at IS NULL/i.test(sql)) {
       let count = 0;
       for (const row of rows.values()) {
