@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { config, HttpError, hmac, safeEq } from './postgres-shared.mjs';
+import { config, HttpError, hmac, safeEq } from './core.mjs';
 
 export const PAYMENT_METHODS = ['COD', 'BKASH', 'NAGAD', 'ROCKET', 'SSLCOMMERZ'];
 export const COURIERS = ['PATHAO', 'STEADFAST', 'REDX'];

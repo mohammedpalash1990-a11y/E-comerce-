@@ -14,7 +14,7 @@ import {
   text,
   bad,
   HttpError
-} from './postgres-shared.mjs';
+} from './core.mjs';
 
 function publicUser(u) {
   return {

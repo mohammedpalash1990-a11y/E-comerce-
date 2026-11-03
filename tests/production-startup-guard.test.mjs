@@ -37,3 +37,23 @@ test('production startup rejects a missing payment webhook secret before databas
   assert.notEqual(result.status, 0, 'production import must fail');
   assert.match(result.stderr, /PAYMENT_WEBHOOK_SECRET is required in production/);
 });
+
+
+test('canonical API entrypoint remains fail-closed in production until PostgreSQL routes replace SQLite', () => {
+  const result = spawnSync(process.execPath, ['apps/api/src/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      NODE_ENV: 'production',
+      PAYMENT_WEBHOOK_SECRET: 'test-only-long-secret',
+      SQLITE_FILE: ':memory:',
+      DATABASE_URL: ''
+    },
+    encoding: 'utf8',
+    timeout: 10_000
+  });
+
+  assert.notEqual(result.status, 0, 'canonical API entrypoint must not start in production on SQLite');
+  assert.match(result.stderr, /Production startup is blocked: current API runtime uses SQLite/);
+  assert.doesNotMatch(result.stderr, /EADDRINUSE|listen EACCES/);
+});
