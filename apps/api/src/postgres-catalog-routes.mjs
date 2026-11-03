@@ -3,7 +3,7 @@ import { createPostgresCatalogRepository } from './postgres-catalog.mjs';
 
 function parsePositiveInt(val, fallback) {
   if (val === null || val === undefined || val === '') return fallback;
-  const n = Number.parseInt(val, 10);
+  const n = Number(val);
   return Number.isSafeInteger(n) ? n : fallback;
 }
 
