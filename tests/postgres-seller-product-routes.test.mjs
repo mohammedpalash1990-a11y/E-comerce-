@@ -62,7 +62,7 @@ test('seller list filters by authenticated seller and caps pagination', async ()
     user, url: new URL('https://haat.test/api/v1/seller/products?status=ACTIVE&limit=999&offset=-4')
   });
   assert.equal(result.body.data[0].id, 'p-1');
-  const call = h.calls.find(item => item.method === 'all' && item.sql.includes('FROM products p LEFT JOIN categories'));
+  const call = h.calls.find(item => item.method === 'all' && item.sql?.includes('FROM products p LEFT JOIN categories'));
   assert.deepEqual(call.args, ['seller-1', 'ACTIVE', 100, 0]);
 });
 
@@ -77,9 +77,9 @@ test('pending seller can submit a validated product into moderation queue', asyn
   const result = await find(h, 'POST', '/api/v1/seller/products').handler({ user, body: productBody });
   assert.equal(result.status, 201);
   assert.equal(result.body.data.status, 'PENDING_REVIEW');
-  assert.ok(h.calls.some(item => item.sql.includes("VALUES(?,?,?,?,?,?,0,?,'PENDING_REVIEW'")));
-  assert.ok(h.calls.some(item => item.sql.includes('INSERT INTO product_images')));
-  assert.ok(h.calls.some(item => item.sql.includes('INSERT INTO audit_logs')));
+  assert.ok(h.calls.some(item => item.sql?.includes("VALUES(?,?,?,?,?,?,0,?,'PENDING_REVIEW'")));
+  assert.ok(h.calls.some(item => item.sql?.includes('INSERT INTO product_images')));
+  assert.ok(h.calls.some(item => item.sql?.includes('INSERT INTO audit_logs')));
 });
 
 test('seller submission rejects invalid account state, category, price, image and variant data', async () => {
@@ -102,8 +102,8 @@ test('seller edits only owned product and forces resubmission for moderation', a
     user, params: ['p-1'], body: { name_bn: 'নতুন চা', images: ['https://cdn.example.test/new.jpg'] }
   });
   assert.equal(result.body.data.status, 'PENDING_REVIEW');
-  assert.ok(h.calls.some(item => item.sql.includes("status='PENDING_REVIEW',active=0")));
-  assert.ok(h.calls.some(item => item.sql.includes('PRODUCT_EDIT_SUBMITTED')));
+  assert.ok(h.calls.some(item => item.sql?.includes("status='PENDING_REVIEW',active=0")));
+  assert.ok(h.calls.some(item => item.sql?.includes('PRODUCT_EDIT_SUBMITTED')));
 });
 
 test('seller cannot submit a discount greater than or equal to effective price', async () => {
@@ -119,7 +119,7 @@ test('seller archive is ownership-scoped, removes cart references and writes aud
   const h = setup({ profile: { status: 'APPROVED', account_status: 'ACTIVE' }, product: owned });
   const result = await find(h, 'DELETE', '/api/v1/seller/products/:id').handler({ user, params: ['p-1'] });
   assert.deepEqual(result.body.data, { id: 'p-1', archived: true });
-  assert.ok(h.calls.some(item => item.sql.includes("status='ARCHIVED',active=0")));
-  assert.ok(h.calls.some(item => item.sql.includes('DELETE FROM cart_items')));
-  assert.ok(h.calls.some(item => item.sql.includes('PRODUCT_ARCHIVE')));
+  assert.ok(h.calls.some(item => item.sql?.includes("status='ARCHIVED',active=0")));
+  assert.ok(h.calls.some(item => item.sql?.includes('DELETE FROM cart_items')));
+  assert.ok(h.calls.some(item => item.sql?.includes('PRODUCT_ARCHIVE')));
 });
