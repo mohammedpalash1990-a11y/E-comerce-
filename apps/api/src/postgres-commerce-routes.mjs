@@ -72,6 +72,8 @@ export function registerPostgresCommerceRoutes(route, ok, options = {}) {
   route('POST', '/api/v1/seller/orders/:id/status', ['SELLER'], async ({ user, params, body }) => {
     const next = String(body.status || '');
     if (!['PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'].includes(next)) throw new HttpError(400, 'Invalid seller order status');
+    const sellerProfile = await database.q('SELECT status FROM seller_profiles WHERE user_id=?').get(user.id);
+    if (sellerProfile?.status !== 'APPROVED') throw new HttpError(403, 'বিক্রেতা অনুমোদিত না থাকলে অর্ডারের অবস্থা পরিবর্তন করা যাবে না');
     const owned = await database.q('SELECT id FROM seller_orders WHERE id=? AND seller_id=?').get(params[0], user.id);
     if (!owned) throw new HttpError(404, 'Seller order not found');
     const note = text(body.note, 300, 'নোট', { required: false });
