@@ -168,6 +168,17 @@ test('HTTP catalog route /api/v1/products enforces HTTP-level bounds on limit an
   lastValues = calls[1].values;
   offsetValue = lastValues[lastValues.length - 1];
   assert.equal(offsetValue, 10000, 'Offset must be capped at 10000 to prevent deep-offset scans');
+
+  await dispatch('GET', '/api/v1/products?limit=12items&offset=12items');
+  assert.equal(calls.length, 3);
+  lastValues = calls[2].values;
+  assert.equal(lastValues[lastValues.length - 2], 100, 'Malformed limit must use the safe default');
+  assert.equal(lastValues[lastValues.length - 1], 0, 'Malformed offset must use the first page');
+
+  await dispatch('GET', '/api/v1/products?offset=1.5');
+  assert.equal(calls.length, 4);
+  lastValues = calls[3].values;
+  assert.equal(lastValues[lastValues.length - 1], 0, 'Fractional offset must use the first page');
 });
 
 test('HTTP catalog route /api/v1/products ignores malicious sort order injection', async () => {
