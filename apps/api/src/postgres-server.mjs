@@ -103,7 +103,14 @@ export function createPostgresApiServer({ database, catalogRepository, authRepos
     // Preserve the richer inventory-adjustment workspace already mounted below.
     if (pattern.startsWith('/api/v1/seller/inventory')) return;
     const routePattern = pattern.split('/').map(segment => segment.startsWith(':') ? '([^/]+)' : segment).join('/');
-    domainRoutes.push({ method: routeMethod, re: new RegExp('^' + routePattern + '(async (req, res) => {
+    domainRoutes.push({ method: routeMethod, re: new RegExp('^' + routePattern + '$'), roles, handler, limit: opts.limit || MAX_BODY_BYTES });
+  };
+  registerPostgresCommerceRoutes(registerDomainRoute, (data, status = 200) => ({ status, body: { data } }), {
+    database,
+    inventoryRepository: createPostgresInventoryRepository(database)
+  });
+
+  return http.createServer(async (req, res) => {
     const headers = safeHeaders(req.headers.origin, env);
     if (req.method === 'OPTIONS') return res.writeHead(headers['access-control-allow-origin'] ? 204 : 403, headers).end();
     try {
