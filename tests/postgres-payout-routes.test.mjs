@@ -10,9 +10,9 @@ function setup({ seller = { status: 'APPROVED', account_status: 'ACTIVE' }, earn
         async get(...args) {
           calls.push({ method: 'get', sql, args });
           if (sql.includes('FROM seller_profiles sp JOIN users')) return seller;
-          if (sql.includes('AS earned')) return { earned, reserved };
           if (sql.includes('FROM payouts WHERE id=? FOR UPDATE')) return payout;
           if (sql.includes('AS sales')) return { sales: 20000, commission: 1600, earned, pending: 10000, paid: 5000 };
+          if (sql.includes('AS earned')) return { earned, reserved };
           return undefined;
         },
         async all(...args) {
