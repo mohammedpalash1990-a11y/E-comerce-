@@ -74,7 +74,7 @@ function fakeCustomer() {
   };
 }
 async function withServer({ authRepository = fakeAuth(), customerRepository = fakeCustomer(), env = {} } = {}, run) {
-  const database = { q(sql) { return { async get() { assert.equal(sql, 'SELECT 1 AS ok'); return { ok: 1 }; } }; } };
+  const database = { q(sql) { return { async get() { if (sql === 'SELECT 1 AS ok') return { ok: 1 }; return undefined; }, async all() { return []; }, async run() { return { changes: 1, rows: [] }; } }; }, async tx(fn) { return fn(); } };
   const server = createPostgresApiServer({ database, catalogRepository: fakeCatalog(), authRepository, customerRepository, env });
   await new Promise(resolveListen => server.listen(0, '127.0.0.1', resolveListen));
   const base = 'http://127.0.0.1:' + server.address().port;
@@ -271,4 +271,24 @@ test('startup closes the pool if connection verification or migration fails', as
     migrate: async () => { throw new Error('migration failure'); }
   }), /migration failure/);
   assert.equal(second.closed, true);
+});
+
+
+test('PostgreSQL commerce routes are mounted with customer, seller and admin role isolation', async () => {
+  await withServer({}, async base => {
+    const customer = { authorization: 'Bearer ' + validToken };
+    const seller = { authorization: 'Bearer ' + validSellerToken };
+    const customerOrders = await fetch(base + '/api/v1/customer/orders', { headers: customer });
+    assert.equal(customerOrders.status, 200);
+    assert.deepEqual(await customerOrders.json(), { data: [] });
+    const sellerCannotReadCustomerOrders = await fetch(base + '/api/v1/customer/orders', { headers: seller });
+    assert.equal(sellerCannotReadCustomerOrders.status, 403);
+    const sellerOrders = await fetch(base + '/api/v1/seller/orders', { headers: seller });
+    assert.equal(sellerOrders.status, 200);
+    assert.deepEqual(await sellerOrders.json(), { data: [] });
+    const customerCannotReadAdminOrders = await fetch(base + '/api/v1/admin/orders', { headers: customer });
+    assert.equal(customerCannotReadAdminOrders.status, 403);
+    const unauthenticated = await fetch(base + '/api/v1/customer/orders');
+    assert.equal(unauthenticated.status, 401);
+  });
 });

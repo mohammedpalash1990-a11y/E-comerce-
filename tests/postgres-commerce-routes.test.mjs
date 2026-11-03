@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { registerPostgresCommerceRoutes } from '../apps/api/src/postgres-commerce-routes.mjs';
 
-function setup({ ownedSellerOrder = true, customerOrder = true } = {}) {
+function setup({ ownedSellerOrder = true, customerOrder = true, sellerStatus = 'APPROVED' } = {}) {
   const routes = [];
   const calls = [];
   const database = {
@@ -10,6 +10,7 @@ function setup({ ownedSellerOrder = true, customerOrder = true } = {}) {
       return {
         async get(...args) {
           calls.push({ sql, args, method: 'get' });
+          if (sql.includes('FROM seller_profiles WHERE user_id=?')) return { status: sellerStatus };
           if (sql.includes('FROM seller_orders WHERE id=? AND seller_id=?')) return ownedSellerOrder ? { id: args[0] } : undefined;
           if (sql.includes('FROM orders WHERE id=? AND user_id=?')) return customerOrder ? { id: args[0] } : undefined;
           if (sql.includes('FROM orders WHERE id=?')) return { id: args[0] };
@@ -86,4 +87,15 @@ test('admin order status delegates only after the order exists', async () => {
   });
   assert.equal(response.body.data.status, 'PROCESSING');
   assert.equal(h.calls.find(x => x.lifecycle === 'parent').args[0], 'order-1');
+});
+
+
+test('pending or suspended sellers cannot mutate order status', async () => {
+  for (const sellerStatus of ['PENDING', 'SUSPENDED', 'REJECTED']) {
+    const h = setup({ sellerStatus });
+    await assert.rejects(find(h, 'POST', '/api/v1/seller/orders/:id/status').handler({
+      user: { id: 'seller-1' }, params: ['seller-order-1'], body: { status: 'PROCESSING' }
+    }), error => error.status === 403);
+    assert.equal(h.calls.some(x => x.lifecycle === 'seller'), false);
+  }
 });

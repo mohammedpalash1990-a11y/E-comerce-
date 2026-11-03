@@ -7,6 +7,8 @@ import { createPostgresCatalogRepository } from './postgres-catalog.mjs';
 import { createPostgresAuthRepository } from './postgres-auth.mjs';
 import { createPostgresCustomerRepository } from './postgres-customer.mjs';
 import { handlePostgresInventoryWorkspace } from './postgres-inventory-workspace.mjs';
+import { registerPostgresCommerceRoutes } from './postgres-commerce-routes.mjs';
+import { createPostgresInventoryRepository } from './postgres-inventory.mjs';
 import { runPostgresMigrations } from './postgres-migrations.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -96,6 +98,17 @@ export function createPostgresApiServer({ database, catalogRepository, authRepos
   if (!authRepository) throw new TypeError('A PostgreSQL auth repository is required');
   if (!customerRepository) throw new TypeError('A PostgreSQL customer repository is required');
   const allowAuthRequest = createAuthRateLimiter();
+  const domainRoutes = [];
+  const registerDomainRoute = (routeMethod, pattern, roles, handler, opts = {}) => {
+    // Preserve the richer inventory-adjustment workspace already mounted below.
+    if (pattern.startsWith('/api/v1/seller/inventory')) return;
+    const routePattern = pattern.split('/').map(segment => segment.startsWith(':') ? '([^/]+)' : segment).join('/');
+    domainRoutes.push({ method: routeMethod, re: new RegExp('^' + routePattern + '$'), roles, handler, limit: opts.limit || MAX_BODY_BYTES });
+  };
+  registerPostgresCommerceRoutes(registerDomainRoute, (data, status = 200) => ({ status, body: { data } }), {
+    database,
+    inventoryRepository: createPostgresInventoryRepository(database)
+  });
 
   return http.createServer(async (req, res) => {
     const headers = safeHeaders(req.headers.origin, env);
@@ -200,6 +213,21 @@ export function createPostgresApiServer({ database, catalogRepository, authRepos
         const body = method === 'POST' ? await readJsonBody(req) : {};
         const result = await handlePostgresInventoryWorkspace({ database, user, method, path, url, body });
         if (result) return json(res, result.status || 200, result, headers);
+      }
+
+      const domainMatch = domainRoutes.map(route => ({ route, match: path.match(route.re) })).find(item => item.match);
+      if (domainMatch) {
+        const { route, match } = domainMatch;
+        if (method !== route.method) return json(res, 405, { error: 'Method not allowed' }, headers);
+        const token = bearerToken(req);
+        if (!token) return json(res, 401, { error: 'Authentication required' }, headers);
+        const user = await authRepository.getSessionUser(token);
+        if (!user) return json(res, 401, { error: 'Authentication required' }, headers);
+        if (route.roles && !route.roles.includes(user.role)) return json(res, 403, { error: 'You do not have permission for this action' }, headers);
+        const body = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) ? await readJsonBody(req) : {};
+        const params = match.slice(1).map(decodePathPart);
+        const result = await route.handler({ req, res, url, params, body, user, ip });
+        return json(res, result.status || 200, result.body || result, headers);
       }
 
       const knownPath = path === '/health' ||
