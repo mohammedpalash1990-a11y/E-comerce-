@@ -293,10 +293,20 @@ test('HTTP auth routes: registration, login, getMe, and logout via PostgreSQL au
       password: 'Password@123',
       confirm_password: 'Password@123',
       address: 'Banani',
-      area: 'Dhaka'
+      area: 'Dhaka',
+      // Public signup must ignore all client-supplied privilege and platform fields.
+      role: 'ADMIN',
+      status: 'ACTIVE',
+      is_admin: true,
+      is_platform_owner: true,
+      permissions: ['*'],
+      marketplace_id: 'attacker-marketplace'
     }
   });
   assert.equal(regRes.status, 201);
+  assert.equal(regRes.body.data.role, 'CUSTOMER');
+  assert.equal(state.users.get(regRes.body.data.id).role, 'CUSTOMER');
+  assert.equal(state.users.get(regRes.body.data.id).status, 'ACTIVE');
   assert.ok(regRes.body.token);
   assert.equal(regRes.body.data.name, 'Rahim Khan');
 
@@ -343,10 +353,20 @@ test('HTTP auth routes: seller registration, notification, and profile lookup', 
       shop_name: 'Karim Handicrafts',
       shop_address: 'Mirpur 10, Dhaka',
       business_info: 'Crafts',
-      kyc_nid: '1234567890123'
+      kyc_nid: '1234567890123',
+      // Seller onboarding must not accept client-side approval or admin claims.
+      role: 'ADMIN',
+      status: 'ACTIVE',
+      seller_status: 'APPROVED',
+      approved: true,
+      is_admin: true,
+      is_platform_owner: true,
+      permissions: ['*']
     }
   });
   assert.equal(regSeller.status, 201);
+  assert.equal(state.users.get(regSeller.body.data.id).role, 'SELLER');
+  assert.equal(state.seller_profiles.get(regSeller.body.data.id).status, 'PENDING');
   assert.equal(regSeller.body.data.role, 'SELLER');
   assert.equal(regSeller.body.data.status, 'PENDING');
 
