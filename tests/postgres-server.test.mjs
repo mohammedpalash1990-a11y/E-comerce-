@@ -340,3 +340,50 @@ test('admin seller lifecycle routes enforce ADMIN role at the HTTP boundary and 
     assert.ok(calls.some(call => call[1]?.includes('INSERT INTO notifications')));
   });
 });
+
+
+test('PostgreSQL CORS preflight only grants explicitly configured browser origins', async () => {
+  await withServer({ env: env({ CORS_ORIGINS: 'https://shop.example.com,https://admin.example.com' }) }, async base => {
+    const allowed = await fetch(base + '/api/v1/products', {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'https://shop.example.com',
+        'access-control-request-method': 'GET',
+        'access-control-request-headers': 'authorization,content-type'
+      }
+    });
+    assert.equal(allowed.status, 204);
+    assert.equal(allowed.headers.get('access-control-allow-origin'), 'https://shop.example.com');
+    assert.equal(allowed.headers.get('vary'), 'Origin');
+
+    const rejected = await fetch(base + '/api/v1/products', {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'https://attacker.example',
+        'access-control-request-method': 'GET'
+      }
+    });
+    assert.equal(rejected.status, 403);
+    assert.equal(rejected.headers.get('access-control-allow-origin'), null);
+
+    const nonBrowser = await fetch(base + '/api/v1/categories');
+    assert.equal(nonBrowser.status, 200);
+    assert.equal(nonBrowser.headers.get('access-control-allow-origin'), null);
+  });
+});
+
+test('PostgreSQL CORS does not reflect an untrusted origin on ordinary API responses', async () => {
+  await withServer({ env: env({ CORS_ORIGINS: 'https://shop.example.com' }) }, async base => {
+    const trusted = await fetch(base + '/api/v1/categories', {
+      headers: { origin: 'https://shop.example.com' }
+    });
+    assert.equal(trusted.status, 200);
+    assert.equal(trusted.headers.get('access-control-allow-origin'), 'https://shop.example.com');
+
+    const untrusted = await fetch(base + '/api/v1/categories', {
+      headers: { origin: 'https://attacker.example' }
+    });
+    assert.equal(untrusted.status, 200);
+    assert.equal(untrusted.headers.get('access-control-allow-origin'), null);
+  });
+});
