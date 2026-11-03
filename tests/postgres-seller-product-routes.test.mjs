@@ -103,7 +103,7 @@ test('seller edits only owned product and forces resubmission for moderation', a
   });
   assert.equal(result.body.data.status, 'PENDING_REVIEW');
   assert.ok(h.calls.some(item => item.sql?.includes("status='PENDING_REVIEW',active=0")));
-  assert.ok(h.calls.some(item => item.sql?.includes('PRODUCT_EDIT_SUBMITTED')));
+  assert.ok(h.calls.some(item => item.args?.includes('PRODUCT_EDIT_SUBMITTED')));
 });
 
 test('seller cannot submit a discount greater than or equal to effective price', async () => {
@@ -121,5 +121,5 @@ test('seller archive is ownership-scoped, removes cart references and writes aud
   assert.deepEqual(result.body.data, { id: 'p-1', archived: true });
   assert.ok(h.calls.some(item => item.sql?.includes("status='ARCHIVED',active=0")));
   assert.ok(h.calls.some(item => item.sql?.includes('DELETE FROM cart_items')));
-  assert.ok(h.calls.some(item => item.sql?.includes('PRODUCT_ARCHIVE')));
+  assert.ok(h.calls.some(item => item.args?.includes('PRODUCT_ARCHIVE')));
 });
