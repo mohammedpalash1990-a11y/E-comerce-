@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { createPostgresAuthRepository } from '../apps/api/src/postgres-auth.mjs';
-import { sha256 } from '../apps/api/src/core.mjs';
+
+const sha256 = value => createHash('sha256').update(String(value)).digest('hex');
 
 // A deterministic transaction/row-lock test double. Transactions are queued in
 // arrival order, modelling PostgreSQL's SELECT ... FOR UPDATE serialization.
