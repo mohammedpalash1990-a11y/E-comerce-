@@ -41,6 +41,17 @@ test('catalog listing applies approved-seller visibility, ILIKE search, bounded 
   assert.doesNotMatch(calls[0].text, /DROP TABLE/);
 });
 
+test('catalog pagination caps deep offsets and rejects malformed offsets', async () => {
+  const { database, calls } = databaseWith(() => ({ rows: [], rowCount: 0 }));
+  const catalog = createPostgresCatalogRepository(database);
+
+  await catalog.listProducts({ offset: '999999999999' });
+  assert.equal(calls[0].values.at(-1), 10000);
+
+  await catalog.listProducts({ offset: '12items' });
+  assert.equal(calls[1].values.at(-1), 0);
+});
+
 test('catalog sorting uses explicit allowlisted expressions and newest order is stable', async () => {
   const { database, calls } = databaseWith(() => ({ rows: [], rowCount: 0 }));
   const catalog = createPostgresCatalogRepository(database);

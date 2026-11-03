@@ -81,9 +81,10 @@ export function createPostgresCatalogRepository(database) {
     }[sort] || 'p.name_bn';
 
     const rawLimit = Number.parseInt(readParam(params, 'limit'), 10);
-    const rawOffset = Number.parseInt(readParam(params, 'offset'), 10);
+    const rawOffset = Number(readParam(params, 'offset'));
     const limit = Math.min(Math.max(rawLimit || 100, 1), 100);
-    const offset = Math.max(rawOffset || 0, 0);
+    // Deep OFFSET scans become increasingly expensive; keep public catalog pagination bounded.
+    const offset = Number.isSafeInteger(rawOffset) ? Math.min(Math.max(rawOffset, 0), 10000) : 0;
 
     const rows = await query(`SELECT p.id,p.name_bn,p.name_en,p.price_paisa,p.discount_paisa,p.stock,c.slug category_slug,b.name brand,
       (SELECT url FROM product_images i WHERE i.product_id=p.id ORDER BY position LIMIT 1) image
