@@ -1,10 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createPostgresDatabase } from '../apps/api/src/postgres-runtime.mjs';
 import { createPostgresCatalogRepository } from '../apps/api/src/postgres-catalog.mjs';
 import { registerPostgresCatalogRoutes } from '../apps/api/src/postgres-catalog-routes.mjs';
+import { createPostgresPool, closePostgresPool } from '../apps/api/src/postgres-pool.mjs';
+import { runPostgresMigrations } from '../apps/api/src/postgres-migrations.mjs';
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const migrationDirectory = resolve(root, 'apps/api/migrations/postgres');
 
 function createCatalogRouteHarness(poolHandler) {
   const routes = [];
@@ -272,19 +278,21 @@ test('HTTP catalog route /api/v1/products/:id/reviews returns reviews for produc
 });
 
 test('real PostgreSQL live database check for catalog routes (skipped if POSTGRES_TEST_DATABASE_URL is absent)', async (t) => {
-  if (!process.env.POSTGRES_TEST_DATABASE_URL) {
+  const databaseUrl = process.env.POSTGRES_TEST_DATABASE_URL;
+  if (!databaseUrl) {
     t.skip('Skipped: POSTGRES_TEST_DATABASE_URL is not set. Disposable PostgreSQL integration skipped.');
     return;
   }
-  // If set, connect and verify real catalog query
-  const pg = await import('pg');
-  const pool = new pg.default.Pool({ connectionString: process.env.POSTGRES_TEST_DATABASE_URL });
+  const pool = await createPostgresPool({
+    env: { ...process.env, DATABASE_URL: databaseUrl }
+  });
   try {
+    await runPostgresMigrations(pool, migrationDirectory);
     const db = createPostgresDatabase(pool);
     const repo = createPostgresCatalogRepository(db);
     const categories = await repo.listCategories();
     assert.ok(Array.isArray(categories));
   } finally {
-    await pool.end();
+    await closePostgresPool(pool);
   }
 });
