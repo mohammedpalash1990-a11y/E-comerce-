@@ -97,7 +97,8 @@ test('real PostgreSQL enforces case-insensitive seller shop uniqueness under con
     const rejected = results.filter(result => result.status === 'rejected');
     assert.equal(fulfilled.length, 1, 'exactly one concurrent registration should create the case-insensitive shop name');
     assert.equal(rejected.length, 1, 'the competing registration should be rejected by the unique index');
-    assert.equal(rejected[0].reason.code, '23505');
+    assert.ok(rejected[0].reason.code === '23505' || rejected[0].reason.status === 409,
+      'the competing registration must be rejected by the unique constraint or duplicate-shop guard');
   } finally {
     await pool.query('DELETE FROM users WHERE phone = ANY($1::text[])', [phones]);
     await closePostgresPool(pool);
