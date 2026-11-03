@@ -38,12 +38,13 @@ function fakeCatalog() {
 }
 const validToken = 'a'.repeat(40);
 const validSellerToken = 'b'.repeat(40);
+const validAdminToken = 'c'.repeat(40);
 function fakeAuth() {
   const calls = [];
   const user = { id: 'u1', name: 'Test User', role: 'CUSTOMER', token_hash: 'hash' };
   return {
     calls,
-    async getSessionUser(token) { calls.push(['getSessionUser', token]); return token === validToken ? user : token === validSellerToken ? { ...user, id: 's1', role: 'SELLER' } : null; },
+    async getSessionUser(token) { calls.push(['getSessionUser', token]); return token === validToken ? user : token === validSellerToken ? { ...user, id: 's1', role: 'SELLER' } : token === validAdminToken ? { ...user, id: 'admin-1', role: 'ADMIN' } : null; },
     async registerCustomer(body) { calls.push(['registerCustomer', body]); return { token: validToken, data: { id: 'u1', role: 'CUSTOMER' } }; },
     async registerSeller(body) { calls.push(['registerSeller', body]); return { token: validToken, data: { id: 's1', role: 'SELLER', status: 'PENDING' } }; },
     async login(body) { calls.push(['login', body]); return { token: validToken, data: { id: 'u1', role: 'CUSTOMER' } }; },
@@ -73,8 +74,8 @@ function fakeCustomer() {
     async saveReview(input) { calls.push(['saveReview', input.userId, input.productId]); return { saved: true }; }
   };
 }
-async function withServer({ authRepository = fakeAuth(), customerRepository = fakeCustomer(), env = {} } = {}, run) {
-  const database = { q(sql) { return { async get() { if (sql === 'SELECT 1 AS ok') return { ok: 1 }; return undefined; }, async all() { return []; }, async run() { return { changes: 1, rows: [] }; } }; }, async tx(fn) { return fn(); } };
+async function withServer({ authRepository = fakeAuth(), customerRepository = fakeCustomer(), database: suppliedDatabase, env = {} } = {}, run) {
+  const database = suppliedDatabase || { q(sql) { return { async get() { if (sql === 'SELECT 1 AS ok') return { ok: 1 }; return undefined; }, async all() { return []; }, async run() { return { changes: 1, rows: [] }; } }; }, async tx(fn) { return fn(); } };
   const server = createPostgresApiServer({ database, catalogRepository: fakeCatalog(), authRepository, customerRepository, env });
   await new Promise(resolveListen => server.listen(0, '127.0.0.1', resolveListen));
   const base = 'http://127.0.0.1:' + server.address().port;
@@ -290,5 +291,52 @@ test('PostgreSQL commerce routes are mounted with customer, seller and admin rol
     assert.equal(customerCannotReadAdminOrders.status, 403);
     const unauthenticated = await fetch(base + '/api/v1/customer/orders');
     assert.equal(unauthenticated.status, 401);
+  });
+});
+
+
+test('admin seller lifecycle routes enforce ADMIN role at the HTTP boundary and persist decisions', async () => {
+  const calls = [];
+  const database = {
+    q(sql) {
+      return {
+        async get(...args) {
+          calls.push(['get', sql, args]);
+          if (sql.includes('FROM seller_profiles sp JOIN users u')) return {
+            user_id: 'seller-1', shop_name: 'Dhaka Store', status: 'PENDING', account_status: 'ACTIVE'
+          };
+          return undefined;
+        },
+        async all(...args) {
+          calls.push(['all', sql, args]);
+          return [{ user_id: 'seller-1', status: 'PENDING' }];
+        },
+        async run(...args) {
+          calls.push(['run', sql, args]);
+          return { changes: 1, rows: [] };
+        }
+      };
+    },
+    async tx(fn) { calls.push(['tx-start']); try { return await fn(); } finally { calls.push(['tx-end']); } }
+  };
+  await withServer({ database }, async base => {
+    const queueUnauth = await fetch(base + '/api/v1/admin/sellers');
+    assert.equal(queueUnauth.status, 401);
+    const sellerDenied = await fetch(base + '/api/v1/admin/sellers', {
+      headers: { authorization: 'Bearer ' + validSellerToken }
+    });
+    assert.equal(sellerDenied.status, 403);
+    const adminHeaders = { authorization: 'Bearer ' + validAdminToken };
+    const queue = await fetch(base + '/api/v1/admin/sellers?status=PENDING', { headers: adminHeaders });
+    assert.equal(queue.status, 200);
+    assert.equal((await queue.json()).data[0].user_id, 'seller-1');
+    const approved = await fetch(base + '/api/v1/admin/sellers/seller-1/status', {
+      method: 'PATCH', headers: { ...adminHeaders, 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'APPROVED', note: 'KYC checked' })
+    });
+    assert.equal(approved.status, 200);
+    assert.equal((await approved.json()).data.status, 'APPROVED');
+    assert.ok(calls.some(call => call[1]?.includes('INSERT INTO audit_logs')));
+    assert.ok(calls.some(call => call[1]?.includes('INSERT INTO notifications')));
   });
 });
