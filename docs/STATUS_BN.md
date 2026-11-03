@@ -88,3 +88,9 @@
 - `apps/api/src/postgres-orders.mjs`-এ PostgreSQL order lifecycle repository যোগ হয়েছে: parent-first row locking, seller sub-order status transition, cancellation-এ stock restore, delivered order-এর seller earning/commission ledger, COD payment capture, এবং paid order cancellation-এ capped refund request।
 - `tests/postgres-orders.test.mjs`-এ cancellation idempotency, COD delivery ledger, paid online refund এবং invalid transition regression test যোগ হয়েছে।
 - **সীমাবদ্ধতা:** order lifecycle repository-টিও এখনো SQLite-ভিত্তিক customer/seller/admin route-এ wired নয়; live PostgreSQL integration ও route migration বাকি।
+
+
+## PostgreSQL OTP regression coverage (২০২৬-১১-০২)
+- `tests/postgres-auth-boundaries.test.mjs`-এ valid OTP একবার consume, replay rejection, পাঁচটি failed attempt-এর ceiling এবং expired code-এর attempt counter অপরিবর্তিত থাকার regression coverage যোগ হয়েছে।
+- Test harness বর্তমান repository contract অনুযায়ী OTP issuance-এর user-row lock এবং transaction statements-ও handle করে; এটি deterministic adapter test, live PostgreSQL concurrency proof নয়।
+- Production startup fail-closed থাকবে; এই test coverage একা PostgreSQL production readiness প্রমাণ করে না।

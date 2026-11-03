@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { createPostgresDatabase } from '../apps/api/src/postgres-runtime.mjs';
 import { createPostgresCatalogRepository } from '../apps/api/src/postgres-catalog.mjs';
-import registerPublic from '../apps/api/src/routes_public.mjs';
+import { registerPostgresCatalogRoutes } from '../apps/api/src/postgres-catalog-routes.mjs';
 
 function createCatalogRouteHarness(poolHandler) {
   const routes = [];
@@ -24,8 +26,7 @@ function createCatalogRouteHarness(poolHandler) {
   };
 
   const postgresDatabase = createPostgresDatabase(pool);
-  const catalogRepository = createPostgresCatalogRepository(postgresDatabase);
-  registerPublic(route, ok, { catalogRepository });
+  registerPostgresCatalogRoutes(route, ok, { database: postgresDatabase });
 
   async function dispatch(method, pathAndQuery) {
     const url = new URL(pathAndQuery, 'http://localhost');
@@ -40,8 +41,18 @@ function createCatalogRouteHarness(poolHandler) {
     }
   }
 
-  return { dispatch, calls };
+  return { dispatch, calls, routes };
 }
+
+test('isolated catalog route module has zero imports from SQLite core or checkout', () => {
+  const filePath = resolve('apps/api/src/postgres-catalog-routes.mjs');
+  const source = readFileSync(filePath, 'utf8');
+  assert.equal(/from ['"].*core\.mjs['"]/.test(source), false, 'Must not import core.mjs');
+  assert.equal(/from ['"].*routes_public\.mjs['"]/.test(source), false, 'Must not import routes_public.mjs');
+  assert.equal(/from ['"].*postgres-checkout\.mjs['"]/.test(source), false, 'Must not import postgres-checkout.mjs');
+  assert.equal(/from ['"].*postgres-orders\.mjs['"]/.test(source), false, 'Must not import postgres-orders.mjs');
+  assert.equal(/node:sqlite/.test(source), false, 'Must not import node:sqlite');
+});
 
 test('HTTP catalog route /api/v1/categories queries PostgreSQL repository', async () => {
   const { dispatch, calls } = createCatalogRouteHarness(sql => {
@@ -133,10 +144,33 @@ test('HTTP catalog route /api/v1/products handles search, filters, pagination an
   ]);
 });
 
-test('HTTP catalog route /api/v1/products/suggest short-circuits empty queries and returns suggestions', async () => {
-  let queryCount = 0;
+test('HTTP catalog route /api/v1/products enforces HTTP-level bounds on limit and offset', async () => {
   const { dispatch, calls } = createCatalogRouteHarness((sql, values) => {
-    queryCount++;
+    return { rows: [], rowCount: 0 };
+  });
+
+  await dispatch('GET', '/api/v1/products?limit=9999&offset=-50');
+  assert.equal(calls.length, 1);
+  const lastValues = calls[0].values;
+  const limitValue = lastValues[lastValues.length - 2];
+  const offsetValue = lastValues[lastValues.length - 1];
+  assert.equal(limitValue, 100, 'Limit must be capped at 100');
+  assert.equal(offsetValue, 0, 'Offset must be non-negative');
+});
+
+test('HTTP catalog route /api/v1/products ignores malicious sort order injection', async () => {
+  const { dispatch, calls } = createCatalogRouteHarness((sql, values) => {
+    // Should fallback to default order p.name_bn
+    assert.match(sql, /ORDER BY p\.name_bn LIMIT/);
+    return { rows: [], rowCount: 0 };
+  });
+
+  await dispatch('GET', '/api/v1/products?sort=id%3BDROP+TABLE+users%3B--');
+  assert.equal(calls.length, 1);
+});
+
+test('HTTP catalog route /api/v1/products/suggest short-circuits empty queries and returns suggestions', async () => {
+  const { dispatch, calls } = createCatalogRouteHarness((sql, values) => {
     assert.match(sql, /LIMIT 8/);
     return {
       rows: [
@@ -161,6 +195,10 @@ test('HTTP catalog route /api/v1/products/suggest short-circuits empty queries a
 test('HTTP catalog route /api/v1/products/:id returns 404 for missing and full details for found product', async () => {
   const { dispatch, calls } = createCatalogRouteHarness((sql, values) => {
     if (sql.includes('WHERE p.id=$1')) {
+      // Confirms unapproved/inactive products query contract
+      assert.match(sql, /p\.active=1/);
+      assert.match(sql, /p\.status='ACTIVE'/);
+      assert.match(sql, /sp\.status='APPROVED'/);
       if (values[0] === 'missing-product-id') {
         return { rows: [], rowCount: 0 };
       }
@@ -208,7 +246,8 @@ test('HTTP catalog route /api/v1/products/:id returns 404 for missing and full d
   assert.deepEqual(data.images, ['/tea-front.jpg', '/tea-back.jpg']);
   assert.deepEqual(data.variants, [{ name: '200g', price_bdt: 350 }]);
   assert.equal(data.seller_shop, 'Sylhet Tea Estate');
-  assert.equal('seller_id' in data, false);
+  assert.equal('seller_id' in data, false, 'seller_id must not leak in public product details');
+  assert.equal('password' in data, false, 'password must not leak in public product details');
 });
 
 test('HTTP catalog route /api/v1/products/:id/reviews returns reviews for product', async () => {
@@ -230,4 +269,22 @@ test('HTTP catalog route /api/v1/products/:id/reviews returns reviews for produc
   assert.equal(res.body.data[0].comment, 'দারুণ চা!');
   assert.equal(res.body.data[0].name, 'Rahim');
   assert.equal(calls.length, 1);
+});
+
+test('real PostgreSQL live database check for catalog routes (skipped if POSTGRES_TEST_DATABASE_URL is absent)', async (t) => {
+  if (!process.env.POSTGRES_TEST_DATABASE_URL) {
+    t.skip('Skipped: POSTGRES_TEST_DATABASE_URL is not set. Disposable PostgreSQL integration skipped.');
+    return;
+  }
+  // If set, connect and verify real catalog query
+  const pg = await import('pg');
+  const pool = new pg.default.Pool({ connectionString: process.env.POSTGRES_TEST_DATABASE_URL });
+  try {
+    const db = createPostgresDatabase(pool);
+    const repo = createPostgresCatalogRepository(db);
+    const categories = await repo.listCategories();
+    assert.ok(Array.isArray(categories));
+  } finally {
+    await pool.end();
+  }
 });
