@@ -47,6 +47,11 @@ test('real PostgreSQL HTTP API serves health/catalog and enforces browser-origin
 
     const health = await fetch(base + '/health');
     assert.equal(health.status, 200);
+    assert.equal(health.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(health.headers.get('x-frame-options'), 'DENY');
+    assert.equal(health.headers.get('referrer-policy'), 'no-referrer');
+    assert.equal(health.headers.get('permissions-policy'), 'camera=(), microphone=(), geolocation=()');
+    assert.equal(health.headers.get('cache-control'), 'no-store');
     assert.deepEqual(await health.json(), {
       ok: true,
       service: 'marketplace-api',
