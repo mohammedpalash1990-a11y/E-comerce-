@@ -9,6 +9,8 @@ import { createPostgresCustomerRepository } from './postgres-customer.mjs';
 import { handlePostgresInventoryWorkspace } from './postgres-inventory-workspace.mjs';
 import { registerPostgresCommerceRoutes } from './postgres-commerce-routes.mjs';
 import { registerPostgresAdminSellerRoutes } from './postgres-admin-seller-routes.mjs';
+import { registerPostgresSellerProductRoutes } from './postgres-seller-product-routes.mjs';
+import { registerPostgresAdminProductRoutes } from './postgres-admin-product-routes.mjs';
 import { createPostgresInventoryRepository } from './postgres-inventory.mjs';
 import { runPostgresMigrations } from './postgres-migrations.mjs';
 
@@ -112,6 +114,8 @@ export function createPostgresApiServer({ database, catalogRepository, authRepos
     inventoryRepository: createPostgresInventoryRepository(database)
   });
   registerPostgresAdminSellerRoutes(registerDomainRoute, response, { database });
+  registerPostgresSellerProductRoutes(registerDomainRoute, response, { database });
+  registerPostgresAdminProductRoutes(registerDomainRoute, response, { database });
 
   return http.createServer(async (req, res) => {
     const headers = safeHeaders(req.headers.origin, env);
