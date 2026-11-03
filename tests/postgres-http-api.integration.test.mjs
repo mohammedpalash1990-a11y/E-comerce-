@@ -25,7 +25,7 @@ test('real PostgreSQL HTTP API serves health/catalog and enforces browser-origin
   let server;
   try {
     const connection = await verifyPostgresConnection(pool);
-    assert.match(connection.version, /^PostgreSQL\\s/i);
+    assert.match(connection.version, /^PostgreSQL\s/i);
     await runPostgresMigrations(pool, migrationDirectory);
 
     const database = createPostgresDatabase(pool);
