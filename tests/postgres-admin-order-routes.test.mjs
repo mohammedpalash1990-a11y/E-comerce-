@@ -42,7 +42,7 @@ test('admin order detail includes customer, delivery, sellers, items, history an
 });
 
 test('admin order detail returns 404 for missing order',async()=>{
-  const h=setup({order:undefined});
+  const h=setup({order:null});
   await assert.rejects(find(h,'GET','/api/v1/admin/orders/:id').handler({params:['missing']}),e=>e.status===404);
 });
 
