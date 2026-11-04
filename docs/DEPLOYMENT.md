@@ -64,10 +64,10 @@ live customer/seller/admin end-to-end acceptance.
 
 ### This increment's rollout and rollback
 
-The customer-order and cart increments need **no schema migration** or data
-backfill and does not change money, commission or shipping policies. Deploy only
+The customer-order, cart and coupon increments need **no schema migration** or
+data backfill. They do not select new commission, shipping or discount amounts. Deploy only
 to private staging after review. Roll back by redeploying the prior approved API
-revision; the additive read routes disappear but existing data stays unchanged.
+revision; the new routes/protections become unavailable but existing data stays unchanged.
 Do not reverse shared migrations or delete orders to roll back this code.
 
 Deploy the cart repository and checkout locking changes together. Drain/stop
@@ -75,6 +75,13 @@ private staging API instances before replacing them: an old checkout writer does
 not participate in the new per-customer cart lock. See the
 [cart increment report](POSTGRES_CART_INCREMENT_2026-11-04.md) for contracts and
 concurrency evidence. Rolling back loses those endpoints/protections, not data.
+
+Also deploy coupon validation and checkout wiring together. Drain old API writers
+that silently ignored coupon codes before staging coupon tests. Keep recorded
+order discounts and coupon usage counters intact during rollback; do not reset
+them. Disable coupon test traffic before reverting to code without validation.
+See the [coupon increment report](POSTGRES_COUPON_INCREMENT_2026-11-04.md) for
+expiry semantics, server-cart preview and unresolved funding/settlement rules.
 
 Main still fails closed for HTTP checkout when shipping policy is missing.
 Open PR #91 addresses policy injection and must be reviewed separately. Customer

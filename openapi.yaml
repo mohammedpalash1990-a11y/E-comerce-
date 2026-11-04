@@ -168,6 +168,50 @@ paths:
         '400': { description: Invalid product ID or URL encoding }
         '401': { description: Active customer session required }
         '403': { description: Authenticated role is not CUSTOMER }
+  /api/v1/coupons/validate:
+    post:
+      summary: Preview a coupon against the authenticated customer's saved cart
+      description: >-
+        PostgreSQL development endpoint. Normalize the code and calculate the
+        subtotal from current server-side cart prices. Client subtotal_bdt and
+        discount_bdt fields are ignored. Empty or unavailable carts are rejected.
+        This read-only preview neither reserves nor consumes coupon uses.
+        Checkout must revalidate eligibility and consume usage atomically with
+        the order. Preview is not a shipping quote or a final payable total.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  description: 1 to 30 ASCII letters/digits/underscores/hyphens after trimming; case insensitive.
+                  example: SAVE20
+      responses:
+        '200':
+          description: Current coupon preview; eligibility can change before checkout.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [code, discount_bdt, subtotal_bdt]
+                    properties:
+                      code: { type: string }
+                      discount_bdt: { type: number, description: Discount on item subtotal only; not shipping. }
+                      subtotal_bdt: { type: number, description: Server-calculated saved-cart subtotal before coupon discount. }
+        '400': { description: Missing or invalid code; empty cart; coupon unavailable or minimum order not met. }
+        '401': { description: Active customer session required }
+        '403': { description: Authenticated role is not CUSTOMER }
+        '409': { description: Cart contains unavailable items or exceeds checkout limits }
+        '405': { description: Unsupported method; Allow header contains POST }
 components:
   securitySchemes:
     bearerAuth:

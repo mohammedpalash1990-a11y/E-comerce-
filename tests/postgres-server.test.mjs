@@ -482,3 +482,18 @@ test('PostgreSQL customer cart is mounted for GET/PUT/DELETE with CUSTOMER-only 
     assert.equal(malformed.status, 400);
   });
 });
+
+test('coupon preview HTTP route requires CUSTOMER auth and a saved cart instead of trusting a submitted subtotal', async () => {
+  await withServer({}, async base => {
+    const path = base + '/api/v1/coupons/validate';
+    const post = token => fetch(path, { method: 'POST', headers: { 'content-type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) }, body: JSON.stringify({ code: 'SAVE', subtotal_bdt: 999999 }) });
+    assert.equal((await post(null)).status, 401);
+    for (const token of [validSellerToken, validAdminToken]) assert.equal((await post(token)).status, 403);
+    const empty = await post(validToken);
+    assert.equal(empty.status, 400);
+    assert.deepEqual(await empty.json(), { error: 'Cart is empty' });
+    const unsupported = await fetch(path);
+    assert.equal(unsupported.status, 405);
+    assert.equal(unsupported.headers.get('allow'), 'POST');
+  });
+});

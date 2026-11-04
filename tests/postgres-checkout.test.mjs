@@ -178,3 +178,42 @@ test('checkout refuses inactive owners before reading or deleting their cart', a
   assert.deepEqual(h.tables.cart_deletes, []);
   assert.equal(h.calls.at(-1).sql, 'ROLLBACK');
 });
+
+test('checkout records the validated coupon and server-calculated discount with usage in its transaction', async () => {
+  const h = checkoutHarness({ coupon: { code: 'SAVE', discount: 2500 } });
+  const result = await h.repo.checkout(customer, { delivery, items: [{ productId: 'p-1', quantity: 2 }], coupon_code: ' save ', discount_bdt: 9999 });
+  assert.equal(result.discount_bdt, 25);
+  assert.equal(result.total_bdt, 235);
+  assert.equal(h.tables.orders[0][12], 2500);
+  assert.equal(h.tables.orders[0][13], 'SAVE');
+  const consume = h.calls.find(call => call.sql.includes('UPDATE coupons'));
+  assert.deepEqual(consume.values, ['SAVE']);
+  assert.match(consume.sql, /used_count<max_uses/);
+  assert.equal(h.calls.at(-1).sql, 'COMMIT');
+});
+
+test('a requested coupon is never silently ignored when an injected validator returns no result', async () => {
+  const h = checkoutHarness();
+  await assert.rejects(h.repo.checkout(customer, { delivery, items: [{ productId: 'p-1', quantity: 1 }], coupon_code: 'SAVE' }), error => error.status === 503);
+  assert.equal(h.tables.orders.length, 0);
+  assert.equal(h.products.get('p-1').stock, 8);
+  assert.equal(h.calls.at(-1).sql, 'ROLLBACK');
+});
+
+test('no coupon is applied unless the customer supplied a code', async () => {
+  const h = checkoutHarness({ coupon: { code: 'SAVE', discount: 2500 } });
+  const result = await h.repo.checkout(customer, { delivery, items: [{ productId: 'p-1', quantity: 1 }] });
+  assert.equal(result.discount_bdt, 0);
+  assert.ok(!h.calls.some(call => call.sql.includes('UPDATE coupons')));
+});
+
+
+test('malformed injected coupon results cannot silently consume a code without a valid discount', async () => {
+  for (const discount of [undefined, null, false, NaN, -1, '2500']) {
+    const h = checkoutHarness({ coupon: { code: 'SAVE', discount } });
+    await assert.rejects(h.repo.checkout(customer, { delivery, items: [{ productId: 'p-1', quantity: 1 }], coupon_code: 'SAVE' }), error => error.status === 503);
+    assert.equal(h.products.get('p-1').stock, 8);
+    assert.equal(h.tables.orders.length, 0);
+    assert.ok(!h.calls.some(call => call.sql.includes('UPDATE coupons')));
+  }
+});

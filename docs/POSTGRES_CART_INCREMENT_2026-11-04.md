@@ -1,5 +1,7 @@
 # PostgreSQL customer cart increment — 2026-11-04
 
+> This records the cart increment at `2cd4e36`. The subsequent [coupon increment](POSTGRES_COUPON_INCREMENT_2026-11-04.md) adds preview/redemption and raises the verified full-suite count to 310.
+
 Continuation of [PR #92](https://github.com/mohammedpalash1990-a11y/E-comerce-/pull/92) on `arena/0ce94763-e-comerce`, after the order-read/dispatch delivery at `efb68fd`. The cart API increment is implemented and locally tested; **the marketplace is not production-ready**. No merge, deployment, provider integration or pricing-policy decision is included.
 
 ## Existing work reused and coordination

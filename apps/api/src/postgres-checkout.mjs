@@ -1,4 +1,5 @@
 import { bad, HttpError, id as defaultId, now as defaultNow, normPhone, validPhone, text } from './postgres-shared.mjs';
+import { createPostgresCouponRepository, normalizeCouponCode } from './postgres-coupons.mjs';
 
 const LIVE_PRODUCT = "p.active=1 AND p.status='ACTIVE' AND EXISTS(SELECT 1 FROM seller_profiles sp WHERE sp.user_id=p.seller_id AND sp.status='APPROVED')";
 
@@ -24,7 +25,7 @@ export function createPostgresCheckoutRepository(database, options = {}) {
   const generateId = options.id || defaultId;
   const getNow = options.now || defaultNow;
   const shippingFor = options.shippingFor;
-  const couponFor = options.couponFor || (async () => null);
+  const couponFor = options.couponFor || createPostgresCouponRepository(database, { now: getNow }).validateCoupon;
   const paymentMethods = new Set(options.paymentMethods || ['COD']);
   const startPayment = options.startPayment;
   const notify = options.notify || (async () => {});
@@ -53,6 +54,7 @@ export function createPostgresCheckoutRepository(database, options = {}) {
       throw new HttpError(503, 'ডেলিভারি চার্জ নীতিমালা কনফিগার করা হয়নি; অর্ডার নেওয়া যাচ্ছে না');
     }
 
+    const couponCode = normalizeCouponCode(body.coupon_code);
     const fromCart = !Array.isArray(body.items);
     const orderId = generateId();
     const result = await database.tx(async () => {
@@ -106,7 +108,10 @@ export function createPostgresCheckoutRepository(database, options = {}) {
         });
       }
 
-      const coupon = await couponFor(body.coupon_code, subtotal, { lock: true });
+      const coupon = couponCode === null ? null : await couponFor(couponCode, subtotal, { lock: true });
+      if (couponCode !== null && (coupon?.code !== couponCode || !Number.isSafeInteger(coupon?.discount) || coupon.discount < 0)) {
+        throw new HttpError(503, 'Coupon validation is unavailable; order was not placed');
+      }
       const discount = safePaisa(coupon?.discount || 0, 'কুপনের ছাড়');
       if (discount > subtotal) throw bad('কুপনের ছাড় অর্ডারের মূল্যের চেয়ে বেশি হতে পারে না');
       const shipping = safePaisa(await shippingFor(delivery.area, subtotal), 'ডেলিভারি চার্জ');
