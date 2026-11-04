@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const spec = readFileSync(new URL('../openapi.yaml', import.meta.url), 'utf8');
 const modules = [
+  '../apps/api/src/postgres-commerce-routes.mjs',
   '../apps/api/src/postgres-seller-workspace-routes.mjs',
   '../apps/api/src/postgres-seller-product-routes.mjs',
   '../apps/api/src/postgres-admin-seller-routes.mjs',
