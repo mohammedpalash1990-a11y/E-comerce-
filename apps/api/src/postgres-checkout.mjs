@@ -108,7 +108,7 @@ export function createPostgresCheckoutRepository(database, options = {}) {
         });
       }
 
-      const coupon = couponCode === null ? null : await couponFor(couponCode, subtotal, { lock: true });
+      const coupon = couponCode === null ? null : await couponFor(couponCode, subtotal, { lock: true, userId: user.id });
       if (couponCode !== null && (coupon?.code !== couponCode || !Number.isSafeInteger(coupon?.discount) || coupon.discount < 0)) {
         throw new HttpError(503, 'Coupon validation is unavailable; order was not placed');
       }
@@ -141,6 +141,8 @@ export function createPostgresCheckoutRepository(database, options = {}) {
         const used = await query('UPDATE coupons SET used_count=used_count+1 WHERE code=? AND active=1 AND (max_uses IS NULL OR used_count<max_uses) RETURNING code')
           .all(coupon.code);
         if (used.length !== 1) throw new HttpError(409, 'কুপনের ব্যবহারসীমা শেষ');
+        await query('INSERT INTO coupon_redemptions(id,coupon_code,user_id,order_id,discount_paisa,created_at,restored_at) VALUES(?,?,?,?,?,?,NULL)')
+          .run(generateId(), coupon.code, user.id, orderId, discount, timestamp);
       }
 
       const groups = new Map();
@@ -150,8 +152,15 @@ export function createPostgresCheckoutRepository(database, options = {}) {
         groups.get(line.sellerId).push(line);
       }
 
-      for (const [sellerId, sellerLines] of groups) {
+      const sellerGroups = [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+      let allocatedCouponDiscount = 0;
+      for (let sellerIndex = 0; sellerIndex < sellerGroups.length; sellerIndex++) {
+        const [sellerId, sellerLines] = sellerGroups[sellerIndex];
         const sellerSubtotal = sellerLines.reduce((sum, line) => sum + line.unit * line.quantity, 0);
+        const sellerCouponDiscount = sellerIndex === sellerGroups.length - 1
+          ? discount - allocatedCouponDiscount
+          : subtotal > 0 ? Number(BigInt(discount) * BigInt(sellerSubtotal) / BigInt(subtotal)) : 0;
+        allocatedCouponDiscount += sellerCouponDiscount;
         const seller = await query('SELECT commission_bps FROM seller_profiles WHERE user_id=? AND status=\'APPROVED\' FOR UPDATE').get(sellerId);
         if (!seller) throw new HttpError(409, 'বিক্রেতা বর্তমানে অর্ডার নিতে পারছেন না');
         const bps = Number(seller.commission_bps);
@@ -159,10 +168,10 @@ export function createPostgresCheckoutRepository(database, options = {}) {
         const commission = Math.floor(sellerSubtotal * bps / 10000);
         const sellerOrderId = generateId();
         await query(`INSERT INTO seller_orders(
-          id,order_id,seller_id,status,subtotal_paisa,created_at,commission_paisa,net_paisa
-        ) VALUES(?,?,?,?,?,?,?,?)`).run(
+          id,order_id,seller_id,status,subtotal_paisa,created_at,commission_paisa,net_paisa,coupon_discount_paisa
+        ) VALUES(?,?,?,?,?,?,?,?,?)`).run(
           sellerOrderId, orderId, sellerId, initialStatus, sellerSubtotal, timestamp,
-          commission, sellerSubtotal - commission
+          commission, sellerSubtotal - commission, sellerCouponDiscount
         );
         for (const line of sellerLines) {
           await query(`INSERT INTO order_items(
