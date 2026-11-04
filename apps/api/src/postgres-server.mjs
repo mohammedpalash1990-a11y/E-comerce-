@@ -9,6 +9,7 @@ import { createPostgresAuthRepository } from './postgres-auth.mjs';
 import { createPostgresCustomerRepository } from './postgres-customer.mjs';
 import { handlePostgresInventoryWorkspace } from './postgres-inventory-workspace.mjs';
 import { registerPostgresCommerceRoutes } from './postgres-commerce-routes.mjs';
+import { shippingFor } from './gateways.mjs';
 import { registerPostgresAdminSellerRoutes } from './postgres-admin-seller-routes.mjs';
 import { registerPostgresSellerWorkspaceRoutes } from './postgres-seller-workspace-routes.mjs';
 import { registerPostgresSellerProductRoutes } from './postgres-seller-product-routes.mjs';
@@ -116,6 +117,7 @@ export function createPostgresApiServer({ database, catalogRepository, authRepos
   const response = (data, status = 200) => ({ status, body: { data } });
   registerPostgresCommerceRoutes(registerDomainRoute, response, {
     database,
+    shippingFor,
     inventoryRepository: createPostgresInventoryRepository(database)
   });
   registerPostgresAdminSellerRoutes(registerDomainRoute, response, { database });
