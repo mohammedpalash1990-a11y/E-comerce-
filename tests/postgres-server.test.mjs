@@ -410,3 +410,52 @@ test('PostgreSQL CORS treats wildcard and lookalike origins as untrusted', async
     assert.equal(exact.headers.get('access-control-allow-origin'), 'https://shop.example.com');
   });
 });
+
+test('domain dispatch resolves the method before enforcing authentication on shared product paths', async () => {
+  await withServer({}, async base => {
+    for (const [method, path] of [
+      ['GET', '/api/v1/seller/products'], ['POST', '/api/v1/seller/products'],
+      ['GET', '/api/v1/seller/products/p1'], ['PUT', '/api/v1/seller/products/p1'],
+      ['DELETE', '/api/v1/seller/products/p1']
+    ]) {
+      const unauthenticated = await fetch(base + path, { method });
+      assert.equal(unauthenticated.status, 401, method + ' must reach its registered auth boundary, not 405');
+      const wrongRole = await fetch(base + path, { method, headers: { authorization: 'Bearer ' + validToken } });
+      assert.equal(wrongRole.status, 403, method + ' must enforce SELLER role');
+    }
+  });
+});
+
+test('unsupported domain methods advertise all allowed methods without confusing unknown paths', async () => {
+  await withServer({}, async base => {
+    for (const [path, allow] of [
+      ['/api/v1/seller/products', 'GET, POST'], ['/api/v1/seller/products/p1', 'GET, PUT, DELETE']
+    ]) {
+      const response = await fetch(base + path, { method: 'PATCH' });
+      assert.equal(response.status, 405);
+      assert.equal(response.headers.get('allow'), allow);
+    }
+    const missing = await fetch(base + '/api/v1/not-a-route', { method: 'PATCH' });
+    assert.equal(missing.status, 404);
+  });
+});
+
+test('customer detail and tracking HTTP routes enforce authentication, roles and opaque 404s', async () => {
+  await withServer({}, async base => {
+    for (const suffix of ['', '/tracking']) {
+      const path = '/api/v1/customer/orders/unknown' + suffix;
+      assert.equal((await fetch(base + path)).status, 401);
+      for (const token of [validSellerToken, validAdminToken]) {
+        assert.equal((await fetch(base + path, { headers: { authorization: 'Bearer ' + token } })).status, 403);
+      }
+      const owned = await fetch(base + path, { headers: { authorization: 'Bearer ' + validToken } });
+      assert.equal(owned.status, 404);
+      assert.deepEqual(await owned.json(), { error: 'Order not found' });
+      const unsupported = await fetch(base + path, { method: 'PUT' });
+      assert.equal(unsupported.status, 405);
+      assert.equal(unsupported.headers.get('allow'), 'GET');
+      const malformed = await fetch(base + '/api/v1/customer/orders/%ZZ' + suffix, { headers: { authorization: 'Bearer ' + validToken } });
+      assert.equal(malformed.status, 400);
+    }
+  });
+});

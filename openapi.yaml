@@ -48,8 +48,149 @@ paths:
       responses:
         '201': { description: Order created }
         '401': { description: Authentication required }
+  /api/v1/customer/orders/{id}:
+    get:
+      summary: Read an owned order with items and seller sub-orders
+      description: >-
+        PostgreSQL development endpoint. Returns a repeatable-read snapshot.
+        Missing and foreign orders both return 404. Private admin notes, seller
+        earnings and payment-provider payloads are never included.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Customer order detail
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/CustomerOrder' }
+        '400': { description: Invalid URL encoding }
+        '401': { description: "Missing, invalid, revoked or expired session" }
+        '403': { description: Authenticated user is not a customer }
+        '404': { description: Order not found or not owned by this customer }
+        '405': { description: Unsupported method; Allow header contains GET }
+  /api/v1/customer/orders/{id}/tracking:
+    get:
+      summary: Read an owned order timeline and recorded shipments
+      description: >-
+        PostgreSQL development endpoint. Events and shipments are ordered by
+        creation time then ID. This reads stored records; it does not poll a
+        courier or invent tracking events. Operational free-text event notes and
+        actor IDs are omitted. Shipment mode distinguishes sandbox records.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Customer tracking snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/CustomerTracking' }
+        '400': { description: Invalid URL encoding }
+        '401': { description: "Missing, invalid, revoked or expired session" }
+        '403': { description: Authenticated user is not a customer }
+        '404': { description: Order not found or not owned by this customer }
+        '405': { description: Unsupported method; Allow header contains GET }
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
+  parameters:
+    OrderId:
+      in: path
+      name: id
+      required: true
+      description: Internal order ID, not the shortened display order number.
+      schema: { type: string }
+  schemas:
+    Shipment:
+      type: object
+      required: [provider, tracking_id, status, mode]
+      properties:
+        provider: { type: string }
+        tracking_id: { type: string }
+        status: { type: string }
+        mode: { type: string, description: Stored provider mode; sandbox is not live fulfilment. }
+    CustomerOrder:
+      type: object
+      required: [id, orderNumber, status, total_bdt, subtotal_bdt, shipping_bdt, discount_bdt, payment, delivery, items, suborders]
+      properties:
+        id: { type: string }
+        orderNumber: { type: string }
+        status: { type: string }
+        total_bdt: { type: number, description: BDT converted from integer paisa. }
+        subtotal_bdt: { type: number }
+        shipping_bdt: { type: number }
+        discount_bdt: { type: number }
+        coupon_code: { type: string, nullable: true }
+        created_at: { type: string }
+        payment:
+          type: object
+          properties:
+            method: { type: string }
+            status: { type: string }
+        delivery:
+          type: object
+          properties:
+            name: { type: string }
+            phone: { type: string }
+            address: { type: string }
+            area: { type: string }
+            note: { type: string, description: The customer's own delivery note. }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              product_id: { type: string }
+              name_bn: { type: string }
+              quantity: { type: integer }
+              unit_price_bdt: { type: number }
+              variant: { type: string }
+              seller_order_id: { type: string, nullable: true }
+        suborders:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              shop: { type: string, nullable: true }
+              status: { type: string }
+              subtotal_bdt: { type: number }
+              shipment:
+                type: object
+                nullable: true
+                description: Latest stored shipment by created_at then ID, or null.
+                allOf:
+                  - $ref: '#/components/schemas/Shipment'
+    CustomerTracking:
+      type: object
+      required: [orderNumber, status, events, shipments]
+      properties:
+        orderNumber: { type: string }
+        status: { type: string }
+        events:
+          type: array
+          items:
+            type: object
+            properties:
+              status: { type: string }
+              created_at: { type: string }
+              seller_order_id: { type: string, nullable: true }
+        shipments:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/Shipment'
+              - type: object
+                properties:
+                  seller_order_id: { type: string }

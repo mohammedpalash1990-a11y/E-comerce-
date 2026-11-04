@@ -5,7 +5,7 @@ Requirements: Node.js 22.5+ and npm.
 
 ```bash
 cp .env.example .env
-npm install
+npm ci
 npm run dev
 ```
 
@@ -14,20 +14,70 @@ The development launcher serves the storefront and API locally. The SQLite datab
 ## 2. GitHub Pages preview
 GitHub Pages hosts only static files. It does not execute the Node.js API, SQLite database, sessions, or payment/courier adapters. Customer login, seller actions, admin actions and checkout will not work on Pages alone.
 
-## 3. Deploying the API to a Node.js host
-1. Deploy the repository to a Node.js 22.5+ service (not a static-site service).
-2. Set the start command to `npm run start:api`.
-3. For an isolated private development demo only, attach persistent storage and set `SQLITE_FILE` to a writable path. Never use ephemeral storage for data you need to keep.
-4. Keep `NODE_ENV=development` for the current SQLite demo runtime and protect it behind private access; demo accounts are seeded in this mode.
-5. Do not set `NODE_ENV=production`: the API intentionally exits with a clear error until the PostgreSQL runtime adapter and production migration path exist.
-6. `DATABASE_URL` is currently reserved/documentary and is not consumed by the application.
-7. After a supported database runtime is implemented, configure exact HTTPS `CORS_ORIGINS`, secret-manager values, admin bootstrap and health checks.
-8. Set `window.HAAT_API_BASE` to the API origin only after the API is deployed and validated; redeploy the frontend and run staging E2E tests.
+## 3. Private development / staging API — not a production release
 
-**Important:** GitHub Pages is a static preview. The current API uses SQLite, and the application deliberately blocks production mode rather than risk accepting real customer/payment data without a supported persistent production database.
+There are two explicit runtimes. `npm run start:api` is the seeded SQLite demo;
+`npm run start:api:postgres` is the isolated PostgreSQL development runtime.
+`DATABASE_URL` **is consumed** by the PostgreSQL entrypoint. Neither runtime is
+approved for production and both reject `NODE_ENV=production`.
+
+1. Use Node 22.5+ and `npm ci`. Supply environment variables through the process
+   environment or Node's `--env-file` support; copying `.env` alone does not load it.
+2. Use a **disposable** PostgreSQL database for tests. Never point
+   `POSTGRES_TEST_DATABASE_URL` at production: tests apply migrations and create
+   and remove fixtures.
+3. Set `DATABASE_URL` from a secret manager and `PGSSL_MODE=require` for a remote
+   database, with certificate verification enabled. Only a disposable local test
+   server should use `PGSSL_MODE=disable`.
+4. Run `npm run db:migrate:postgres` with the configured database. Review the
+   migration ledger/checksums; do not edit already-applied SQL. The PostgreSQL
+   entrypoint also auto-migrates unless `PG_AUTO_MIGRATE=0`.
+5. For a private development service, start with `NODE_ENV=development`,
+   `HOST=0.0.0.0`, `PORT=4000`, then `npm run start:api:postgres`. This is not a
+   workaround for launching publicly with the production gate disabled. No demo
+   account seed is imported by this PostgreSQL entrypoint.
+6. Start `npm run start:web` with `WEB_PORT=3000`, `PORT=4000` and backend
+   `API_HOST` pointing to the API service. Browser requests use same-origin
+   `/api/*`; do not configure browser-facing localhost URLs in a hosted preview.
+7. Configure exact browser origins in `CORS_ORIGINS`, including the staging
+   frontend origin when necessary. Do not use wildcard origins.
+8. Check API `/health`, run authentication/authorization and real PostgreSQL
+   tests, and then verify browser journeys. The current web/Pages storefront
+   differs from the root canonical demo; see the current report before deployment.
+
+### Verification commands
+
+After exporting `POSTGRES_TEST_DATABASE_URL` for a disposable database and its
+appropriate `PGSSL_MODE`:
+
+```bash
+npm ci --no-audit --no-fund
+npm run check
+node --test tests/postgres-customer-orders.integration.test.mjs
+```
+
+`npm run check` runs syntax/repository checks and the full Node test suite. Without
+`POSTGRES_TEST_DATABASE_URL`, real-database tests report skips rather than passes.
+The existing browser workflow installs Playwright/Chromium and runs
+`npx playwright test`; it currently covers the canonical static storefront, not
+live customer/seller/admin end-to-end acceptance.
+
+### This increment's rollout and rollback
+
+The customer-order route/dispatch increment needs **no schema migration** or data
+backfill and does not change money, commission or shipping policies. Deploy only
+to private staging after review. Roll back by redeploying the prior approved API
+revision; the additive read routes disappear but existing data stays unchanged.
+Do not reverse shared migrations or delete orders to roll back this code.
+
+Main still fails closed for HTTP checkout when shipping policy is missing.
+Open PR #91 addresses policy injection and must be reviewed separately. Customer
+tracking exposes existing stored shipments (with sandbox mode), not a live
+courier integration. Never bypass the production startup guard to work around
+these gaps.
 
 ## 4. Before production
-- Implement and test the PostgreSQL runtime adapter and reviewed migrations.
+- Complete and verify remaining PostgreSQL route/adapter parity, HTTP checkout and reviewed migrations.
 - Use secure session lifecycle, password reset and OTP verification.
 - Configure TLS, strict CORS, CSRF protections where applicable, rate limits and security headers.
 - Store secrets in the host secret manager; never commit `.env`.
@@ -38,7 +88,9 @@ GitHub Pages hosts only static files. It does not execute the Node.js API, SQLit
 
 This repository remains a development MVP and is not production-ready.
 
-## Neon PostgreSQL provisioning status (2026-11-01)
+## Historical Neon PostgreSQL provisioning notes (2026-11-01)
+
+The following are historical project notes, not live infrastructure verification by this session. The current explicit PostgreSQL development entrypoint supersedes the old claim that every API path uses SQLite. The production gate still applies.
 - Neon project `haat-bangladesh` is provisioned (PostgreSQL 17, Singapore region), database `haat`.
 - PostgreSQL migrations `001_init.sql` and `002_indexes.sql` have been applied to the Neon main branch. Verification confirmed 24 application tables and 45 indexes.
 - A separate `haat-schema-validation` branch was also created for schema validation.

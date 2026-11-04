@@ -16,6 +16,7 @@ import { registerPostgresAdminProductRoutes } from './postgres-admin-product-rou
 import { registerPostgresPayoutRoutes } from './postgres-payout-routes.mjs';
 import { registerPostgresAdminDashboardRoutes } from './postgres-admin-dashboard-routes.mjs';
 import { registerPostgresAdminOrderRoutes } from './postgres-admin-order-routes.mjs';
+import { registerPostgresCustomerOrderRoutes } from './postgres-customer-order-routes.mjs';
 import { createPostgresInventoryRepository } from './postgres-inventory.mjs';
 import { runPostgresMigrations } from './postgres-migrations.mjs';
 
@@ -125,6 +126,7 @@ export function createPostgresApiServer({ database, catalogRepository, authRepos
   registerPostgresPayoutRoutes(registerDomainRoute, response, { database });
   registerPostgresAdminDashboardRoutes(registerDomainRoute, response, { database });
   registerPostgresAdminOrderRoutes(registerDomainRoute, response, { database });
+  registerPostgresCustomerOrderRoutes(registerDomainRoute, response, { database });
   registerPostgresCatalogRoutes(registerDomainRoute, response, { catalogRepository });
 
   return http.createServer(async (req, res) => {
@@ -219,10 +221,15 @@ export function createPostgresApiServer({ database, catalogRepository, authRepos
         if (result) return json(res, result.status || 200, result, headers);
       }
 
-      const domainMatch = domainRoutes.map(route => ({ route, match: path.match(route.re) })).find(item => item.match);
+      const pathMatches = domainRoutes.map(route => ({ route, match: path.match(route.re) })).filter(item => item.match);
+      const domainMatch = pathMatches.find(item => item.route.method === method);
+      if (pathMatches.length && !domainMatch) {
+        return json(res, 405, { error: 'Method not allowed' }, {
+          ...headers, allow: [...new Set(pathMatches.map(item => item.route.method))].join(', ')
+        });
+      }
       if (domainMatch) {
         const { route, match } = domainMatch;
-        if (method !== route.method) return json(res, 405, { error: 'Method not allowed' }, headers);
         let user = null;
         if (route.roles) {
           const token = bearerToken(req);
