@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { createPostgresPool, postgresPoolOptions, verifyPostgresConnection, closePostgresPool } from './postgres-pool.mjs';
 import { createPostgresDatabase } from './postgres-runtime.mjs';
 import { createPostgresCatalogRepository } from './postgres-catalog.mjs';
+import { registerPostgresCatalogRoutes } from './postgres-catalog-routes.mjs';
 import { createPostgresAuthRepository } from './postgres-auth.mjs';
 import { createPostgresCustomerRepository } from './postgres-customer.mjs';
 import { handlePostgresInventoryWorkspace } from './postgres-inventory-workspace.mjs';
@@ -124,6 +125,7 @@ export function createPostgresApiServer({ database, catalogRepository, authRepos
   registerPostgresPayoutRoutes(registerDomainRoute, response, { database });
   registerPostgresAdminDashboardRoutes(registerDomainRoute, response, { database });
   registerPostgresAdminOrderRoutes(registerDomainRoute, response, { database });
+  registerPostgresCatalogRoutes(registerDomainRoute, response, { catalogRepository });
 
   return http.createServer(async (req, res) => {
     const headers = safeHeaders(req.headers.origin, env);
@@ -143,19 +145,6 @@ export function createPostgresApiServer({ database, catalogRepository, authRepos
         await database.q('SELECT 1 AS ok').get();
         return json(res, 200, { ok: true, service: 'marketplace-api', db: 'ok', runtime: 'postgresql' }, headers);
       }
-      if (method === 'GET' && path === '/api/v1/categories') return json(res, 200, { data: await catalogRepository.listCategories() }, headers);
-      if (method === 'GET' && path === '/api/v1/brands') return json(res, 200, { data: await catalogRepository.listBrands() }, headers);
-      if (method === 'GET' && path === '/api/v1/products') return json(res, 200, { data: await catalogRepository.listProducts(url.searchParams) }, headers);
-      if (method === 'GET' && path === '/api/v1/products/suggest') return json(res, 200, { data: await catalogRepository.suggestProducts(url.searchParams) }, headers);
-      const reviews = path.match(/^\/api\/v1\/products\/([^/]+)\/reviews$/);
-      if (method === 'GET' && reviews) return json(res, 200, { data: await catalogRepository.listReviews(decodePathPart(reviews[1])) }, headers);
-      const product = path.match(/^\/api\/v1\/products\/([^/]+)$/);
-      if (method === 'GET' && product) {
-        const value = await catalogRepository.getProduct(decodePathPart(product[1]));
-        if (!value) return json(res, 404, { error: 'Product not found' }, headers);
-        return json(res, 200, { data: value }, headers);
-      }
-
       const publicAuthRoutes = {
         'POST /api/v1/auth/register': async body => ({ status: 201, body: await authRepository.registerCustomer(body) }),
         'POST /api/v1/auth/register-seller': async body => ({ status: 201, body: await authRepository.registerSeller(body) }),
