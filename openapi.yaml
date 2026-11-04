@@ -18,13 +18,122 @@ paths:
         '200': { description: Category list }
   /api/v1/products:
     get:
-      summary: Search active products
+      summary: Search and filter publicly visible products
+      description: >-
+        Public PostgreSQL catalog endpoint. Only active products belonging to
+        approved sellers are returned. Price filters are BDT values converted
+        to integer paisa by the server. Sort is allowlisted; malformed numeric
+        filters are ignored. Pagination is capped at 100 items and offset 10000.
       parameters:
         - in: query
           name: q
-          schema: { type: string }
+          schema: { type: string, maxLength: 80 }
+        - in: query
+          name: category
+          schema: { type: string, maxLength: 100 }
+        - in: query
+          name: brand
+          schema: { type: string, maxLength: 100 }
+        - in: query
+          name: min_price
+          description: Minimum effective selling price in BDT; zero is allowed.
+          schema: { type: number, minimum: 0 }
+        - in: query
+          name: max_price
+          description: Maximum effective selling price in BDT; must be greater than zero.
+          schema: { type: number, minimum: 0, exclusiveMinimum: true }
+        - in: query
+          name: sort
+          schema: { type: string, enum: [price_asc, price_desc, newest] }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 100 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0, maximum: 10000, default: 0 }
       responses:
-        '200': { description: Product list }
+        '200':
+          description: Public product list with integer-paisa and BDT price fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/CatalogProductListItem' }
+  /api/v1/brands:
+    get:
+      summary: List public brands
+      description: Returns the public brand slug and display name, ordered by name.
+      responses:
+        '200':
+          description: Public brand list.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Brand' }
+  /api/v1/products/suggest:
+    get:
+      summary: Suggest public products for search autocomplete
+      description: Returns at most eight active products from approved sellers; query is truncated to 40 characters and empty queries return an empty list.
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string, maxLength: 40 }
+      responses:
+        '200':
+          description: Search suggestions with product ID and bilingual names.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/CatalogSuggestion' }
+  /api/v1/products/{id}:
+    get:
+      summary: Read public product details
+      description: Returns only active products from approved sellers and excludes seller ownership IDs and credential fields.
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '200':
+          description: Public product detail with rating aggregate and images.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/CatalogProductDetail' }
+        '404': { description: Product is missing, inactive or not sold by an approved seller }
+  /api/v1/products/{id}/reviews:
+    get:
+      summary: List public reviews for a product
+      description: Returns at most 50 newest reviews without reviewer account IDs.
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '200':
+          description: Public product reviews.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/ProductReview' }
   /api/v1/auth/login:
     post:
       summary: Customer, seller or admin login
@@ -162,7 +271,7 @@ paths:
         - in: path
           name: pid
           required: true
-          schema: { type: string, minLength: 1, maxLength: 160 }
+          schema: { type: string, minLength: 1 }
       responses:
         '200': { $ref: '#/components/responses/CartResponse' }
         '400': { description: Invalid product ID or URL encoding }
@@ -571,6 +680,12 @@ components:
       type: http
       scheme: bearer
   parameters:
+    ProductId:
+      in: path
+      name: id
+      required: true
+      description: Internal product identifier.
+      schema: { type: string, minLength: 1, maxLength: 160 }
     OrderId:
       in: path
       name: id
@@ -588,6 +703,69 @@ components:
             properties:
               data: { $ref: '#/components/schemas/CustomerCart' }
   schemas:
+    Brand:
+      type: object
+      required: [slug, name]
+      properties:
+        slug: { type: string }
+        name: { type: string }
+    CatalogSuggestion:
+      type: object
+      required: [id, name_bn, name_en]
+      properties:
+        id: { type: string }
+        name_bn: { type: string }
+        name_en: { type: string }
+    CatalogProductListItem:
+      type: object
+      required: [id, name_bn, name_en, price_paisa, discount_paisa, stock, price_bdt, sale_price_bdt, discount_price_bdt, in_stock, category_slug, brand, image]
+      properties:
+        id: { type: string }
+        name_bn: { type: string }
+        name_en: { type: string }
+        price_paisa: { type: integer, minimum: 0, description: Stored price in integer paisa. }
+        discount_paisa: { type: integer, nullable: true, minimum: 0 }
+        stock: { type: integer, minimum: 0 }
+        price_bdt: { type: number, minimum: 0 }
+        sale_price_bdt: { type: number, minimum: 0, description: Effective selling price after a valid discount. }
+        discount_price_bdt: { type: number, nullable: true, minimum: 0 }
+        in_stock: { type: boolean }
+        category_slug: { type: string }
+        brand: { type: string, nullable: true }
+        image: { type: string, nullable: true }
+    CatalogProductDetail:
+      type: object
+      required: [id, name_bn, name_en, price_paisa, discount_paisa, stock, price_bdt, sale_price_bdt, discount_price_bdt, in_stock, category_slug, brand, seller_shop, variants, images, rating, review_count]
+      properties:
+        id: { type: string }
+        name_bn: { type: string }
+        name_en: { type: string }
+        price_paisa: { type: integer, minimum: 0 }
+        discount_paisa: { type: integer, nullable: true, minimum: 0 }
+        stock: { type: integer, minimum: 0 }
+        price_bdt: { type: number, minimum: 0 }
+        sale_price_bdt: { type: number, minimum: 0 }
+        discount_price_bdt: { type: number, nullable: true, minimum: 0 }
+        in_stock: { type: boolean }
+        category_slug: { type: string }
+        brand: { type: string, nullable: true }
+        seller_shop: { type: string }
+        variants:
+          type: array
+          items: { type: object, additionalProperties: true }
+        images:
+          type: array
+          items: { type: string }
+        rating: { type: number, minimum: 0, maximum: 5 }
+        review_count: { type: integer, minimum: 0 }
+    ProductReview:
+      type: object
+      required: [rating, comment, created_at, name]
+      properties:
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        comment: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        name: { type: string }
     Address:
       type: object
       properties:
