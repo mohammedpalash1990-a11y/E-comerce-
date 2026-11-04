@@ -149,7 +149,7 @@ test('checkout rejects unapproved sellers and invalid money values', async () =>
 
 
 test('checkout fails closed when no shipping policy is configured', async () => {
-  const h = checkoutHarness({ shippingFor: undefined });
+  const h = checkoutHarness({ shippingFor: null });
   await assert.rejects(h.repo.checkout(customer, {
     delivery, items: [{ productId: 'p-1', quantity: 1 }]
   }), error => error.status === 503 && /ডেলিভারি চার্জ নীতিমালা/.test(error.message));
