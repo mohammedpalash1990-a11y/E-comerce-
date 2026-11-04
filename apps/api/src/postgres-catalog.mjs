@@ -133,9 +133,12 @@ export function createPostgresCatalogRepository(database) {
   }
 
   async function listReviews(productId) {
-    return query(`SELECT r.rating,r.comment,r.created_at,u.name
+    const rows = await query(`SELECT r.rating,r.comment,r.created_at,u.name
       FROM reviews r JOIN users u ON u.id=r.user_id
       WHERE r.product_id=? ORDER BY r.created_at DESC LIMIT 50`).all(String(productId));
+    // PostgreSQL returns BIGINT as text; expose the documented numeric rating so
+    // review payloads agree with the product aggregate rating.
+    return rows.map(row => ({ ...row, rating: Number(row.rating) }));
   }
 
   return Object.freeze({

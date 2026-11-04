@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPostgresCheckoutRepository } from '../apps/api/src/postgres-checkout.mjs';
 
-function checkoutHarness({ stock = 8, coupon = null, paymentMethods = ['COD'], shippingFor = () => 6000 } = {}) {
+function checkoutHarness({ stock = 8, coupon = null, paymentMethods = ['COD'], shippingFor = () => 6000, cart = [], owner = true } = {}) {
   const products = new Map([['p-1', {
     id: 'p-1', name_bn: 'শার্ট', price_paisa: '12000', discount_paisa: '10000',
     stock, active: 1, status: 'ACTIVE', seller_id: 'seller-1'
@@ -16,7 +16,7 @@ function checkoutHarness({ stock = 8, coupon = null, paymentMethods = ['COD'], s
       return {
         async get(...values) {
           calls.push({ sql, values, method: 'get' });
-          if (sql.includes('FROM cart_items')) return [];
+          if (sql.includes('FROM users')) return owner ? { id: values[0] } : undefined;
           if (sql.includes('FROM products p')) {
             const p = products.get(values[0]);
             return p && p.active === 1 && p.status === 'ACTIVE' && sellers.get(p.seller_id)?.status === 'APPROVED'
@@ -27,6 +27,7 @@ function checkoutHarness({ stock = 8, coupon = null, paymentMethods = ['COD'], s
         },
         async all(...values) {
           calls.push({ sql, values, method: 'all' });
+          if (sql.includes('FROM cart_items')) return cart;
           if (sql.includes('UPDATE products SET stock=stock-')) {
             const p = products.get(values[1]);
             if (!p || p.stock < values[0] || p.active !== 1 || p.status !== 'ACTIVE') return [];
@@ -156,4 +157,63 @@ test('checkout fails closed when no shipping policy is configured', async () => 
   assert.equal(h.calls.length, 0);
   assert.equal(h.tables.orders.length, 0);
   assert.equal(h.products.get('p-1').stock, 8);
+});
+
+
+test('cart checkout locks the customer before reading a correctly quoted PostgreSQL productId alias', async () => {
+  const h = checkoutHarness({ cart: [{ productId: 'p-1', quantity: 2 }] });
+  await h.repo.checkout(customer, { delivery });
+  assert.equal(h.calls[0].sql, 'BEGIN');
+  assert.match(h.calls[1].sql, /FROM users.*FOR UPDATE/);
+  assert.match(h.calls[2].sql, /SELECT product_id AS "productId",quantity/);
+  assert.deepEqual(h.calls[2].values, [customer.id]);
+  assert.equal(h.tables.order_items[0][4], 2);
+  assert.deepEqual(h.tables.cart_deletes, [[customer.id]]);
+});
+
+test('checkout refuses inactive owners before reading or deleting their cart', async () => {
+  const h = checkoutHarness({ owner: false });
+  await assert.rejects(h.repo.checkout(customer, { delivery }), error => error.status === 401);
+  assert.ok(!h.calls.some(call => call.sql.includes('FROM cart_items')));
+  assert.deepEqual(h.tables.cart_deletes, []);
+  assert.equal(h.calls.at(-1).sql, 'ROLLBACK');
+});
+
+test('checkout records the validated coupon and server-calculated discount with usage in its transaction', async () => {
+  const h = checkoutHarness({ coupon: { code: 'SAVE', discount: 2500 } });
+  const result = await h.repo.checkout(customer, { delivery, items: [{ productId: 'p-1', quantity: 2 }], coupon_code: ' save ', discount_bdt: 9999 });
+  assert.equal(result.discount_bdt, 25);
+  assert.equal(result.total_bdt, 235);
+  assert.equal(h.tables.orders[0][12], 2500);
+  assert.equal(h.tables.orders[0][13], 'SAVE');
+  const consume = h.calls.find(call => call.sql.includes('UPDATE coupons'));
+  assert.deepEqual(consume.values, ['SAVE']);
+  assert.match(consume.sql, /used_count<max_uses/);
+  assert.equal(h.calls.at(-1).sql, 'COMMIT');
+});
+
+test('a requested coupon is never silently ignored when an injected validator returns no result', async () => {
+  const h = checkoutHarness();
+  await assert.rejects(h.repo.checkout(customer, { delivery, items: [{ productId: 'p-1', quantity: 1 }], coupon_code: 'SAVE' }), error => error.status === 503);
+  assert.equal(h.tables.orders.length, 0);
+  assert.equal(h.products.get('p-1').stock, 8);
+  assert.equal(h.calls.at(-1).sql, 'ROLLBACK');
+});
+
+test('no coupon is applied unless the customer supplied a code', async () => {
+  const h = checkoutHarness({ coupon: { code: 'SAVE', discount: 2500 } });
+  const result = await h.repo.checkout(customer, { delivery, items: [{ productId: 'p-1', quantity: 1 }] });
+  assert.equal(result.discount_bdt, 0);
+  assert.ok(!h.calls.some(call => call.sql.includes('UPDATE coupons')));
+});
+
+
+test('malformed injected coupon results cannot silently consume a code without a valid discount', async () => {
+  for (const discount of [undefined, null, false, NaN, -1, '2500']) {
+    const h = checkoutHarness({ coupon: { code: 'SAVE', discount } });
+    await assert.rejects(h.repo.checkout(customer, { delivery, items: [{ productId: 'p-1', quantity: 1 }], coupon_code: 'SAVE' }), error => error.status === 503);
+    assert.equal(h.products.get('p-1').stock, 8);
+    assert.equal(h.tables.orders.length, 0);
+    assert.ok(!h.calls.some(call => call.sql.includes('UPDATE coupons')));
+  }
 });

@@ -162,3 +162,35 @@ test('deleting a non-default address does not rewrite the remaining default', as
   await repo.deleteAddress(customer.id, 'address-secondary');
   assert.equal(db.calls.some(call => call.sql?.includes('ORDER BY id LIMIT 1')), false);
 });
+
+test('wishlist identifiers must be non-empty strings so coercion cannot reach SQL', async () => {
+  const db = fakeDatabase(() => ({ ok: 1 }));
+  const repo = createPostgresCustomerRepository(db);
+  for (const bad of [undefined, null, '', '   ', 42, true, ['p-1'], { id: 'p-1' }, 'x'.repeat(101)]) {
+    await assert.rejects(repo.addWishlist(customer.id, bad), /পণ্য নির্বাচন সঠিক নয়/);
+    await assert.rejects(repo.removeWishlist(customer.id, bad), /পণ্য নির্বাচন সঠিক নয়/);
+  }
+  assert.equal(db.calls.length, 0, 'no SQL should run for rejected identifiers');
+  assert.deepEqual(await repo.addWishlist(customer.id, '  p-1  '), { added: true });
+  assert.equal(db.calls.find(call => call.sql.includes('FROM products')).values[0], 'p-1');
+});
+
+test('review ratings reject booleans, arrays and free text instead of coercing them', async () => {
+  const db = fakeDatabase((method, sql) => sql.includes('FROM order_items') ? { eligible: true } : undefined);
+  const repo = createPostgresCustomerRepository(db);
+  for (const rating of [true, false, null, [5], { rating: 5 }, 'five', 4.5, '05', 0, 6, '5.5']) {
+    await assert.rejects(repo.saveReview({ userId: customer.id, productId: 'p-1', body: { rating } }), /রেটিং ১ থেকে ৫ হতে হবে/);
+  }
+  assert.equal(db.calls.length, 0);
+  assert.deepEqual(await repo.saveReview({ userId: customer.id, productId: '  p-1 ', body: { rating: ' 5 ' } }), { saved: true });
+  assert.deepEqual(await repo.saveReview({ userId: customer.id, productId: 'p-1', body: { rating: 4 } }), { saved: true });
+  assert.equal(db.calls.find(call => call.sql.includes('FROM order_items')).values[1], 'p-1');
+});
+
+test('review submission without a body or product identifier fails validation before querying eligibility', async () => {
+  const db = fakeDatabase(() => undefined);
+  const repo = createPostgresCustomerRepository(db);
+  await assert.rejects(repo.saveReview({ userId: customer.id, productId: 'p-1' }), /রেটিং ১ থেকে ৫ হতে হবে/);
+  await assert.rejects(repo.saveReview({ userId: customer.id, body: { rating: 5 } }), /পণ্য নির্বাচন সঠিক নয়/);
+  assert.equal(db.calls.length, 0);
+});
