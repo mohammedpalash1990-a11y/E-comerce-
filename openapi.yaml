@@ -674,6 +674,1003 @@ paths:
           description: Active CUSTOMER session required.
         '403':
           description: Non-customer role, or no delivered purchase of this product.
+
+  /api/v1/seller/profile:
+    get:
+      summary: Read the authenticated seller profile
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated SELLER account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/seller/dashboard:
+    get:
+      summary: Read seller dashboard metrics and recent orders
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated SELLER account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/seller/orders:
+    get:
+      summary: List the authenticated seller's orders
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated SELLER account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/seller/orders/{id}:
+    get:
+      summary: Read a seller-owned order and its items
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated SELLER account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/seller/orders/{id}/status:
+    post:
+      summary: Update the status of a seller-owned order
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated SELLER account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, minLength: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/seller/products:
+    get:
+      summary: List the authenticated seller's products
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated SELLER account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/seller/products/{id}:
+    get:
+      summary: Read a seller-owned product
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated SELLER account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/seller/products:
+    post:
+      summary: Create a product for the authenticated seller
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated SELLER account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/seller/products/{id}:
+    put:
+      summary: Replace editable fields on a seller-owned product
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated SELLER account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, minLength: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/seller/products/{id}:
+    delete:
+      summary: Archive a seller-owned product
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated SELLER account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/seller/finance:
+    get:
+      summary: Read seller settlements, balances and payouts
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated SELLER account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/seller/payouts:
+    post:
+      summary: Request a seller payout
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated SELLER account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '201':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/seller/inventory:
+    get:
+      summary: List inventory owned by the authenticated seller
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated SELLER account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/seller/inventory/{id}/movements:
+    get:
+      summary: List stock movements for a seller-owned product
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated SELLER account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/seller/inventory/{id}/adjust-requests:
+    post:
+      summary: Request a stock adjustment for a seller-owned product
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated SELLER account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, minLength: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/seller/inventory/alerts:
+    get:
+      summary: List low-stock alerts for the authenticated seller
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated SELLER account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+        - in: query
+          name: threshold
+          schema: { type: integer, minimum: 0, maximum: 1000, default: 5 }
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/seller/inventory/report:
+    get:
+      summary: Read the authenticated seller's inventory report
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated SELLER account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/admin/sellers:
+    get:
+      summary: List seller accounts for administration
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated ADMIN account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/admin/sellers/{id}/status:
+    patch:
+      summary: Change a seller account status
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated ADMIN account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, minLength: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/admin/products:
+    get:
+      summary: List products for administration
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated ADMIN account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/admin/products/pending:
+    get:
+      summary: List products awaiting moderation
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated ADMIN account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/admin/products/{id}/approve:
+    post:
+      summary: Approve a pending product
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated ADMIN account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, minLength: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/admin/products/{id}/reject:
+    post:
+      summary: Reject a pending product
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated ADMIN account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, minLength: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/admin/products/{id}/suspend:
+    post:
+      summary: Suspend an active product
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated ADMIN account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, minLength: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/admin/products/{id}/unsuspend:
+    post:
+      summary: Restore a suspended product
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated ADMIN account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, minLength: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/admin/orders:
+    get:
+      summary: List marketplace orders for administration
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated ADMIN account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/admin/orders/{id}/status:
+    post:
+      summary: Update an order status as an administrator
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated ADMIN account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, minLength: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/admin/orders/{id}:
+    get:
+      summary: Read an order and administrative details
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated ADMIN account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/admin/orders/{id}/note:
+    post:
+      summary: Save an internal administrative order note
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated ADMIN account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, minLength: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/admin/orders/{id}/shipping:
+    post:
+      summary: Update shipping charge for an eligible order
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated ADMIN account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, minLength: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/admin/dashboard:
+    get:
+      summary: Read marketplace administration dashboard metrics
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated ADMIN account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/admin/inventory/adjustments:
+    get:
+      summary: List inventory adjustment requests
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated ADMIN account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/admin/inventory/adjustments/{id}/decision:
+    post:
+      summary: Approve or reject an inventory adjustment request
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated ADMIN account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, minLength: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/admin/inventory/alerts:
+    get:
+      summary: List marketplace low-stock alerts
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated ADMIN account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+        - in: query
+          name: threshold
+          schema: { type: integer, minimum: 0, maximum: 1000, default: 5 }
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/admin/inventory/report:
+    get:
+      summary: Read marketplace inventory report
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated ADMIN account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/admin/payouts:
+    get:
+      summary: List seller payout requests by status
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated ADMIN account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+        - in: query
+          name: status
+          schema: { type: string, enum: [REQUESTED, APPROVED, REJECTED], default: REQUESTED }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 300, default: 100 }
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
+  /api/v1/admin/payouts/{id}/decision:
+    post:
+      summary: Approve or reject a seller payout request
+      description: >-
+        PostgreSQL domain endpoint. Access is restricted to an authenticated ADMIN account.
+        Monetary values use BDT display fields and/or integer paisa fields as returned by the handler.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, minLength: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Successful operation; response data follows the route handler's documented fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, additionalProperties: true }
+        '400': { description: Invalid request parameters or body }
+        '401': { description: Missing, invalid, revoked or expired session }
+        '403': { description: Authenticated account does not have the required role or ownership }
+        '404': { description: Requested resource was not found }
+        '409': { description: Operation conflicts with the current resource state }
 components:
   securitySchemes:
     bearerAuth:
