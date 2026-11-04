@@ -17,7 +17,7 @@ export function registerPostgresCouponRoutes(route, ok, { database } = {}) {
       if (saved.items.length > MAX_CART_ITEMS || saved.items.some(item => !item.available || item.quantity > 1000)) {
         throw new HttpError(409, 'Cart contains unavailable items; refresh your cart');
       }
-      const coupon = await coupons.validateCoupon(code, saved.subtotal_paisa);
+      const coupon = await coupons.validateCoupon(code, saved.subtotal_paisa, { userId: user.id });
       return ok({ code: coupon.code, discount_bdt: coupon.discount / 100, subtotal_bdt: saved.subtotal_paisa / 100 });
     });
   });
