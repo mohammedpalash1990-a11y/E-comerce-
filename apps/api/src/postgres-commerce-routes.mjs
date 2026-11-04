@@ -28,7 +28,7 @@ export function registerPostgresCommerceRoutes(route, ok, options = {}) {
 
   const checkout = options.checkoutRepository || createPostgresCheckoutRepository(database, {
     id, now,
-    shippingFor: options.shippingFor || (async () => 0),
+    shippingFor: options.shippingFor,
     couponFor: options.couponFor,
     paymentMethods: options.paymentMethods || ['COD'],
     startPayment: options.startPayment,
