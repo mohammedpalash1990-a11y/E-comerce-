@@ -54,28 +54,32 @@ export function createPostgresCheckoutRepository(database, options = {}) {
     }
 
     const fromCart = !Array.isArray(body.items);
-    const raw = fromCart
-      ? await query('SELECT product_id productId,quantity FROM cart_items WHERE user_id=?').all(user.id)
-      : body.items;
-    if (!raw.length || raw.length > 50) throw bad('Cart must contain between 1 and 50 items');
-
-    const quantities = new Map();
-    const variants = new Map();
-    for (const item of raw) {
-      const productId = String(item.productId || '');
-      const quantity = Number(item.quantity);
-      if (!productId || !Number.isInteger(quantity) || quantity < 1 || quantity > 1000) {
-        throw bad('Invalid cart item');
-      }
-      quantities.set(productId, (quantities.get(productId) || 0) + quantity);
-      variants.set(productId, String(item.variant || '').slice(0, 60));
-    }
-    for (const quantity of quantities.values()) {
-      if (quantity > 1000) throw bad('একটি পণ্যের সর্বোচ্চ পরিমাণ ১০০০');
-    }
-
     const orderId = generateId();
     const result = await database.tx(async () => {
+      // The same per-customer lock used by cart mutations protects snapshot and
+      // cleanup together. Lock even explicit-item checkout: it removes cart lines.
+      const owner = await query("SELECT id FROM users WHERE id=? AND role='CUSTOMER' AND status='ACTIVE' FOR UPDATE").get(user.id);
+      if (!owner) throw new HttpError(401, 'Authentication required');
+      const raw = fromCart
+        ? await query('SELECT product_id AS "productId",quantity FROM cart_items WHERE user_id=? ORDER BY product_id').all(user.id)
+        : body.items;
+      if (!raw.length || raw.length > 50) throw bad('Cart must contain between 1 and 50 items');
+
+      const quantities = new Map();
+      const variants = new Map();
+      for (const item of raw) {
+        const productId = String(item.productId || '');
+        const quantity = Number(item.quantity);
+        if (!productId || !Number.isInteger(quantity) || quantity < 1 || quantity > 1000) {
+          throw bad('Invalid cart item');
+        }
+        quantities.set(productId, (quantities.get(productId) || 0) + quantity);
+        variants.set(productId, String(item.variant || '').slice(0, 60));
+      }
+      for (const quantity of quantities.values()) {
+        if (quantity > 1000) throw bad('একটি পণ্যের সর্বোচ্চ পরিমাণ ১০০০');
+      }
+
       const lines = [];
       let subtotal = 0;
 

@@ -1,5 +1,7 @@
 # Marketplace development delivery — 2026-11-04
 
+> Historical snapshot of the initial order-read/dispatch increment at `efb68fd`. The subsequent [cart increment](POSTGRES_CART_INCREMENT_2026-11-04.md) adds saved-cart routes and checkout concurrency fixes; its final full suite passes 285 tests. Counts and missing-cart notes below describe the initial increment, not the latest branch head.
+
 ## Scope and verdict
 
 Branch: `arena/0ce94763-e-comerce`, based on `bda1453` (merged PR #90).

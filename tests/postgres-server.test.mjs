@@ -459,3 +459,26 @@ test('customer detail and tracking HTTP routes enforce authentication, roles and
     }
   });
 });
+
+
+test('PostgreSQL customer cart is mounted for GET/PUT/DELETE with CUSTOMER-only authorization', async () => {
+  await withServer({}, async base => {
+    for (const [method, path] of [
+      ['GET', '/api/v1/customer/cart'], ['PUT', '/api/v1/customer/cart'],
+      ['DELETE', '/api/v1/customer/cart'], ['DELETE', '/api/v1/customer/cart/p1']
+    ]) {
+      assert.equal((await fetch(base + path, { method })).status, 401);
+      for (const token of [validSellerToken, validAdminToken]) {
+        assert.equal((await fetch(base + path, { method, headers: { authorization: 'Bearer ' + token } })).status, 403);
+      }
+    }
+    const cart = await fetch(base + '/api/v1/customer/cart', { headers: { authorization: 'Bearer ' + validToken } });
+    assert.equal(cart.status, 200);
+    assert.deepEqual(await cart.json(), { data: { items: [], subtotal_bdt: 0, item_count: 0 } });
+    const unsupported = await fetch(base + '/api/v1/customer/cart', { method: 'POST' });
+    assert.equal(unsupported.status, 405);
+    assert.equal(unsupported.headers.get('allow'), 'GET, PUT, DELETE');
+    const malformed = await fetch(base + '/api/v1/customer/cart/%ZZ', { method: 'DELETE', headers: { authorization: 'Bearer ' + validToken } });
+    assert.equal(malformed.status, 400);
+  });
+});

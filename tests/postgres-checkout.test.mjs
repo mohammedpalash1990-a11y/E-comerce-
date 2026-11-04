@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPostgresCheckoutRepository } from '../apps/api/src/postgres-checkout.mjs';
 
-function checkoutHarness({ stock = 8, coupon = null, paymentMethods = ['COD'], shippingFor = () => 6000 } = {}) {
+function checkoutHarness({ stock = 8, coupon = null, paymentMethods = ['COD'], shippingFor = () => 6000, cart = [], owner = true } = {}) {
   const products = new Map([['p-1', {
     id: 'p-1', name_bn: 'শার্ট', price_paisa: '12000', discount_paisa: '10000',
     stock, active: 1, status: 'ACTIVE', seller_id: 'seller-1'
@@ -16,7 +16,7 @@ function checkoutHarness({ stock = 8, coupon = null, paymentMethods = ['COD'], s
       return {
         async get(...values) {
           calls.push({ sql, values, method: 'get' });
-          if (sql.includes('FROM cart_items')) return [];
+          if (sql.includes('FROM users')) return owner ? { id: values[0] } : undefined;
           if (sql.includes('FROM products p')) {
             const p = products.get(values[0]);
             return p && p.active === 1 && p.status === 'ACTIVE' && sellers.get(p.seller_id)?.status === 'APPROVED'
@@ -27,6 +27,7 @@ function checkoutHarness({ stock = 8, coupon = null, paymentMethods = ['COD'], s
         },
         async all(...values) {
           calls.push({ sql, values, method: 'all' });
+          if (sql.includes('FROM cart_items')) return cart;
           if (sql.includes('UPDATE products SET stock=stock-')) {
             const p = products.get(values[1]);
             if (!p || p.stock < values[0] || p.active !== 1 || p.status !== 'ACTIVE') return [];
@@ -156,4 +157,24 @@ test('checkout fails closed when no shipping policy is configured', async () => 
   assert.equal(h.calls.length, 0);
   assert.equal(h.tables.orders.length, 0);
   assert.equal(h.products.get('p-1').stock, 8);
+});
+
+
+test('cart checkout locks the customer before reading a correctly quoted PostgreSQL productId alias', async () => {
+  const h = checkoutHarness({ cart: [{ productId: 'p-1', quantity: 2 }] });
+  await h.repo.checkout(customer, { delivery });
+  assert.equal(h.calls[0].sql, 'BEGIN');
+  assert.match(h.calls[1].sql, /FROM users.*FOR UPDATE/);
+  assert.match(h.calls[2].sql, /SELECT product_id AS "productId",quantity/);
+  assert.deepEqual(h.calls[2].values, [customer.id]);
+  assert.equal(h.tables.order_items[0][4], 2);
+  assert.deepEqual(h.tables.cart_deletes, [[customer.id]]);
+});
+
+test('checkout refuses inactive owners before reading or deleting their cart', async () => {
+  const h = checkoutHarness({ owner: false });
+  await assert.rejects(h.repo.checkout(customer, { delivery }), error => error.status === 401);
+  assert.ok(!h.calls.some(call => call.sql.includes('FROM cart_items')));
+  assert.deepEqual(h.tables.cart_deletes, []);
+  assert.equal(h.calls.at(-1).sql, 'ROLLBACK');
 });
