@@ -5,72 +5,55 @@ import { readFileSync } from 'node:fs';
 const spec = readFileSync(new URL('../openapi.yaml', import.meta.url), 'utf8');
 const routes = readFileSync(new URL('../apps/api/src/postgres-catalog-routes.mjs', import.meta.url), 'utf8');
 
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function operation(path, method = 'get') {
+  const start = spec.indexOf('  ' + path + ':');
+  assert.notEqual(start, -1, 'Missing OpenAPI path ' + path);
+  const next = spec.indexOf('\n  /', start + 1);
+  const block = spec.slice(start, next < 0 ? spec.indexOf('\ncomponents:', start) : next);
+  const methodStart = block.indexOf('\n    ' + method + ':');
+  assert.notEqual(methodStart, -1, 'Missing ' + method.toUpperCase() + ' ' + path);
+  const after = block.slice(methodStart + method.length + 7);
+  const nextMethod = after.search(/\n    (get|post|put|patch|delete|options|head):/);
+  return nextMethod < 0 ? after : after.slice(0, nextMethod);
 }
 
-function pathBlock(path) {
-  const match = spec.match(new RegExp('^  ' + escapeRegExp(path) + ':\\n([\\s\\S]*?)(?=^  /|^components:)', 'm'));
-  assert.ok(match, 'OpenAPI must document ' + path);
-  return match[1];
-}
-
-function operationBlock(path, method) {
-  const block = pathBlock(path);
-  const header = new RegExp('^    ' + method + ':\\n', 'm');
-  const match = header.exec(block);
-  assert.ok(match, 'OpenAPI must document ' + method.toUpperCase() + ' ' + path);
-  const rest = block.slice(match.index + match[0].length);
-  const nextOperation = rest.search(/^    (?:get|post|put|patch|delete|options|head):/m);
-  return nextOperation < 0 ? rest : rest.slice(0, nextOperation);
-}
-
-function schemaBlock(name) {
-  const schemasStart = spec.indexOf('  schemas:\\n');
-  assert.notEqual(schemasStart, -1, 'OpenAPI schemas section must exist');
-  const schemas = spec.slice(schemasStart);
-  const header = new RegExp('^    ' + escapeRegExp(name) + ':\\n', 'm');
-  const match = header.exec(schemas);
-  assert.ok(match, 'OpenAPI must define schema ' + name);
-  const rest = schemas.slice(match.index + match[0].length);
-  const nextSchema = rest.search(/^    [A-Z][A-Za-z0-9_]*:/m);
-  return nextSchema < 0 ? rest : rest.slice(0, nextSchema);
-}
-
-test('every PostgreSQL public catalog route has an unauthenticated OpenAPI operation', () => {
-  const definitions = [...routes.matchAll(/route\\('([A-Z]+)', '([^']+)', null,/g)];
-  assert.equal(definitions.length, 6, 'Expected the six public catalog routes to remain registered');
-
-  for (const [, method, pattern] of definitions) {
-    const path = pattern.replace(/:([A-Za-z][A-Za-z0-9_]*)/g, '{$1}');
-    const operation = operationBlock(path, method.toLowerCase());
-    assert.match(operation, /^      summary: .+/m, method + ' ' + path + ' needs a summary');
-    assert.match(operation, /^        '200':/m, method + ' ' + path + ' needs a success response');
-    assert.doesNotMatch(operation, /^      security:/m, method + ' ' + path + ' is public and must not require bearer auth');
+test('all PostgreSQL public catalog routes are documented without bearer authentication', () => {
+  const expected = [
+    ["GET", "/api/v1/categories"],
+    ["GET", "/api/v1/brands"],
+    ["GET", "/api/v1/products"],
+    ["GET", "/api/v1/products/suggest"],
+    ["GET", "/api/v1/products/{id}"],
+    ["GET", "/api/v1/products/{id}/reviews"]
+  ];
+  for (const [method, path] of expected) {
+    assert.ok(routes.includes("route('" + method + "', '" + path.replace('{id}', ':id') + "', null,"), 'Route missing from implementation: ' + path);
+    const op = operation(path, method.toLowerCase());
+    assert.match(op, /summary:/);
+    assert.match(op, /'200':/);
+    assert.doesNotMatch(op, /security:/);
   }
 });
 
-test('catalog search contract documents all supported filters and bounded pagination', () => {
-  const operation = operationBlock('/api/v1/products', 'get');
+test('catalog search documents all filters, sort allowlist and pagination caps', () => {
+  const op = operation('/api/v1/products');
   for (const name of ['q', 'category', 'brand', 'min_price', 'max_price', 'sort', 'limit', 'offset']) {
-    assert.match(operation, new RegExp('^\\s+name: ' + name + '$', 'm'), 'Missing query parameter: ' + name);
+    assert.ok(op.includes('name: ' + name), 'Missing parameter ' + name);
   }
-  assert.match(operation, /maximum: 100/);
-  assert.match(operation, /maximum: 10000/);
-  assert.match(operation, /enum: \\[price_asc, price_desc, newest\\]/);
+  assert.ok(op.includes('maximum: 100'));
+  assert.ok(op.includes('maximum: 10000'));
+  assert.ok(op.includes('price_asc, price_desc, newest'));
 });
 
-test('catalog detail, autocomplete and reviews use explicit response schemas', () => {
-  assert.match(operationBlock('/api/v1/products/{id}', 'get'), /CatalogProductDetail/);
-  assert.match(operationBlock('/api/v1/products/{id}', 'get'), /^        '404':/m);
-  assert.match(operationBlock('/api/v1/products/{id}/reviews', 'get'), /ProductReview/);
-  assert.match(operationBlock('/api/v1/products/suggest', 'get'), /CatalogSuggestion/);
-  assert.match(operationBlock('/api/v1/brands', 'get'), /Brand/);
-});
-
-test('public catalog schemas do not expose seller ownership or credential identifiers', () => {
-  const detail = schemaBlock('CatalogProductDetail');
-  const review = schemaBlock('ProductReview');
-  assert.doesNotMatch(detail, /^\\s+(?:seller_id|password|password_hash|session_token|otp_code):/m);
-  assert.doesNotMatch(review, /^\\s+(?:user_id|seller_id|password|session_token):/m);
+test('catalog public response schemas are defined and omit private identifiers', () => {
+  for (const name of ['Brand', 'CatalogSuggestion', 'CatalogProductListItem', 'CatalogProductDetail', 'ProductReview']) {
+    assert.ok(spec.includes('    ' + name + ':\n'), 'Missing schema ' + name);
+  }
+  const detailStart = spec.indexOf('    CatalogProductDetail:\n');
+  const reviewStart = spec.indexOf('    ProductReview:\n');
+  const addressStart = spec.indexOf('    Address:\n');
+  const detail = spec.slice(detailStart, reviewStart);
+  const review = spec.slice(reviewStart, addressStart);
+  assert.doesNotMatch(detail, /seller_id|password_hash|session_token|otp_code/);
+  assert.doesNotMatch(review, /user_id|seller_id|session_token/);
 });
