@@ -73,6 +73,15 @@ test('percentage creation preserves the explicit whole-percent contract and opti
   assert.deepEqual(h.coupons.get('PERCENT'), { code: 'PERCENT', type: 'PERCENT', value: 17, min_order_paisa: 0, max_uses: null, max_uses_per_customer: null, used_count: 0, expires_at: null, active: 1 });
 });
 
+test('admin can set and read an explicit per-customer coupon redemption limit', async () => {
+  const h = setup();
+  await h.invoke('POST', { code: 'ONEPERUSER', type: 'FIXED', value: '2.50', max_uses_per_customer: '1' });
+  assert.equal(h.coupons.get('ONEPERUSER').max_uses_per_customer, 1);
+  const listed = await h.invoke('GET', '');
+  assert.equal(listed.data[0].max_uses_per_customer, 1);
+  assert.equal(JSON.parse(h.audits[0][5]).max_uses_per_customer, 1);
+});
+
 test('unsafe monetary input, malformed types and privileged fields are rejected before any mutation', async () => {
   const h = setup(), valid = { code: 'SAVE', type: 'FIXED', value: '1.01' };
   for (const patch of [
