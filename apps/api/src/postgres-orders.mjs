@@ -30,6 +30,16 @@ export function createPostgresOrderLifecycleRepository(database, options = {}) {
       .run(generateId(), orderId, sellerOrderId || null, status, note || '', actor || null, getNow());
   }
 
+  async function restoreCouponRedemption(orderId) {
+    // A durable restored_at marker makes this reversal exactly-once. Legacy orders
+    // without a redemption row are intentionally left unchanged.
+    const restored = await query('UPDATE coupon_redemptions SET restored_at=? WHERE order_id=? AND restored_at IS NULL RETURNING coupon_code')
+      .all(getNow(), orderId);
+    if (restored.length === 1) {
+      await query('UPDATE coupons SET used_count=GREATEST(used_count-1,0) WHERE code=?').run(restored[0].coupon_code);
+    }
+  }
+
   async function ensureRefund(orderId, cap, reason) {
     const row = await query("SELECT COALESCE(SUM(amount_paisa),0) amount FROM refunds WHERE order_id=? AND status<>'REJECTED'")
       .get(orderId);
@@ -43,7 +53,7 @@ export function createPostgresOrderLifecycleRepository(database, options = {}) {
 
   async function recomputeParent(orderId) {
     const states = await query('SELECT status FROM seller_orders WHERE order_id=?').all(orderId);
-    const parent = await query('SELECT status,payment_method,payment_status,total_paisa,user_id FROM orders WHERE id=?').get(orderId);
+    const parent = await query('SELECT status,payment_method,payment_status,total_paisa,user_id,coupon_code FROM orders WHERE id=?').get(orderId);
     if (!parent) throw new HttpError(404, 'Order not found');
     if (!states.length) return parent.status;
 
@@ -65,6 +75,7 @@ export function createPostgresOrderLifecycleRepository(database, options = {}) {
     if (next === 'CANCELLED' && parent.payment_status === 'PAID') {
       await ensureRefund(orderId, safeAmount(parent.total_paisa), 'অর্ডার বাতিল');
     }
+    if (next === 'CANCELLED' && parent.status !== 'CANCELLED') await restoreCouponRedemption(orderId);
     await query('UPDATE orders SET status=? WHERE id=?').run(next, orderId);
     return next;
   }
@@ -139,6 +150,7 @@ export function createPostgresOrderLifecycleRepository(database, options = {}) {
           for (const item of items) await query('UPDATE products SET stock=stock+? WHERE id=?').run(item.quantity, item.product_id);
           if (parent.payment_status === 'PAID') await ensureRefund(orderId, safeAmount(parent.total_paisa), 'অর্ডার বাতিল');
         }
+        if (next === 'CANCELLED' && parent.status !== 'CANCELLED') await restoreCouponRedemption(orderId);
         await query('UPDATE orders SET status=? WHERE id=?').run(next, orderId);
         await addEvent(orderId, null, next, note, actor);
         moved++;
