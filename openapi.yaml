@@ -41,7 +41,7 @@ paths:
         - in: query
           name: max_price
           description: Maximum effective selling price in BDT; must be greater than zero.
-          schema: { type: number, exclusiveMinimum: true }
+          schema: { type: number, minimum: 0, exclusiveMinimum: true }
         - in: query
           name: sort
           schema: { type: string, enum: [price_asc, price_desc, newest] }
@@ -271,7 +271,7 @@ paths:
         - in: path
           name: pid
           required: true
-          schema: { type: string, minLength: 1, maxLength: 160 }
+          schema: { type: string, minLength: 1 }
       responses:
         '200': { $ref: '#/components/responses/CartResponse' }
         '400': { description: Invalid product ID or URL encoding }
