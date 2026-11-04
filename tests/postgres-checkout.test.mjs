@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPostgresCheckoutRepository } from '../apps/api/src/postgres-checkout.mjs';
 
-function checkoutHarness({ stock = 8, coupon = null, paymentMethods = ['COD'] } = {}) {
+function checkoutHarness({ stock = 8, coupon = null, paymentMethods = ['COD'], shippingFor = () => 6000 } = {}) {
   const products = new Map([['p-1', {
     id: 'p-1', name_bn: 'শার্ট', price_paisa: '12000', discount_paisa: '10000',
     stock, active: 1, status: 'ACTIVE', seller_id: 'seller-1'
@@ -65,7 +65,7 @@ function checkoutHarness({ stock = 8, coupon = null, paymentMethods = ['COD'] } 
   const repo = createPostgresCheckoutRepository(database, {
     id: (() => { let n = 0; return () => 'id-' + (++n); })(),
     now: () => '2026-11-02T00:00:00.000Z',
-    shippingFor: () => 6000,
+    shippingFor,
     couponFor: async () => coupon,
     notify: async (...args) => notices.push(args),
     addEvent: async (...args) => events.push(args),
@@ -145,4 +145,15 @@ test('checkout rejects unapproved sellers and invalid money values', async () =>
     delivery, items: [{ productId: 'p-1', quantity: 1 }]
   }), /উপলব্ধ নেই/);
   assert.equal(h.tables.orders.length, 0);
+});
+
+
+test('checkout fails closed when no shipping policy is configured', async () => {
+  const h = checkoutHarness({ shippingFor: undefined });
+  await assert.rejects(h.repo.checkout(customer, {
+    delivery, items: [{ productId: 'p-1', quantity: 1 }]
+  }), error => error.status === 503 && /ডেলিভারি চার্জ নীতিমালা/.test(error.message));
+  assert.equal(h.calls.length, 0);
+  assert.equal(h.tables.orders.length, 0);
+  assert.equal(h.products.get('p-1').stock, 8);
 });
