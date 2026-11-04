@@ -4,10 +4,12 @@ import { fileURLToPath } from 'node:url';
 import { createPostgresPool, postgresPoolOptions, verifyPostgresConnection, closePostgresPool } from './postgres-pool.mjs';
 import { createPostgresDatabase } from './postgres-runtime.mjs';
 import { createPostgresCatalogRepository } from './postgres-catalog.mjs';
+import { registerPostgresCatalogRoutes } from './postgres-catalog-routes.mjs';
 import { createPostgresAuthRepository } from './postgres-auth.mjs';
 import { createPostgresCustomerRepository } from './postgres-customer.mjs';
 import { handlePostgresInventoryWorkspace } from './postgres-inventory-workspace.mjs';
 import { registerPostgresCommerceRoutes } from './postgres-commerce-routes.mjs';
+import { shippingFor } from './gateways.mjs';
 import { registerPostgresAdminSellerRoutes } from './postgres-admin-seller-routes.mjs';
 import { registerPostgresSellerWorkspaceRoutes } from './postgres-seller-workspace-routes.mjs';
 import { registerPostgresSellerProductRoutes } from './postgres-seller-product-routes.mjs';
@@ -15,6 +17,11 @@ import { registerPostgresAdminProductRoutes } from './postgres-admin-product-rou
 import { registerPostgresPayoutRoutes } from './postgres-payout-routes.mjs';
 import { registerPostgresAdminDashboardRoutes } from './postgres-admin-dashboard-routes.mjs';
 import { registerPostgresAdminOrderRoutes } from './postgres-admin-order-routes.mjs';
+import { registerPostgresCustomerOrderRoutes } from './postgres-customer-order-routes.mjs';
+import { registerPostgresCartRoutes } from './postgres-cart-routes.mjs';
+import { registerPostgresCouponRoutes } from './postgres-coupon-routes.mjs';
+import { registerPostgresAdminCouponRoutes } from './postgres-admin-coupon-routes.mjs';
+import { registerPostgresCustomerAccountRoutes } from './postgres-customer-account-routes.mjs';
 import { createPostgresInventoryRepository } from './postgres-inventory.mjs';
 import { runPostgresMigrations } from './postgres-migrations.mjs';
 
@@ -115,6 +122,7 @@ export function createPostgresApiServer({ database, catalogRepository, authRepos
   const response = (data, status = 200) => ({ status, body: { data } });
   registerPostgresCommerceRoutes(registerDomainRoute, response, {
     database,
+    shippingFor,
     inventoryRepository: createPostgresInventoryRepository(database)
   });
   registerPostgresAdminSellerRoutes(registerDomainRoute, response, { database });
@@ -124,6 +132,12 @@ export function createPostgresApiServer({ database, catalogRepository, authRepos
   registerPostgresPayoutRoutes(registerDomainRoute, response, { database });
   registerPostgresAdminDashboardRoutes(registerDomainRoute, response, { database });
   registerPostgresAdminOrderRoutes(registerDomainRoute, response, { database });
+  registerPostgresCustomerOrderRoutes(registerDomainRoute, response, { database });
+  registerPostgresCartRoutes(registerDomainRoute, response, { database });
+  registerPostgresCouponRoutes(registerDomainRoute, response, { database });
+  registerPostgresAdminCouponRoutes(registerDomainRoute, response, { database });
+  registerPostgresCustomerAccountRoutes(registerDomainRoute, response, { database, customerRepository });
+  registerPostgresCatalogRoutes(registerDomainRoute, response, { catalogRepository });
 
   return http.createServer(async (req, res) => {
     const headers = safeHeaders(req.headers.origin, env);
@@ -143,19 +157,6 @@ export function createPostgresApiServer({ database, catalogRepository, authRepos
         await database.q('SELECT 1 AS ok').get();
         return json(res, 200, { ok: true, service: 'marketplace-api', db: 'ok', runtime: 'postgresql' }, headers);
       }
-      if (method === 'GET' && path === '/api/v1/categories') return json(res, 200, { data: await catalogRepository.listCategories() }, headers);
-      if (method === 'GET' && path === '/api/v1/brands') return json(res, 200, { data: await catalogRepository.listBrands() }, headers);
-      if (method === 'GET' && path === '/api/v1/products') return json(res, 200, { data: await catalogRepository.listProducts(url.searchParams) }, headers);
-      if (method === 'GET' && path === '/api/v1/products/suggest') return json(res, 200, { data: await catalogRepository.suggestProducts(url.searchParams) }, headers);
-      const reviews = path.match(/^\/api\/v1\/products\/([^/]+)\/reviews$/);
-      if (method === 'GET' && reviews) return json(res, 200, { data: await catalogRepository.listReviews(decodePathPart(reviews[1])) }, headers);
-      const product = path.match(/^\/api\/v1\/products\/([^/]+)$/);
-      if (method === 'GET' && product) {
-        const value = await catalogRepository.getProduct(decodePathPart(product[1]));
-        if (!value) return json(res, 404, { error: 'Product not found' }, headers);
-        return json(res, 200, { data: value }, headers);
-      }
-
       const publicAuthRoutes = {
         'POST /api/v1/auth/register': async body => ({ status: 201, body: await authRepository.registerCustomer(body) }),
         'POST /api/v1/auth/register-seller': async body => ({ status: 201, body: await authRepository.registerSeller(body) }),
@@ -230,15 +231,23 @@ export function createPostgresApiServer({ database, catalogRepository, authRepos
         if (result) return json(res, result.status || 200, result, headers);
       }
 
-      const domainMatch = domainRoutes.map(route => ({ route, match: path.match(route.re) })).find(item => item.match);
+      const pathMatches = domainRoutes.map(route => ({ route, match: path.match(route.re) })).filter(item => item.match);
+      const domainMatch = pathMatches.find(item => item.route.method === method);
+      if (pathMatches.length && !domainMatch) {
+        return json(res, 405, { error: 'Method not allowed' }, {
+          ...headers, allow: [...new Set(pathMatches.map(item => item.route.method))].join(', ')
+        });
+      }
       if (domainMatch) {
         const { route, match } = domainMatch;
-        if (method !== route.method) return json(res, 405, { error: 'Method not allowed' }, headers);
-        const token = bearerToken(req);
-        if (!token) return json(res, 401, { error: 'Authentication required' }, headers);
-        const user = await authRepository.getSessionUser(token);
-        if (!user) return json(res, 401, { error: 'Authentication required' }, headers);
-        if (route.roles && !route.roles.includes(user.role)) return json(res, 403, { error: 'You do not have permission for this action' }, headers);
+        let user = null;
+        if (route.roles) {
+          const token = bearerToken(req);
+          if (!token) return json(res, 401, { error: 'Authentication required' }, headers);
+          user = await authRepository.getSessionUser(token);
+          if (!user) return json(res, 401, { error: 'Authentication required' }, headers);
+          if (!route.roles.includes(user.role)) return json(res, 403, { error: 'You do not have permission for this action' }, headers);
+        }
         const body = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) ? await readJsonBody(req) : {};
         const params = match.slice(1).map(decodePathPart);
         const result = await route.handler({ req, res, url, params, body, user, ip });

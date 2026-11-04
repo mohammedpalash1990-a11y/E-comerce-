@@ -98,6 +98,7 @@ test('PostgreSQL HTTP import graph is SQLite-free', async () => {
   assert.ok([...files].some(file => file.endsWith('/postgres-auth.mjs')));
   assert.ok([...files].some(file => file.endsWith('/postgres-customer.mjs')));
   assert.ok([...files].some(file => file.endsWith('/postgres-runtime.mjs')));
+  assert.ok([...files].some(file => file.endsWith('/gateways.mjs')));
 });
 
 test('PostgreSQL server serves health and catalog routes without exposing order routes', async () => {
@@ -408,5 +409,142 @@ test('PostgreSQL CORS treats wildcard and lookalike origins as untrusted', async
     });
     assert.equal(exact.status, 200);
     assert.equal(exact.headers.get('access-control-allow-origin'), 'https://shop.example.com');
+  });
+});
+
+test('domain dispatch resolves the method before enforcing authentication on shared product paths', async () => {
+  await withServer({}, async base => {
+    for (const [method, path] of [
+      ['GET', '/api/v1/seller/products'], ['POST', '/api/v1/seller/products'],
+      ['GET', '/api/v1/seller/products/p1'], ['PUT', '/api/v1/seller/products/p1'],
+      ['DELETE', '/api/v1/seller/products/p1']
+    ]) {
+      const unauthenticated = await fetch(base + path, { method });
+      assert.equal(unauthenticated.status, 401, method + ' must reach its registered auth boundary, not 405');
+      const wrongRole = await fetch(base + path, { method, headers: { authorization: 'Bearer ' + validToken } });
+      assert.equal(wrongRole.status, 403, method + ' must enforce SELLER role');
+    }
+  });
+});
+
+test('unsupported domain methods advertise all allowed methods without confusing unknown paths', async () => {
+  await withServer({}, async base => {
+    for (const [path, allow] of [
+      ['/api/v1/seller/products', 'GET, POST'], ['/api/v1/seller/products/p1', 'GET, PUT, DELETE']
+    ]) {
+      const response = await fetch(base + path, { method: 'PATCH' });
+      assert.equal(response.status, 405);
+      assert.equal(response.headers.get('allow'), allow);
+    }
+    const missing = await fetch(base + '/api/v1/not-a-route', { method: 'PATCH' });
+    assert.equal(missing.status, 404);
+  });
+});
+
+test('customer detail and tracking HTTP routes enforce authentication, roles and opaque 404s', async () => {
+  await withServer({}, async base => {
+    for (const suffix of ['', '/tracking']) {
+      const path = '/api/v1/customer/orders/unknown' + suffix;
+      assert.equal((await fetch(base + path)).status, 401);
+      for (const token of [validSellerToken, validAdminToken]) {
+        assert.equal((await fetch(base + path, { headers: { authorization: 'Bearer ' + token } })).status, 403);
+      }
+      const owned = await fetch(base + path, { headers: { authorization: 'Bearer ' + validToken } });
+      assert.equal(owned.status, 404);
+      assert.deepEqual(await owned.json(), { error: 'Order not found' });
+      const unsupported = await fetch(base + path, { method: 'PUT' });
+      assert.equal(unsupported.status, 405);
+      assert.equal(unsupported.headers.get('allow'), 'GET');
+      const malformed = await fetch(base + '/api/v1/customer/orders/%ZZ' + suffix, { headers: { authorization: 'Bearer ' + validToken } });
+      assert.equal(malformed.status, 400);
+    }
+  });
+});
+
+
+test('PostgreSQL customer cart is mounted for GET/PUT/DELETE with CUSTOMER-only authorization', async () => {
+  await withServer({}, async base => {
+    for (const [method, path] of [
+      ['GET', '/api/v1/customer/cart'], ['PUT', '/api/v1/customer/cart'],
+      ['DELETE', '/api/v1/customer/cart'], ['DELETE', '/api/v1/customer/cart/p1']
+    ]) {
+      assert.equal((await fetch(base + path, { method })).status, 401);
+      for (const token of [validSellerToken, validAdminToken]) {
+        assert.equal((await fetch(base + path, { method, headers: { authorization: 'Bearer ' + token } })).status, 403);
+      }
+    }
+    const cart = await fetch(base + '/api/v1/customer/cart', { headers: { authorization: 'Bearer ' + validToken } });
+    assert.equal(cart.status, 200);
+    assert.deepEqual(await cart.json(), { data: { items: [], subtotal_bdt: 0, item_count: 0 } });
+    const unsupported = await fetch(base + '/api/v1/customer/cart', { method: 'POST' });
+    assert.equal(unsupported.status, 405);
+    assert.equal(unsupported.headers.get('allow'), 'GET, PUT, DELETE');
+    const malformed = await fetch(base + '/api/v1/customer/cart/%ZZ', { method: 'DELETE', headers: { authorization: 'Bearer ' + validToken } });
+    assert.equal(malformed.status, 400);
+  });
+});
+
+test('coupon preview HTTP route requires CUSTOMER auth and a saved cart instead of trusting a submitted subtotal', async () => {
+  await withServer({}, async base => {
+    const path = base + '/api/v1/coupons/validate';
+    const post = token => fetch(path, { method: 'POST', headers: { 'content-type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) }, body: JSON.stringify({ code: 'SAVE', subtotal_bdt: 999999 }) });
+    assert.equal((await post(null)).status, 401);
+    for (const token of [validSellerToken, validAdminToken]) assert.equal((await post(token)).status, 403);
+    const empty = await post(validToken);
+    assert.equal(empty.status, 400);
+    assert.deepEqual(await empty.json(), { error: 'Cart is empty' });
+    const unsupported = await fetch(path);
+    assert.equal(unsupported.status, 405);
+    assert.equal(unsupported.headers.get('allow'), 'POST');
+  });
+});
+
+test('admin coupon HTTP paths enforce ADMIN for each supported method and reject unsupported methods', async () => {
+  await withServer({}, async base => {
+    for (const [method, path] of [
+      ['GET', '/api/v1/admin/coupons'], ['POST', '/api/v1/admin/coupons'], ['PATCH', '/api/v1/admin/coupons/SAVE']
+    ]) {
+      assert.equal((await fetch(base + path, { method })).status, 401);
+      for (const token of [validToken, validSellerToken]) {
+        assert.equal((await fetch(base + path, { method, headers: { authorization: 'Bearer ' + token } })).status, 403);
+      }
+    }
+    const list = await fetch(base + '/api/v1/admin/coupons', { headers: { authorization: 'Bearer ' + validAdminToken } });
+    assert.equal(list.status, 200);
+    assert.deepEqual(await list.json(), { data: [] });
+    const unsupported = await fetch(base + '/api/v1/admin/coupons', { method: 'DELETE' });
+    assert.equal(unsupported.status, 405);
+    assert.equal(unsupported.headers.get('allow'), 'GET, POST');
+    const malformed = await fetch(base + '/api/v1/admin/coupons/%ZZ', { method: 'PATCH', headers: { authorization: 'Bearer ' + validAdminToken } });
+    assert.equal(malformed.status, 400);
+  });
+});
+
+test('customer account HTTP surface keeps address, wishlist and review routes CUSTOMER-only', async () => {
+  const customerRepository = fakeCustomer();
+  await withServer({ customerRepository }, async base => {
+    const customer = { authorization: 'Bearer ' + validToken, 'content-type': 'application/json' };
+    for (const [method, path] of [
+      ['GET', '/api/v1/customer/addresses'], ['POST', '/api/v1/customer/addresses'],
+      ['PUT', '/api/v1/customer/addresses/a1'], ['DELETE', '/api/v1/customer/addresses/a1'],
+      ['GET', '/api/v1/customer/wishlist'], ['POST', '/api/v1/customer/wishlist'],
+      ['DELETE', '/api/v1/customer/wishlist/p1'], ['POST', '/api/v1/customer/products/p1/reviews']
+    ]) {
+      assert.equal((await fetch(base + path, { method })).status, 401, method + ' ' + path + ' requires auth');
+      for (const token of [validSellerToken, validAdminToken]) {
+        assert.equal((await fetch(base + path, { method, headers: { authorization: 'Bearer ' + token } })).status, 403, method + ' ' + path + ' must reject non-customers');
+      }
+    }
+    assert.equal((await fetch(base + '/api/v1/customer/addresses', { headers: customer })).status, 200);
+    const created = await fetch(base + '/api/v1/customer/addresses', { method: 'POST', headers: customer, body: JSON.stringify({ phone: '01711111111', address: 'Road 1', area: 'Dhaka' }) });
+    assert.equal(created.status, 201);
+    assert.deepEqual(await created.json(), { data: { id: 'a2' } });
+    assert.equal((await fetch(base + '/api/v1/customer/wishlist', { method: 'POST', headers: customer, body: JSON.stringify({ productId: 'p1' }) })).status, 201);
+    const review = await fetch(base + '/api/v1/customer/products/p1/reviews', { method: 'POST', headers: customer, body: JSON.stringify({ rating: 5 }) });
+    assert.equal(review.status, 201);
+    assert.deepEqual(await review.json(), { data: { saved: true } });
+    assert.ok(customerRepository.calls.some(call => call[0] === 'saveReview' && call[2] === 'p1'));
+    assert.equal((await fetch(base + '/api/v1/customer/wishlist', { method: 'DELETE', headers: customer })).status, 405);
+    assert.equal((await fetch(base + '/api/v1/customer/wishlist/p1', { method: 'DELETE', headers: customer })).status, 200);
   });
 });

@@ -2,6 +2,12 @@
 
 বাংলাদেশের জন্য বাংলা-প্রথম multi-vendor e-commerce platform-এর development repository। BDT pricing, customer storefront, seller/admin workspace এবং COD checkout লক্ষ্য করে তৈরি।
 
+## Verified development update — 2026-11-04
+
+See [the current implementation report](docs/DEVELOPMENT_REPORT_2026-11-04.md) for the repository audit, team handoff, exact test evidence and remaining work. The explicit PostgreSQL development API now includes customer order detail/tracking, saved-cart routes and method-aware dispatch for seller product writes. See the [cart increment report](docs/POSTGRES_CART_INCREMENT_2026-11-04.md) for its contract and concurrency tests. The [coupon increment report](docs/POSTGRES_COUPON_INCREMENT_2026-11-04.md) covers server-cart-based coupon preview and transactional redemption. The [admin coupon increment](docs/POSTGRES_ADMIN_COUPON_INCREMENT_2026-11-04.md) adds validated creation, bounded listing and audited activation controls. The [customer account increment](docs/POSTGRES_CUSTOMER_ACCOUNT_INCREMENT_2026-11-04.md) exposes saved addresses, wishlist and verified-purchase reviews over HTTP. Both production startup guards remain enabled.
+
+**Design baseline:** root `index.html` is the canonical static HAAT demo used by browser tests. The Node web server and Pages workflow currently serve the different `apps/web/public/index.html`. Reconcile these through frontend review; do not overwrite either blindly. Native apps and complete live browser checkout are not delivered.
+
 ## Current GitHub branch status
 **Active MVP development — public storefront preview is deployed; the API is not yet publicly hosted and the live catalog/order flows are unavailable on GitHub Pages. Not production-ready.**
 
@@ -28,7 +34,7 @@
 - Sandbox payment and courier adapters only
 
 ## Still required before production
-- PostgreSQL-only API composition that does not import or execute SQLite-backed routes or seed data
+- Complete remaining route parity in the existing isolated PostgreSQL API; keep its SQLite-free composition and production gate
 - Live PostgreSQL migration and checkout/order/payment/inventory integration verification
 - Public Node.js API hosting, persistent production database, secrets and monitoring
 - Live payment/courier credentials and provider webhook verification
@@ -42,12 +48,12 @@
 ## Run locally
 ```bash
 cp .env.example .env
-npm install
+npm ci
 npm run dev
 ```
 - Customer storefront: http://localhost:3000
-- Seller placeholder: http://localhost:3000/seller.html
-- Admin placeholder: http://localhost:3000/admin.html
+- Seller workspace: http://localhost:3000/seller.html
+- Admin workspace: http://localhost:3000/admin.html
 - API health: http://localhost:4000/health
 
 ## PostgreSQL migration bootstrap (staging/development only)

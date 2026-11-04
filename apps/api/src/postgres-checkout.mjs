@@ -1,4 +1,5 @@
 import { bad, HttpError, id as defaultId, now as defaultNow, normPhone, validPhone, text } from './postgres-shared.mjs';
+import { createPostgresCouponRepository, normalizeCouponCode } from './postgres-coupons.mjs';
 
 const LIVE_PRODUCT = "p.active=1 AND p.status='ACTIVE' AND EXISTS(SELECT 1 FROM seller_profiles sp WHERE sp.user_id=p.seller_id AND sp.status='APPROVED')";
 
@@ -24,7 +25,7 @@ export function createPostgresCheckoutRepository(database, options = {}) {
   const generateId = options.id || defaultId;
   const getNow = options.now || defaultNow;
   const shippingFor = options.shippingFor;
-  const couponFor = options.couponFor || (async () => null);
+  const couponFor = options.couponFor || createPostgresCouponRepository(database, { now: getNow }).validateCoupon;
   const paymentMethods = new Set(options.paymentMethods || ['COD']);
   const startPayment = options.startPayment;
   const notify = options.notify || (async () => {});
@@ -49,30 +50,38 @@ export function createPostgresCheckoutRepository(database, options = {}) {
     if (method !== 'COD' && typeof startPayment !== 'function') {
       throw bad('অনলাইন পেমেন্ট সার্ভিস এখনো সংযুক্ত নয়');
     }
+    if (typeof shippingFor !== 'function') {
+      throw new HttpError(503, 'ডেলিভারি চার্জ নীতিমালা কনফিগার করা হয়নি; অর্ডার নেওয়া যাচ্ছে না');
+    }
 
+    const couponCode = normalizeCouponCode(body.coupon_code);
     const fromCart = !Array.isArray(body.items);
-    const raw = fromCart
-      ? await query('SELECT product_id productId,quantity FROM cart_items WHERE user_id=?').all(user.id)
-      : body.items;
-    if (!raw.length || raw.length > 50) throw bad('Cart must contain between 1 and 50 items');
-
-    const quantities = new Map();
-    const variants = new Map();
-    for (const item of raw) {
-      const productId = String(item.productId || '');
-      const quantity = Number(item.quantity);
-      if (!productId || !Number.isInteger(quantity) || quantity < 1 || quantity > 1000) {
-        throw bad('Invalid cart item');
-      }
-      quantities.set(productId, (quantities.get(productId) || 0) + quantity);
-      variants.set(productId, String(item.variant || '').slice(0, 60));
-    }
-    for (const quantity of quantities.values()) {
-      if (quantity > 1000) throw bad('একটি পণ্যের সর্বোচ্চ পরিমাণ ১০০০');
-    }
-
     const orderId = generateId();
     const result = await database.tx(async () => {
+      // The same per-customer lock used by cart mutations protects snapshot and
+      // cleanup together. Lock even explicit-item checkout: it removes cart lines.
+      const owner = await query("SELECT id FROM users WHERE id=? AND role='CUSTOMER' AND status='ACTIVE' FOR UPDATE").get(user.id);
+      if (!owner) throw new HttpError(401, 'Authentication required');
+      const raw = fromCart
+        ? await query('SELECT product_id AS "productId",quantity FROM cart_items WHERE user_id=? ORDER BY product_id').all(user.id)
+        : body.items;
+      if (!raw.length || raw.length > 50) throw bad('Cart must contain between 1 and 50 items');
+
+      const quantities = new Map();
+      const variants = new Map();
+      for (const item of raw) {
+        const productId = String(item.productId || '');
+        const quantity = Number(item.quantity);
+        if (!productId || !Number.isInteger(quantity) || quantity < 1 || quantity > 1000) {
+          throw bad('Invalid cart item');
+        }
+        quantities.set(productId, (quantities.get(productId) || 0) + quantity);
+        variants.set(productId, String(item.variant || '').slice(0, 60));
+      }
+      for (const quantity of quantities.values()) {
+        if (quantity > 1000) throw bad('একটি পণ্যের সর্বোচ্চ পরিমাণ ১০০০');
+      }
+
       const lines = [];
       let subtotal = 0;
 
@@ -99,10 +108,13 @@ export function createPostgresCheckoutRepository(database, options = {}) {
         });
       }
 
-      const coupon = await couponFor(body.coupon_code, subtotal, { lock: true });
+      const coupon = couponCode === null ? null : await couponFor(couponCode, subtotal, { lock: true });
+      if (couponCode !== null && (coupon?.code !== couponCode || !Number.isSafeInteger(coupon?.discount) || coupon.discount < 0)) {
+        throw new HttpError(503, 'Coupon validation is unavailable; order was not placed');
+      }
       const discount = safePaisa(coupon?.discount || 0, 'কুপনের ছাড়');
       if (discount > subtotal) throw bad('কুপনের ছাড় অর্ডারের মূল্যের চেয়ে বেশি হতে পারে না');
-      const shipping = safePaisa(await shippingFor?.(delivery.area, subtotal) ?? 0, 'ডেলিভারি চার্জ');
+      const shipping = safePaisa(await shippingFor(delivery.area, subtotal), 'ডেলিভারি চার্জ');
       const total = subtotal + shipping - discount;
       if (!Number.isSafeInteger(total) || total < 0) throw bad('Order total is too large');
 

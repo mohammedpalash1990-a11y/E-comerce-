@@ -48,8 +48,728 @@ paths:
       responses:
         '201': { description: Order created }
         '401': { description: Authentication required }
+  /api/v1/customer/orders/{id}:
+    get:
+      summary: Read an owned order with items and seller sub-orders
+      description: >-
+        PostgreSQL development endpoint. Returns a repeatable-read snapshot.
+        Missing and foreign orders both return 404. Private admin notes, seller
+        earnings and payment-provider payloads are never included.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Customer order detail
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/CustomerOrder' }
+        '400': { description: Invalid URL encoding }
+        '401': { description: "Missing, invalid, revoked or expired session" }
+        '403': { description: Authenticated user is not a customer }
+        '404': { description: Order not found or not owned by this customer }
+        '405': { description: Unsupported method; Allow header contains GET }
+  /api/v1/customer/orders/{id}/tracking:
+    get:
+      summary: Read an owned order timeline and recorded shipments
+      description: >-
+        PostgreSQL development endpoint. Events and shipments are ordered by
+        creation time then ID. This reads stored records; it does not poll a
+        courier or invent tracking events. Operational free-text event notes and
+        actor IDs are omitted. Shipment mode distinguishes sandbox records.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Customer tracking snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/CustomerTracking' }
+        '400': { description: Invalid URL encoding }
+        '401': { description: "Missing, invalid, revoked or expired session" }
+        '403': { description: Authenticated user is not a customer }
+        '404': { description: Order not found or not owned by this customer }
+        '405': { description: Unsupported method; Allow header contains GET }
+  /api/v1/customer/cart:
+    get:
+      summary: Read the signed-in customer's saved cart
+      description: >-
+        PostgreSQL development endpoint. Prices are current catalog estimates;
+        no inventory is reserved. Saved inactive or unavailable products remain
+        visible with available=false so the customer can remove them. The subtotal
+        includes all stored lines and is not a checkout quote.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { $ref: '#/components/responses/CartResponse' }
+        '401': { description: Active customer session required }
+        '403': { description: Authenticated role is not CUSTOMER }
+    put:
+      summary: Replace a cart line quantity; zero removes the line
+      description: >-
+        Sets the absolute quantity; it is not additive. Accepts integer numbers
+        or digit-only form strings. Rejects null and boolean quantities rather
+        than interpreting them as removal. New positive quantities require a live
+        product from an approved seller and sufficient current stock. At most
+        50 distinct products and 1000 units per product. Ownership comes only
+        from the session; client-supplied prices and user IDs are ignored.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId, quantity]
+              properties:
+                productId: { type: string, minLength: 1, maxLength: 160 }
+                quantity:
+                  oneOf:
+                    - type: integer
+                      minimum: 0
+                      maximum: 1000
+                    - type: string
+                      pattern: '^\s*[0-9]+\s*$'
+                      description: Numeric value must be between 0 and 1000.
+      responses:
+        '200': { $ref: '#/components/responses/CartResponse' }
+        '400': { description: Invalid product ID or quantity }
+        '401': { description: Active customer session required }
+        '403': { description: Authenticated role is not CUSTOMER }
+        '404': { description: Product is missing or unavailable for a positive quantity }
+        '409': { description: Insufficient stock or distinct-product limit reached }
+    delete:
+      summary: Clear only the signed-in customer's saved cart
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { $ref: '#/components/responses/CartResponse' }
+        '401': { description: Active customer session required }
+        '403': { description: Authenticated role is not CUSTOMER }
+  /api/v1/customer/cart/{pid}:
+    delete:
+      summary: Remove one cart line even if the product is no longer available
+      description: Idempotent; removing an absent line succeeds without changing other carts.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: pid
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 160 }
+      responses:
+        '200': { $ref: '#/components/responses/CartResponse' }
+        '400': { description: Invalid product ID or URL encoding }
+        '401': { description: Active customer session required }
+        '403': { description: Authenticated role is not CUSTOMER }
+  /api/v1/coupons/validate:
+    post:
+      summary: Preview a coupon against the authenticated customer's saved cart
+      description: >-
+        PostgreSQL development endpoint. Normalize the code and calculate the
+        subtotal from current server-side cart prices. Client subtotal_bdt and
+        discount_bdt fields are ignored. Empty or unavailable carts are rejected.
+        This read-only preview neither reserves nor consumes coupon uses.
+        Checkout must revalidate eligibility and consume usage atomically with
+        the order. Preview is not a shipping quote or a final payable total.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  description: 1 to 30 ASCII letters/digits/underscores/hyphens after trimming; case insensitive.
+                  example: SAVE20
+      responses:
+        '200':
+          description: Current coupon preview; eligibility can change before checkout.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [code, discount_bdt, subtotal_bdt]
+                    properties:
+                      code: { type: string }
+                      discount_bdt: { type: number, description: Discount on item subtotal only; not shipping. }
+                      subtotal_bdt: { type: number, description: Server-calculated saved-cart subtotal before coupon discount. }
+        '400': { description: Missing or invalid code; empty cart; coupon unavailable or minimum order not met. }
+        '401': { description: Active customer session required }
+        '403': { description: Authenticated role is not CUSTOMER }
+        '409': { description: Cart contains unavailable items or exceeds checkout limits }
+        '405': { description: Unsupported method; Allow header contains POST }
+  /api/v1/admin/coupons:
+    get:
+      summary: List configured coupons for administrators
+      description: >-
+        PostgreSQL development endpoint. Ordered by code with bounded pagination.
+        active is the stored switch, not a guarantee of redemption eligibility.
+        Retains legacy value units; use value_bdt for FIXED display values.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 300, default: 100 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0, maximum: 10000, default: 0 }
+        - in: query
+          name: active
+          schema: { type: integer, enum: [0, 1] }
+      responses:
+        '200':
+          description: Coupon array; numeric active and stored-unit value retain the existing contract.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/AdminCoupon' }
+        '400': { description: Invalid or repeated pagination/filter parameters }
+        '401': { description: Active session required }
+        '403': { description: ADMIN role required }
+    post:
+      summary: Create a coupon with an atomic audit record
+      description: >-
+        No coupon values are seeded. FIXED value input is BDT with at most two
+        decimal places; PERCENT is a whole percentage from 1 to 90. Unknown fields
+        are rejected and used_count always starts at zero. Expiry must be in the
+        future at transaction time. A duplicate normalized code returns 409;
+        existing terms are never overwritten.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminCouponCreate' }
+      responses:
+        '201':
+          description: Created and audited coupon.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      code: { type: string }
+        '400': { description: Invalid input or expiry; unknown fields are not accepted }
+        '401': { description: Active session required }
+        '403': { description: Active ADMIN required }
+        '409': { description: Coupon code already exists }
+        '500': { description: Persistence or audit failure; the transaction is rolled back }
+  /api/v1/admin/coupons/{code}:
+    patch:
+      summary: Activate or deactivate a coupon with an atomic transition audit
+      description: >-
+        Accepts only a JSON boolean active. It cannot reset usage or alter economic
+        terms. Same-state requests make no new audit record. Enabling expired,
+        exhausted or invalid coupons returns 409. The coupon row is locked using
+        the same lock as checkout, so deactivation preserves prior redemptions
+        and does not retroactively cancel an order that commits first.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [active]
+              properties:
+                active: { type: boolean }
+      responses:
+        '200':
+          description: Updated or already matching switch.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      code: { type: string }
+                      active: { type: boolean }
+        '400': { description: Invalid code/encoding or unsupported body fields }
+        '401': { description: Active session required }
+        '403': { description: Active ADMIN required }
+        '404': { description: Coupon not found }
+        '409': { description: Coupon cannot be enabled in its current state }
+        '500': { description: Persistence or audit failure; the transaction is rolled back }
+  /api/v1/customer/addresses:
+    get:
+      summary: List the authenticated customer's saved delivery addresses
+      description: Ordered with the default address first. Addresses belong only to the calling customer.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Saved addresses, with is_default as an integer flag (0 or 1).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Address' }
+        '401':
+          description: Active CUSTOMER session required.
+        '403':
+          description: Non-customer role.
+    post:
+      summary: Save a delivery address
+      description: >-
+        The first saved address becomes the default automatically. A customer may
+        store at most 10 addresses; concurrent creation is serialized and the
+        eleventh returns 400. A true is_default clears any previous default.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddressInput' }
+      responses:
+        '201':
+          description: Saved address identifier.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string }
+        '400':
+          description: Invalid phone/name/address/area/label, invalid is_default type, or the ten-address limit.
+        '401':
+          description: Active CUSTOMER session required.
+        '403':
+          description: Non-customer role.
+  /api/v1/customer/addresses/{id}:
+    put:
+      summary: Replace the editable fields of one saved address
+      description: >-
+        Ownership is enforced by the session. Setting is_default true clears the
+        other defaults; setting it false promotes another saved address so exactly
+        one default remains. Another customer's address id returns 404.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddressInput' }
+      responses:
+        '200':
+          description: Address updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string }
+        '400':
+          description: Invalid address fields.
+        '401':
+          description: Active CUSTOMER session required.
+        '403':
+          description: Non-customer role.
+        '404':
+          description: Address not found for this customer.
+    delete:
+      summary: Delete one saved address
+      description: Deleting the default address promotes a remaining address. Missing or foreign ids are an idempotent success and delete nothing.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Deletion acknowledged (or nothing to delete).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      deleted: { type: boolean }
+        '401':
+          description: Active CUSTOMER session required.
+        '403':
+          description: Non-customer role.
+  /api/v1/customer/wishlist:
+    get:
+      summary: List the authenticated customer's wishlist
+      description: Only products that are active, ACTIVE-status and owned by an APPROVED seller are returned.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Wishlist products with the public product view fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/WishlistProduct' }
+        '401':
+          description: Active CUSTOMER session required.
+        '403':
+          description: Non-customer role.
+    post:
+      summary: Add a product to the wishlist
+      description: Idempotent; adding the same product twice keeps a single row and does not reorder the list.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId]
+              properties:
+                productId: { type: string, minLength: 1, maxLength: 100 }
+      responses:
+        '201':
+          description: Product present in the wishlist.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      added: { type: boolean }
+        '400':
+          description: Missing, non-string or over-long product identifier.
+        '401':
+          description: Active CUSTOMER session required.
+        '403':
+          description: Non-customer role.
+        '404':
+          description: Product is unknown, inactive or not sold by an approved seller.
+  /api/v1/customer/wishlist/{productId}:
+    delete:
+      summary: Remove a product from the wishlist
+      description: Idempotent and scoped to the calling customer; other customers' wishlists are unaffected.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: productId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Removal acknowledged (or nothing to remove).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      removed: { type: boolean }
+        '400':
+          description: Invalid product identifier or URL encoding.
+        '401':
+          description: Active CUSTOMER session required.
+        '403':
+          description: Non-customer role.
+  /api/v1/customer/products/{id}/reviews:
+    post:
+      summary: Create or update the customer's review for a delivered product
+      description: >-
+        Requires a DELIVERED seller order containing the product for the calling
+        customer; a confirmed but undelivered order is rejected with 403. Ratings
+        are integers 1-5 (numeric strings are accepted, booleans and arrays are
+        not) and comments are optional up to 1000 characters. Each customer has
+        one review per product, so repeat submissions update the existing rating
+        and comment in place. The public review list and product aggregate update
+        immediately.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rating]
+              properties:
+                rating:
+                  description: Whole star rating from 1 to 5. Booleans and non-digit strings are rejected.
+                  oneOf:
+                    - type: integer
+                      minimum: 1
+                      maximum: 5
+                    - type: string
+                      pattern: '^[1-5]$'
+                comment: { type: string, maxLength: 1000 }
+      responses:
+        '201':
+          description: Review saved (created or updated).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      saved: { type: boolean }
+        '400':
+          description: Invalid rating, comment or product identifier.
+        '401':
+          description: Active CUSTOMER session required.
+        '403':
+          description: Non-customer role, or no delivered purchase of this product.
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
+  parameters:
+    OrderId:
+      in: path
+      name: id
+      required: true
+      description: Internal order ID, not the shortened display order number.
+      schema: { type: string }
+  responses:
+    CartResponse:
+      description: Current customer cart; no stock reservation or final checkout price guarantee.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties:
+              data: { $ref: '#/components/schemas/CustomerCart' }
+  schemas:
+    Address:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        name: { type: string }
+        phone: { type: string }
+        address: { type: string }
+        area: { type: string }
+        is_default: { type: integer, enum: [0, 1] }
+    AddressInput:
+      type: object
+      required: [phone, address, area]
+      properties:
+        label: { type: string, maxLength: 40 }
+        name: { type: string, maxLength: 100, description: Defaults to the account name when omitted. }
+        phone: { type: string, description: Bangladeshi mobile number normalized before storage. }
+        address: { type: string, maxLength: 500 }
+        area: { type: string, maxLength: 100 }
+        is_default: { type: boolean }
+    WishlistProduct:
+      type: object
+      properties:
+        id: { type: string }
+        name_bn: { type: string }
+        name_en: { type: string }
+        price_paisa: { type: integer }
+        price_bdt: { type: number }
+        discount_paisa: { type: integer, nullable: true }
+        sale_price_bdt: { type: number }
+        stock: { type: integer }
+        in_stock: { type: boolean }
+    AdminCoupon:
+      type: object
+      properties:
+        code: { type: string }
+        type: { type: string, enum: [FIXED, PERCENT] }
+        value: { type: integer, description: Stored paisa for FIXED; whole percentage for PERCENT. }
+        value_bdt: { type: number, nullable: true, description: FIXED value in BDT; null for PERCENT. }
+        min_order_paisa: { type: integer }
+        min_order_bdt: { type: number }
+        max_uses: { type: integer, nullable: true }
+        used_count: { type: integer }
+        expires_at: { type: string, nullable: true }
+        active: { type: integer, enum: [0, 1] }
+    AdminCouponCreate:
+      type: object
+      additionalProperties: false
+      required: [code, type, value]
+      properties:
+        code:
+          type: string
+          description: 1 to 30 ASCII letters/digits/underscores/hyphens after trimming; stored uppercase.
+        type: { type: string, enum: [FIXED, PERCENT] }
+        value:
+          description: FIXED input is positive BDT with at most two decimal places. PERCENT input is a whole number from 1 to 90. Prefer decimal strings for exact BDT inputs.
+          oneOf:
+            - type: number
+              minimum: 0
+              exclusiveMinimum: true
+            - type: string
+              pattern: '^\d+(?:\.\d{1,2})?$'
+        min_order_bdt:
+          description: Nonnegative BDT with at most two decimals; omitted or empty string means zero.
+          oneOf:
+            - type: number
+              minimum: 0
+            - type: string
+              pattern: '^(?:\d+(?:\.\d{1,2})?)?$'
+        max_uses:
+          description: Positive safe integer; omitted/null/empty string means unlimited global uses.
+          oneOf:
+            - type: integer
+              minimum: 1
+              nullable: true
+            - type: string
+              pattern: '^\d*$'
+        expires_at:
+          type: string
+          nullable: true
+          description: Future timezone-qualified ISO timestamp or legacy date at midnight UTC. Omitted/null/empty string means no expiry. Stored as canonical UTC ISO.
+        active: { type: boolean, default: true }
+    CustomerCart:
+      type: object
+      required: [items, subtotal_bdt, item_count]
+      properties:
+        subtotal_bdt: { type: number, description: Integer-paisa sum converted once to BDT. }
+        item_count: { type: integer, minimum: 0, description: Sum of quantities rather than number of product lines. }
+        items:
+          type: array
+          items:
+            type: object
+            required: [product_id, name_bn, name_en, quantity, stock, image, unit_price_bdt, line_total_bdt, available]
+            properties:
+              product_id: { type: string }
+              name_bn: { type: string }
+              name_en: { type: string }
+              quantity: { type: integer, minimum: 1 }
+              stock: { type: integer, minimum: 0 }
+              image: { type: string, nullable: true }
+              unit_price_bdt: { type: number }
+              line_total_bdt: { type: number }
+              available: { type: boolean }
+    Shipment:
+      type: object
+      required: [provider, tracking_id, status, mode]
+      properties:
+        provider: { type: string }
+        tracking_id: { type: string }
+        status: { type: string }
+        mode: { type: string, description: Stored provider mode; sandbox is not live fulfilment. }
+    CustomerOrder:
+      type: object
+      required: [id, orderNumber, status, total_bdt, subtotal_bdt, shipping_bdt, discount_bdt, payment, delivery, items, suborders]
+      properties:
+        id: { type: string }
+        orderNumber: { type: string }
+        status: { type: string }
+        total_bdt: { type: number, description: BDT converted from integer paisa. }
+        subtotal_bdt: { type: number }
+        shipping_bdt: { type: number }
+        discount_bdt: { type: number }
+        coupon_code: { type: string, nullable: true }
+        created_at: { type: string }
+        payment:
+          type: object
+          properties:
+            method: { type: string }
+            status: { type: string }
+        delivery:
+          type: object
+          properties:
+            name: { type: string }
+            phone: { type: string }
+            address: { type: string }
+            area: { type: string }
+            note: { type: string, description: The customer's own delivery note. }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              product_id: { type: string }
+              name_bn: { type: string }
+              quantity: { type: integer }
+              unit_price_bdt: { type: number }
+              variant: { type: string }
+              seller_order_id: { type: string, nullable: true }
+        suborders:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              shop: { type: string, nullable: true }
+              status: { type: string }
+              subtotal_bdt: { type: number }
+              shipment:
+                type: object
+                nullable: true
+                description: Latest stored shipment by created_at then ID, or null.
+                allOf:
+                  - $ref: '#/components/schemas/Shipment'
+    CustomerTracking:
+      type: object
+      required: [orderNumber, status, events, shipments]
+      properties:
+        orderNumber: { type: string }
+        status: { type: string }
+        events:
+          type: array
+          items:
+            type: object
+            properties:
+              status: { type: string }
+              created_at: { type: string }
+              seller_order_id: { type: string, nullable: true }
+        shipments:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/Shipment'
+              - type: object
+                properties:
+                  seller_order_id: { type: string }
