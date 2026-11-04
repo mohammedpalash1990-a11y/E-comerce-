@@ -49,6 +49,9 @@ export function createPostgresCheckoutRepository(database, options = {}) {
     if (method !== 'COD' && typeof startPayment !== 'function') {
       throw bad('অনলাইন পেমেন্ট সার্ভিস এখনো সংযুক্ত নয়');
     }
+    if (typeof shippingFor !== 'function') {
+      throw new HttpError(503, 'ডেলিভারি চার্জ নীতিমালা কনফিগার করা হয়নি; অর্ডার নেওয়া যাচ্ছে না');
+    }
 
     const fromCart = !Array.isArray(body.items);
     const raw = fromCart
@@ -102,7 +105,7 @@ export function createPostgresCheckoutRepository(database, options = {}) {
       const coupon = await couponFor(body.coupon_code, subtotal, { lock: true });
       const discount = safePaisa(coupon?.discount || 0, 'কুপনের ছাড়');
       if (discount > subtotal) throw bad('কুপনের ছাড় অর্ডারের মূল্যের চেয়ে বেশি হতে পারে না');
-      const shipping = safePaisa(await shippingFor?.(delivery.area, subtotal) ?? 0, 'ডেলিভারি চার্জ');
+      const shipping = safePaisa(await shippingFor(delivery.area, subtotal), 'ডেলিভারি চার্জ');
       const total = subtotal + shipping - discount;
       if (!Number.isSafeInteger(total) || total < 0) throw bad('Order total is too large');
 
