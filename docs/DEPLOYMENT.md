@@ -83,6 +83,12 @@ them. Disable coupon test traffic before reverting to code without validation.
 See the [coupon increment report](POSTGRES_COUPON_INCREMENT_2026-11-04.md) for
 expiry semantics, server-cart preview and unresolved funding/settlement rules.
 
+Admin coupon creation/activation must use the reviewed PostgreSQL module rather
+than older unaudited writers. Create FIXED values in BDT; list `value` remains
+paisa, with `value_bdt` supplied for display. Preserve coupon terms, usage counts
+and audit records during rollback, and disable admin coupon test traffic before
+reverting. See the [admin coupon contract](POSTGRES_ADMIN_COUPON_INCREMENT_2026-11-04.md).
+
 Main still fails closed for HTTP checkout when shipping policy is missing.
 Open PR #91 addresses policy injection and must be reviewed separately. Customer
 tracking exposes existing stored shipments (with sandbox mode), not a live

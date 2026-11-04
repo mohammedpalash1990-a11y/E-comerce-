@@ -497,3 +497,24 @@ test('coupon preview HTTP route requires CUSTOMER auth and a saved cart instead 
     assert.equal(unsupported.headers.get('allow'), 'POST');
   });
 });
+
+test('admin coupon HTTP paths enforce ADMIN for each supported method and reject unsupported methods', async () => {
+  await withServer({}, async base => {
+    for (const [method, path] of [
+      ['GET', '/api/v1/admin/coupons'], ['POST', '/api/v1/admin/coupons'], ['PATCH', '/api/v1/admin/coupons/SAVE']
+    ]) {
+      assert.equal((await fetch(base + path, { method })).status, 401);
+      for (const token of [validToken, validSellerToken]) {
+        assert.equal((await fetch(base + path, { method, headers: { authorization: 'Bearer ' + token } })).status, 403);
+      }
+    }
+    const list = await fetch(base + '/api/v1/admin/coupons', { headers: { authorization: 'Bearer ' + validAdminToken } });
+    assert.equal(list.status, 200);
+    assert.deepEqual(await list.json(), { data: [] });
+    const unsupported = await fetch(base + '/api/v1/admin/coupons', { method: 'DELETE' });
+    assert.equal(unsupported.status, 405);
+    assert.equal(unsupported.headers.get('allow'), 'GET, POST');
+    const malformed = await fetch(base + '/api/v1/admin/coupons/%ZZ', { method: 'PATCH', headers: { authorization: 'Bearer ' + validAdminToken } });
+    assert.equal(malformed.status, 400);
+  });
+});

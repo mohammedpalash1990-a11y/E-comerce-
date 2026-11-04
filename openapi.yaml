@@ -212,6 +212,113 @@ paths:
         '403': { description: Authenticated role is not CUSTOMER }
         '409': { description: Cart contains unavailable items or exceeds checkout limits }
         '405': { description: Unsupported method; Allow header contains POST }
+  /api/v1/admin/coupons:
+    get:
+      summary: List configured coupons for administrators
+      description: >-
+        PostgreSQL development endpoint. Ordered by code with bounded pagination.
+        active is the stored switch, not a guarantee of redemption eligibility.
+        Retains legacy value units; use value_bdt for FIXED display values.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 300, default: 100 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0, maximum: 10000, default: 0 }
+        - in: query
+          name: active
+          schema: { type: integer, enum: [0, 1] }
+      responses:
+        '200':
+          description: Coupon array; numeric active and stored-unit value retain the existing contract.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/AdminCoupon' }
+        '400': { description: Invalid or repeated pagination/filter parameters }
+        '401': { description: Active session required }
+        '403': { description: ADMIN role required }
+    post:
+      summary: Create a coupon with an atomic audit record
+      description: >-
+        No coupon values are seeded. FIXED value input is BDT with at most two
+        decimal places; PERCENT is a whole percentage from 1 to 90. Unknown fields
+        are rejected and used_count always starts at zero. Expiry must be in the
+        future at transaction time. A duplicate normalized code returns 409;
+        existing terms are never overwritten.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminCouponCreate' }
+      responses:
+        '201':
+          description: Created and audited coupon.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      code: { type: string }
+        '400': { description: Invalid input or expiry; unknown fields are not accepted }
+        '401': { description: Active session required }
+        '403': { description: Active ADMIN required }
+        '409': { description: Coupon code already exists }
+        '500': { description: Persistence or audit failure; the transaction is rolled back }
+  /api/v1/admin/coupons/{code}:
+    patch:
+      summary: Activate or deactivate a coupon with an atomic transition audit
+      description: >-
+        Accepts only a JSON boolean active. It cannot reset usage or alter economic
+        terms. Same-state requests make no new audit record. Enabling expired,
+        exhausted or invalid coupons returns 409. The coupon row is locked using
+        the same lock as checkout, so deactivation preserves prior redemptions
+        and does not retroactively cancel an order that commits first.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [active]
+              properties:
+                active: { type: boolean }
+      responses:
+        '200':
+          description: Updated or already matching switch.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      code: { type: string }
+                      active: { type: boolean }
+        '400': { description: Invalid code/encoding or unsupported body fields }
+        '401': { description: Active session required }
+        '403': { description: Active ADMIN required }
+        '404': { description: Coupon not found }
+        '409': { description: Coupon cannot be enabled in its current state }
+        '500': { description: Persistence or audit failure; the transaction is rolled back }
 components:
   securitySchemes:
     bearerAuth:
@@ -235,6 +342,56 @@ components:
             properties:
               data: { $ref: '#/components/schemas/CustomerCart' }
   schemas:
+    AdminCoupon:
+      type: object
+      properties:
+        code: { type: string }
+        type: { type: string, enum: [FIXED, PERCENT] }
+        value: { type: integer, description: Stored paisa for FIXED; whole percentage for PERCENT. }
+        value_bdt: { type: number, nullable: true, description: FIXED value in BDT; null for PERCENT. }
+        min_order_paisa: { type: integer }
+        min_order_bdt: { type: number }
+        max_uses: { type: integer, nullable: true }
+        used_count: { type: integer }
+        expires_at: { type: string, nullable: true }
+        active: { type: integer, enum: [0, 1] }
+    AdminCouponCreate:
+      type: object
+      additionalProperties: false
+      required: [code, type, value]
+      properties:
+        code:
+          type: string
+          description: 1 to 30 ASCII letters/digits/underscores/hyphens after trimming; stored uppercase.
+        type: { type: string, enum: [FIXED, PERCENT] }
+        value:
+          description: FIXED input is positive BDT with at most two decimal places. PERCENT input is a whole number from 1 to 90. Prefer decimal strings for exact BDT inputs.
+          oneOf:
+            - type: number
+              minimum: 0
+              exclusiveMinimum: true
+            - type: string
+              pattern: '^\d+(?:\.\d{1,2})?$'
+        min_order_bdt:
+          description: Nonnegative BDT with at most two decimals; omitted or empty string means zero.
+          oneOf:
+            - type: number
+              minimum: 0
+            - type: string
+              pattern: '^(?:\d+(?:\.\d{1,2})?)?$'
+        max_uses:
+          description: Positive safe integer; omitted/null/empty string means unlimited global uses.
+          oneOf:
+            - type: integer
+              minimum: 1
+              nullable: true
+            - type: string
+              pattern: '^\d*$'
+        expires_at:
+          type: string
+          nullable: true
+          description: Future timezone-qualified ISO timestamp or legacy date at midnight UTC. Omitted/null/empty string means no expiry. Stored as canonical UTC ISO.
+        active: { type: boolean, default: true }
     CustomerCart:
       type: object
       required: [items, subtotal_bdt, item_count]

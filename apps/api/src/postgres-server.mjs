@@ -19,6 +19,7 @@ import { registerPostgresAdminOrderRoutes } from './postgres-admin-order-routes.
 import { registerPostgresCustomerOrderRoutes } from './postgres-customer-order-routes.mjs';
 import { registerPostgresCartRoutes } from './postgres-cart-routes.mjs';
 import { registerPostgresCouponRoutes } from './postgres-coupon-routes.mjs';
+import { registerPostgresAdminCouponRoutes } from './postgres-admin-coupon-routes.mjs';
 import { createPostgresInventoryRepository } from './postgres-inventory.mjs';
 import { runPostgresMigrations } from './postgres-migrations.mjs';
 
@@ -131,6 +132,7 @@ export function createPostgresApiServer({ database, catalogRepository, authRepos
   registerPostgresCustomerOrderRoutes(registerDomainRoute, response, { database });
   registerPostgresCartRoutes(registerDomainRoute, response, { database });
   registerPostgresCouponRoutes(registerDomainRoute, response, { database });
+  registerPostgresAdminCouponRoutes(registerDomainRoute, response, { database });
   registerPostgresCatalogRoutes(registerDomainRoute, response, { catalogRepository });
 
   return http.createServer(async (req, res) => {

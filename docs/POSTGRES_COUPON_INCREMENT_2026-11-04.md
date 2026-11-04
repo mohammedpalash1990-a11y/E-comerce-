@@ -1,5 +1,7 @@
 # PostgreSQL coupon increment — 2026-11-04
 
+> Historical snapshot at `666da59`. The subsequent [admin coupon increment](POSTGRES_ADMIN_COUPON_INCREMENT_2026-11-04.md) implements admin list/create/activation APIs; its final full suite passes 335 tests. Missing-admin notes below describe this earlier snapshot.
+
 Continuation of [PR #92](https://github.com/mohammedpalash1990-a11y/E-comerce-/pull/92) after cart commit `2cd4e36`, on the same `arena/0ce94763-e-comerce` branch. Coupon preview and checkout validation are implemented and tested. **This is not a complete storefront checkout or production release.**
 
 ## Existing work and coordination

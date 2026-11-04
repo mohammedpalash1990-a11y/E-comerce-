@@ -18,7 +18,7 @@ function storedInteger(value, minimum = 0) {
   if (result < minimum) throw unavailable();
   return result;
 }
-function expiryTime(value) {
+export function expiryTime(value) {
   if (value === null) return null;
   // Legacy date-only records mean midnight UTC at the START of that date.
   // Timestamp records require an explicit zone; never use the server locale.
