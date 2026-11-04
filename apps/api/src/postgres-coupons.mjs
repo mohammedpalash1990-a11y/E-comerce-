@@ -22,7 +22,7 @@ export function expiryTime(value) {
   if (value === null) return null;
   // Legacy date-only records mean midnight UTC at the START of that date.
   // Timestamp records require an explicit zone; never use the server locale.
-  if (typeof value !== 'string' || !/^\\d{4}-\\d{2}-\\d{2}(?:T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d{1,3})?(?:Z|[+-](?:[01]\\d|2[0-3]):[0-5]\\d))?$/.test(value)) throw unavailable();
+  if (typeof value !== 'string' || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}(?:T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:[.][0-9]{1,3})?(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9]))?$/.test(value)) throw unavailable();
   const date = value.slice(0, 10), day = Date.parse(date + 'T00:00:00.000Z');
   if (!Number.isFinite(day) || new Date(day).toISOString().slice(0, 10) !== date) throw unavailable();
   const expiry = Date.parse(value);
