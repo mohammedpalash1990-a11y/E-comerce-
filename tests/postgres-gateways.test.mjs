@@ -18,6 +18,12 @@ test('sandbox payment and courier adapters retain supported contracts', () => {
   assert.deepEqual(COURIERS, ['PATHAO', 'STEADFAST', 'REDX']);
   assert.equal(shippingFor('Dhaka', 0), 6000);
   assert.equal(shippingFor('Chattogram', 0), 12000);
+  assert.equal(shippingFor('ঢাকা', 0), 6000);
+  assert.equal(shippingFor('Dhaka North', 0), 6000);
+  assert.equal(shippingFor('Sylhet', 0), 12000);
+  assert.equal(shippingFor('Rajshahi', 0), 12000);
+  assert.equal(shippingFor('', 0), 12000);
+  assert.equal(shippingFor(null, 0), 12000);
   const payment = initiateGateway('BKASH', { id: 'payment-1' });
   assert.equal(payment.sandbox, true);
   assert.match(payment.gatewayTxnId, /^SBX-BKASH-/);

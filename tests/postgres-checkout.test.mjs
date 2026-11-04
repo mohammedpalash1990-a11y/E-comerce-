@@ -159,6 +159,74 @@ test('checkout fails closed when no shipping policy is configured', async () => 
   assert.equal(h.products.get('p-1').stock, 8);
 });
 
+test('checkout computes exact Bangladesh shipping for Dhaka, outside Dhaka and threshold boundaries', async () => {
+  // Test with actual shippingFor policy logic
+  const policy = (area, subtotalPaisa) => {
+    const freeShippingThreshold = 500000; // 5000 BDT
+    if (subtotalPaisa >= freeShippingThreshold) return 0;
+    return /dhaka|ঢাকা/i.test(area || '') ? 6000 : 12000;
+  };
+
+  // Case 1: Inside Dhaka, below threshold (unit discount_paisa: 10000 paisa * 1 = 10000)
+  const hDhaka = checkoutHarness({ shippingFor: policy });
+  const resDhaka = await hDhaka.repo.checkout(customer, {
+    delivery: { ...delivery, area: 'Dhaka' },
+    items: [{ productId: 'p-1', quantity: 1 }]
+  });
+  // subtotal 10000 + shipping 6000 = 16000
+  assert.equal(resDhaka.total_bdt, 160);
+  assert.equal(hDhaka.tables.orders[0][11], 6000); // shipping_paisa column
+
+  // Case 2: Outside Dhaka, below threshold
+  const hOutside = checkoutHarness({ shippingFor: policy });
+  const resOutside = await hOutside.repo.checkout(customer, {
+    delivery: { ...delivery, area: 'Chattogram' },
+    items: [{ productId: 'p-1', quantity: 1 }]
+  });
+  // subtotal 10000 + shipping 12000 = 22000
+  assert.equal(resOutside.total_bdt, 220);
+  assert.equal(hOutside.tables.orders[0][11], 12000); // shipping_paisa column
+
+  // Case 3: Inside Dhaka using Bengali script, below threshold
+  const hDhakaBn = checkoutHarness({ shippingFor: policy });
+  const resDhakaBn = await hDhakaBn.repo.checkout(customer, {
+    delivery: { ...delivery, area: 'ঢাকা উত্তর' },
+    items: [{ productId: 'p-1', quantity: 1 }]
+  });
+  assert.equal(resDhakaBn.total_bdt, 160);
+  assert.equal(hDhakaBn.tables.orders[0][11], 6000);
+
+  // Case 4: Below threshold boundary (subtotal 4999 BDT = 499900 paisa -> quantity 50 of 10000 - 100 = 499900 paisa)
+  // Let's test with quantity 49 (subtotal 490000 paisa < 500000)
+  const hBelow = checkoutHarness({ stock: 100, shippingFor: policy });
+  const resBelow = await hBelow.repo.checkout(customer, {
+    delivery: { ...delivery, area: 'Sylhet' },
+    items: [{ productId: 'p-1', quantity: 49 }]
+  });
+  // subtotal 490000 + shipping 12000 = 502000
+  assert.equal(resBelow.total_bdt, 5020);
+  assert.equal(hBelow.tables.orders[0][11], 12000);
+
+  // Case 5: At threshold boundary (subtotal 5000 BDT = 500000 paisa -> quantity 50 of 10000 paisa = 500000 paisa)
+  const hAt = checkoutHarness({ stock: 100, shippingFor: policy });
+  const resAt = await hAt.repo.checkout(customer, {
+    delivery: { ...delivery, area: 'Sylhet' },
+    items: [{ productId: 'p-1', quantity: 50 }]
+  });
+  // subtotal 500000 + shipping 0 = 500000
+  assert.equal(resAt.total_bdt, 5000);
+  assert.equal(hAt.tables.orders[0][11], 0);
+
+  // Case 6: Above threshold boundary (subtotal 5100 BDT = 510000 paisa -> quantity 51 of 10000 paisa = 510000 paisa)
+  const hAbove = checkoutHarness({ stock: 100, shippingFor: policy });
+  const resAbove = await hAbove.repo.checkout(customer, {
+    delivery: { ...delivery, area: 'Dhaka' },
+    items: [{ productId: 'p-1', quantity: 51 }]
+  });
+  assert.equal(resAbove.total_bdt, 5100);
+  assert.equal(hAbove.tables.orders[0][11], 0);
+});
+
 
 test('cart checkout locks the customer before reading a correctly quoted PostgreSQL productId alias', async () => {
   const h = checkoutHarness({ cart: [{ productId: 'p-1', quantity: 2 }] });
