@@ -223,11 +223,14 @@ export function createPostgresApiServer({ database, catalogRepository, authRepos
       if (domainMatch) {
         const { route, match } = domainMatch;
         if (method !== route.method) return json(res, 405, { error: 'Method not allowed' }, headers);
-        const token = bearerToken(req);
-        if (!token) return json(res, 401, { error: 'Authentication required' }, headers);
-        const user = await authRepository.getSessionUser(token);
-        if (!user) return json(res, 401, { error: 'Authentication required' }, headers);
-        if (route.roles && !route.roles.includes(user.role)) return json(res, 403, { error: 'You do not have permission for this action' }, headers);
+        let user = null;
+        if (route.roles) {
+          const token = bearerToken(req);
+          if (!token) return json(res, 401, { error: 'Authentication required' }, headers);
+          user = await authRepository.getSessionUser(token);
+          if (!user) return json(res, 401, { error: 'Authentication required' }, headers);
+          if (!route.roles.includes(user.role)) return json(res, 403, { error: 'You do not have permission for this action' }, headers);
+        }
         const body = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) ? await readJsonBody(req) : {};
         const params = match.slice(1).map(decodePathPart);
         const result = await route.handler({ req, res, url, params, body, user, ip });
