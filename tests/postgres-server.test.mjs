@@ -98,6 +98,7 @@ test('PostgreSQL HTTP import graph is SQLite-free', async () => {
   assert.ok([...files].some(file => file.endsWith('/postgres-auth.mjs')));
   assert.ok([...files].some(file => file.endsWith('/postgres-customer.mjs')));
   assert.ok([...files].some(file => file.endsWith('/postgres-runtime.mjs')));
+  assert.ok([...files].some(file => file.endsWith('/gateways.mjs')));
 });
 
 test('PostgreSQL server serves health and catalog routes without exposing order routes', async () => {
