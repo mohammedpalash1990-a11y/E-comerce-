@@ -518,3 +518,32 @@ test('admin coupon HTTP paths enforce ADMIN for each supported method and reject
     assert.equal(malformed.status, 400);
   });
 });
+
+test('customer account HTTP surface keeps address, wishlist and review routes CUSTOMER-only', async () => {
+  const customerRepository = fakeCustomer();
+  await withServer({ customerRepository }, async base => {
+    const customer = { authorization: 'Bearer ' + validToken, 'content-type': 'application/json' };
+    for (const [method, path] of [
+      ['GET', '/api/v1/customer/addresses'], ['POST', '/api/v1/customer/addresses'],
+      ['PUT', '/api/v1/customer/addresses/a1'], ['DELETE', '/api/v1/customer/addresses/a1'],
+      ['GET', '/api/v1/customer/wishlist'], ['POST', '/api/v1/customer/wishlist'],
+      ['DELETE', '/api/v1/customer/wishlist/p1'], ['POST', '/api/v1/customer/products/p1/reviews']
+    ]) {
+      assert.equal((await fetch(base + path, { method })).status, 401, method + ' ' + path + ' requires auth');
+      for (const token of [validSellerToken, validAdminToken]) {
+        assert.equal((await fetch(base + path, { method, headers: { authorization: 'Bearer ' + token } })).status, 403, method + ' ' + path + ' must reject non-customers');
+      }
+    }
+    assert.equal((await fetch(base + '/api/v1/customer/addresses', { headers: customer })).status, 200);
+    const created = await fetch(base + '/api/v1/customer/addresses', { method: 'POST', headers: customer, body: JSON.stringify({ phone: '01711111111', address: 'Road 1', area: 'Dhaka' }) });
+    assert.equal(created.status, 201);
+    assert.deepEqual(await created.json(), { data: { id: 'a2' } });
+    assert.equal((await fetch(base + '/api/v1/customer/wishlist', { method: 'POST', headers: customer, body: JSON.stringify({ productId: 'p1' }) })).status, 201);
+    const review = await fetch(base + '/api/v1/customer/products/p1/reviews', { method: 'POST', headers: customer, body: JSON.stringify({ rating: 5 }) });
+    assert.equal(review.status, 201);
+    assert.deepEqual(await review.json(), { data: { saved: true } });
+    assert.ok(customerRepository.calls.some(call => call[0] === 'saveReview' && call[2] === 'p1'));
+    assert.equal((await fetch(base + '/api/v1/customer/wishlist', { method: 'DELETE', headers: customer })).status, 405);
+    assert.equal((await fetch(base + '/api/v1/customer/wishlist/p1', { method: 'DELETE', headers: customer })).status, 200);
+  });
+});

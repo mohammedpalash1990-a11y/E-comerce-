@@ -91,6 +91,11 @@ Browser tests still cover the canonical static storefront, not a new admin coupo
 - `README.md`, `docs/DEPLOYMENT.md`, `docs/POSTGRES_COUPON_INCREMENT_2026-11-04.md`: current contract/rollout links and historical-snapshot clarification.
 - `docs/POSTGRES_ADMIN_COUPON_INCREMENT_2026-11-04.md`: this report and team handoff.
 
+> Historical snapshot at `c7c3cd0`. A later increment on the same branch exposes
+> customer addresses, wishlist and verified reviews; its report is
+> [here](POSTGRES_CUSTOMER_ACCOUNT_INCREMENT_2026-11-04.md). The admin scope and
+> limitations below are unchanged.
+
 ## Deployment, remaining work and completion
 
 No migration/backfill is required. For private staging, deploy the admin module with the reviewed coupon-validation/checkout code, drain old writers and review the normalized expiry/amount contract. Rollback by redeploying the prior approved API without deleting coupons, audit records, orders or usage counts. Old admin writers may not provide these validation/audit guarantees, so disable admin coupon test traffic before rollback.

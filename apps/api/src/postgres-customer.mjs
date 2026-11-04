@@ -20,7 +20,10 @@ export function createPostgresCustomerRepository(database) {
   }
 
   async function listAddresses(userId) {
-    return query('SELECT id,label,name,phone,address,area,is_default FROM addresses WHERE user_id=? ORDER BY is_default DESC,id').all(userId);
+    const rows = await query('SELECT id,label,name,phone,address,area,is_default FROM addresses WHERE user_id=? ORDER BY is_default DESC,id').all(userId);
+    // BIGINT arrives as a string from PostgreSQL; keep the documented integer
+    // flag instead of changing the response shape depending on the driver.
+    return rows.map(row => ({ ...row, is_default: Number(row.is_default) }));
   }
 
   async function createAddress({ user, body }) {
@@ -89,32 +92,54 @@ export function createPostgresCustomerRepository(database) {
     return rows.map(productView);
   }
 
+  // Identifiers come from untrusted bodies/URLs: reject non-string and
+  // over-long values instead of letting array/boolean coercion reach SQL.
+  function productIdentifier(value) {
+    if (typeof value !== 'string') throw bad('পণ্য নির্বাচন সঠিক নয়');
+    const productId = value.trim();
+    if (!productId || productId.length > 100) throw bad('পণ্য নির্বাচন সঠিক নয়');
+    return productId;
+  }
+
   async function addWishlist(userId, productId) {
-    const product = await query(`SELECT 1 FROM products p WHERE p.id=? AND ${LIVE}`).get(String(productId || ''));
+    const id = productIdentifier(productId);
+    const product = await query(`SELECT 1 FROM products p WHERE p.id=? AND ${LIVE}`).get(id);
     if (!product) throw new HttpError(404, 'Product not found');
+    // Adding twice is idempotent and must not duplicate rows or reorder the list.
     await query('INSERT INTO wishlists(user_id,product_id,created_at) VALUES(?,?,?) ON CONFLICT(user_id,product_id) DO NOTHING')
-      .run(userId, productId, now());
+      .run(userId, id, now());
     return { added: true };
   }
 
   async function removeWishlist(userId, productId) {
-    await query('DELETE FROM wishlists WHERE user_id=? AND product_id=?').run(userId, productId);
+    await query('DELETE FROM wishlists WHERE user_id=? AND product_id=?').run(userId, productIdentifier(productId));
     return { removed: true };
   }
 
   async function saveReview({ userId, productId, body }) {
-    const rating = Number(body.rating);
+    const product = productIdentifier(productId);
+    const raw = body?.rating;
+    // Number(true) is 1 and Number([]) is 0: only accept numbers or digit strings.
+    if (typeof raw !== 'number' && !(typeof raw === 'string' && /^[1-5]$/.test(raw.trim()))) {
+      throw bad('রেটিং ১ থেকে ৫ হতে হবে');
+    }
+    const rating = Number(raw);
     if (!Number.isInteger(rating) || rating < 1 || rating > 5) throw bad('রেটিং ১ থেকে ৫ হতে হবে');
+    // Validate the comment before touching the database: a malformed review
+    // must fail on input, not after an eligibility lookup.
+    const comment = text(body?.comment, 1000, 'মন্তব্য', { required: false });
     const eligible = await query(`SELECT 1 FROM order_items oi
       JOIN seller_orders so ON so.id=oi.seller_order_id
       JOIN orders o ON o.id=oi.order_id
-      WHERE o.user_id=? AND oi.product_id=? AND so.status='DELIVERED' LIMIT 1`).get(userId, productId);
+      WHERE o.user_id=? AND oi.product_id=? AND so.status='DELIVERED' LIMIT 1`).get(userId, product);
     if (!eligible) throw new HttpError(403, 'শুধু ডেলিভারি পাওয়া পণ্যের রিভিউ দেওয়া যায়');
+    // One review per customer/product: repeat submissions update the existing
+    // row in place and keep its original creation timestamp.
     await query(`INSERT INTO reviews(id,product_id,user_id,rating,comment,created_at)
       VALUES(?,?,?,?,?,?)
       ON CONFLICT(product_id,user_id) DO UPDATE
       SET rating=EXCLUDED.rating,comment=EXCLUDED.comment`)
-      .run(id(), productId, userId, rating, text(body.comment, 1000, 'মন্তব্য', { required: false }), now());
+      .run(id(), product, userId, rating, comment, now());
     return { saved: true };
   }
 

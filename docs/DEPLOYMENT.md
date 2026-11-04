@@ -89,6 +89,13 @@ paisa, with `value_bdt` supplied for display. Preserve coupon terms, usage count
 and audit records during rollback, and disable admin coupon test traffic before
 reverting. See the [admin coupon contract](POSTGRES_ADMIN_COUPON_INCREMENT_2026-11-04.md).
 
+Customer account endpoints (addresses, wishlist, reviews) need no schema change;
+they use the existing `addresses`, `wishlists` and `reviews` tables. Review
+submission requires a DELIVERED seller order and addresses are capped at ten per
+customer with exactly one default. Rollback keeps those rows intact and readable
+by the previous API. See the
+[customer account contract](POSTGRES_CUSTOMER_ACCOUNT_INCREMENT_2026-11-04.md).
+
 Main still fails closed for HTTP checkout when shipping policy is missing.
 Open PR #91 addresses policy injection and must be reviewed separately. Customer
 tracking exposes existing stored shipments (with sandbox mode), not a live
