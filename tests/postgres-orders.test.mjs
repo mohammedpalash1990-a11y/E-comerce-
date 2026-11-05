@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPostgresOrderLifecycleRepository } from '../apps/api/src/postgres-orders.mjs';
 
-function lifecycleHarness({ status = 'CONFIRMED', paymentMethod = 'COD', paymentStatus = 'PENDING' } = {}) {
+function lifecycleHarness({ status = 'CONFIRMED', paymentMethod = 'COD', paymentStatus = 'PENDING', couponRedemption = false } = {}) {
   const parent = {
     id: 'order-1', user_id: 'customer-1', status, payment_method: paymentMethod,
     payment_status: paymentStatus, total_paisa: 20000
@@ -14,7 +14,8 @@ function lifecycleHarness({ status = 'CONFIRMED', paymentMethod = 'COD', payment
   const product = { id: 'product-1', stock: 3 };
   const items = [{ product_id: 'product-1', quantity: 2 }];
   const calls = [];
-  const ledger = { transactions: [], refunds: [], events: [], audits: [], notifications: [] };
+  let redemptionRestored = false;
+  const ledger = { transactions: [], refunds: [], events: [], audits: [], notifications: [], couponUsage: 1 };
 
   const database = {
     q(sql) {
@@ -23,7 +24,7 @@ function lifecycleHarness({ status = 'CONFIRMED', paymentMethod = 'COD', payment
           calls.push({ sql, values, method: 'get' });
           if (sql.includes('SELECT order_id FROM seller_orders')) return sellerOrder.id === values[0] ? { order_id: sellerOrder.order_id } : undefined;
           if (sql.includes('SELECT * FROM orders')) return parent.id === values[0] ? { ...parent } : undefined;
-          if (sql.includes('SELECT status,payment_method,payment_status,total_paisa,user_id FROM orders')) return parent.id === values[0] ? { ...parent } : undefined;
+          if (sql.includes('SELECT status,payment_method,payment_status,total_paisa,user_id,coupon_code FROM orders')) return parent.id === values[0] ? { ...parent } : undefined;
           if (sql.includes('SELECT * FROM seller_orders')) return sellerOrder.id === values[0] ? { ...sellerOrder } : undefined;
           if (sql.includes('SELECT COUNT(*) count FROM seller_orders')) return { count: 0 };
           if (sql.includes('COALESCE(SUM(amount_paisa),0) amount FROM refunds')) return { amount: ledger.refunds.filter(x => x.status !== 'REJECTED').reduce((sum, x) => sum + x.amount, 0) };
@@ -35,11 +36,14 @@ function lifecycleHarness({ status = 'CONFIRMED', paymentMethod = 'COD', payment
           if (sql.includes('SELECT status FROM seller_orders')) return [{ status: sellerOrder.status }];
           if (sql.includes('SELECT id,status FROM seller_orders')) return [{ id: sellerOrder.id, status: sellerOrder.status }];
           if (sql.includes('SELECT product_id,quantity FROM order_items')) return items;
+          if (sql.includes('UPDATE coupon_redemptions') && couponRedemption && !redemptionRestored) { redemptionRestored = true; return [{ coupon_code: 'SAVE' }]; }
+          if (sql.includes('UPDATE coupon_redemptions')) return [];
           return [];
         },
         async run(...values) {
           calls.push({ sql, values, method: 'run' });
           if (sql.includes('UPDATE products SET stock=stock+')) product.stock += values[0];
+          if (sql.includes('UPDATE coupons SET used_count=GREATEST')) ledger.couponUsage = Math.max(0, ledger.couponUsage - 1);
           if (sql.includes('UPDATE seller_orders SET status=')) sellerOrder.status = values[0];
           if (sql.includes("UPDATE orders SET payment_status='PAID'")) parent.payment_status = 'PAID';
           if (sql.includes("UPDATE orders SET status=")) parent.status = values[0];
@@ -114,4 +118,14 @@ test('invalid seller-order transitions fail without restoring inventory', async 
   await assert.rejects(h.repo.applySellerStatus('seller-order-1', 'CANCELLED', 'admin-1'), /পরিবর্তন করা যাবে না/);
   assert.equal(h.product.stock, 3);
   assert.equal(h.sellerOrder.status, 'DELIVERED');
+});
+
+
+test('full parent cancellation restores one coupon redemption exactly once', async () => {
+  const h = lifecycleHarness({ couponRedemption: true });
+  await h.repo.applySellerStatus('seller-order-1', 'CANCELLED', 'admin-1');
+  assert.equal(h.ledger.couponUsage, 0);
+  assert.equal(h.product.stock, 5);
+  await assert.rejects(h.repo.applySellerStatus('seller-order-1', 'CANCELLED', 'admin-1'), /পরিবর্তন করা যাবে না/);
+  assert.equal(h.ledger.couponUsage, 0);
 });

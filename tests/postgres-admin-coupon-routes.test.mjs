@@ -27,8 +27,8 @@ function setup({ coupon, activeAdmin = true, failAudit = false } = {}) {
         calls.push({ sql, args });
         if (sql.startsWith('INSERT INTO coupons')) {
           if (coupons.has(args[0])) throw Object.assign(new Error('duplicate'), { code: '23505' });
-          const [code, type, value, min_order_paisa, max_uses, expires_at, active] = args;
-          coupons.set(code, { code, type, value, min_order_paisa, max_uses, used_count: 0, expires_at, active });
+          const [code, type, value, min_order_paisa, max_uses, max_uses_per_customer, expires_at, active] = args;
+          coupons.set(code, { code, type, value, min_order_paisa, max_uses, max_uses_per_customer, used_count: 0, expires_at, active });
         } else if (sql.startsWith('UPDATE coupons')) coupons.get(args[1]).active = args[0];
         else if (sql.startsWith('INSERT INTO audit_logs')) {
           if (failAudit) throw new Error('audit unavailable');
@@ -57,7 +57,7 @@ test('fixed coupon creation converts decimal BDT exactly, normalizes expiry and 
   const h = setup();
   const result = await h.invoke('POST', { code: ' save ', type: 'FIXED', value: '0.29', min_order_bdt: '10.05', max_uses: '2', expires_at: '2026-11-05T06:00:00+06:00', active: false });
   assert.deepEqual(result, { status: 201, data: { code: 'SAVE' } });
-  assert.deepEqual(h.coupons.get('SAVE'), { code: 'SAVE', type: 'FIXED', value: 29, min_order_paisa: 1005, max_uses: 2, used_count: 0, expires_at: '2026-11-05T00:00:00.000Z', active: 0 });
+  assert.deepEqual(h.coupons.get('SAVE'), { code: 'SAVE', type: 'FIXED', value: 29, min_order_paisa: 1005, max_uses: 2, max_uses_per_customer: null, used_count: 0, expires_at: '2026-11-05T00:00:00.000Z', active: 0 });
   assert.equal(h.calls[0].sql, 'BEGIN');
   assert.match(h.calls[1].sql, /role='ADMIN'.*FOR SHARE/);
   assert.equal(h.audits[0][1], admin.id);
@@ -70,7 +70,16 @@ test('fixed coupon creation converts decimal BDT exactly, normalizes expiry and 
 test('percentage creation preserves the explicit whole-percent contract and optional defaults', async () => {
   const h = setup();
   await h.invoke('POST', { code: 'PERCENT', type: 'PERCENT', value: '17' });
-  assert.deepEqual(h.coupons.get('PERCENT'), { code: 'PERCENT', type: 'PERCENT', value: 17, min_order_paisa: 0, max_uses: null, used_count: 0, expires_at: null, active: 1 });
+  assert.deepEqual(h.coupons.get('PERCENT'), { code: 'PERCENT', type: 'PERCENT', value: 17, min_order_paisa: 0, max_uses: null, max_uses_per_customer: null, used_count: 0, expires_at: null, active: 1 });
+});
+
+test('admin can set and read an explicit per-customer coupon redemption limit', async () => {
+  const h = setup();
+  await h.invoke('POST', { code: 'ONEPERUSER', type: 'FIXED', value: '2.50', max_uses_per_customer: '1' });
+  assert.equal(h.coupons.get('ONEPERUSER').max_uses_per_customer, 1);
+  const listed = await h.invoke('GET', '');
+  assert.equal(listed.data[0].max_uses_per_customer, 1);
+  assert.equal(JSON.parse(h.audits[0][5]).max_uses_per_customer, 1);
 });
 
 test('unsafe monetary input, malformed types and privileged fields are rejected before any mutation', async () => {
@@ -102,7 +111,7 @@ test('listing preserves stored-unit fields, adds BDT helpers and binds bounded p
   const result = await h.invoke('GET', 'limit=25&offset=50&active=1');
   assert.deepEqual(h.calls[0].args, [1, 25, 50]);
   assert.match(h.calls[0].sql, /WHERE active=\? ORDER BY code LIMIT \? OFFSET \?/);
-  assert.deepEqual(result.data[0], { ...record, value: 500, min_order_paisa: 1000, max_uses: 5, used_count: 2, active: 1, value_bdt: 5, min_order_bdt: 10 });
+  assert.deepEqual(result.data[0], { ...record, value: 500, min_order_paisa: 1000, max_uses: 5, max_uses_per_customer: null, used_count: 2, active: 1, value_bdt: 5, min_order_bdt: 10 });
   await h.invoke('GET', '');
   assert.deepEqual(h.calls[1].args, [100, 0]);
 });
