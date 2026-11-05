@@ -177,5 +177,5 @@ test('admin order detail, dashboard and seller/admin inventory use typed respons
     assert.ok(spec.includes('    ' + name + ':'), 'Missing schema ' + name);
   }
   assert.match(spec, /idempotency_key: \{ type: string, pattern:/);
-  assert.match(spec, /enum: \\[PENDING, APPROVED, REJECTED\\]/);
+  assert.match(spec, /enum: \[PENDING, APPROVED, REJECTED\]/);
 });
