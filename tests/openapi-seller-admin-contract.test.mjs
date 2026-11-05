@@ -118,3 +118,24 @@ test('seller product operations expose precise response schemas and creation sta
   assert.ok(schemas.includes('SellerProductArchiveResult:'));
   assert.ok(schemas.includes('required: [id, archived]'));
 });
+
+test('seller finance and payout routes use role-scoped typed contracts', () => {
+  const finance = operation('/api/v1/seller/finance', 'GET');
+  const request = operation('/api/v1/seller/payouts', 'POST');
+  const adminList = operation('/api/v1/admin/payouts', 'GET');
+  const decision = operation('/api/v1/admin/payouts/{id}/decision', 'POST');
+
+  assert.ok(finance.includes('SellerFinanceSummary'));
+  assert.ok(request.includes("'201':"));
+  assert.ok(request.includes('SellerPayoutCreated'));
+  assert.ok(adminList.includes('AdminPayoutListItem'));
+  assert.ok(decision.includes('PayoutDecisionInput'));
+  assert.ok(decision.includes('AdminPayoutDecisionResult'));
+
+  for (const name of ['SellerSettlement', 'SellerPayoutHistoryItem', 'SellerFinanceSummary', 'SellerPayoutCreated', 'AdminPayoutListItem', 'PayoutDecisionInput', 'AdminPayoutDecisionResult']) {
+    assert.ok(spec.includes('    ' + name + ':'), 'Missing payout schema ' + name);
+  }
+  assert.ok(spec.includes('enum: [BKASH, NAGAD, ROCKET, BANK]'));
+  assert.ok(spec.includes('enum: [APPROVE, REJECT]'));
+  assert.ok(spec.includes('maxLength: 300'));
+});
