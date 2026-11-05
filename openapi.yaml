@@ -2082,7 +2082,7 @@ components:
         discount_paisa: { type: integer, nullable: true, minimum: 1 }
         discount_price_bdt: { type: number, nullable: true, exclusiveMinimum: 0 }
         stock: { type: integer, minimum: 0, maximum: 1000000 }
-        status: { type: string, enum: [PENDING_REVIEW, ACTIVE, REJECTED, ARCHIVED] }
+        status: { type: string, enum: [PENDING_REVIEW, ACTIVE, REJECTED, SUSPENDED, ARCHIVED] }
         sku: { type: string, nullable: true }
         category_slug: { type: string, nullable: true }
         description: { type: string }

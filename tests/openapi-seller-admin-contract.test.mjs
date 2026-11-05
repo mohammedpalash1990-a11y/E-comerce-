@@ -113,6 +113,7 @@ test('seller product operations expose precise response schemas and creation sta
   }
   assert.ok(schemas.includes('variants:'));
   assert.ok(schemas.includes('images:'));
+  assert.ok(schemas.includes('enum: [PENDING_REVIEW, ACTIVE, REJECTED, SUSPENDED, ARCHIVED]'));
   assert.ok(schemas.includes('SellerProductMutationResult:'));
   assert.ok(schemas.includes('required: [id, status, message]'));
   assert.ok(schemas.includes('SellerProductArchiveResult:'));
