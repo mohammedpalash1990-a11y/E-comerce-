@@ -140,3 +140,42 @@ test('seller finance and payout routes use role-scoped typed contracts', () => {
   assert.ok(spec.includes('enum: [APPROVE, REJECT]'));
   assert.ok(spec.includes('maxLength: 300'));
 });
+
+
+test('admin order detail, dashboard and seller/admin inventory use typed response contracts', () => {
+  const detail = operation('/api/v1/admin/orders/{id}', 'GET');
+  const dashboard = operation('/api/v1/admin/dashboard', 'GET');
+  const sellerInventory = operation('/api/v1/seller/inventory', 'GET');
+  const movements = operation('/api/v1/seller/inventory/{id}/movements', 'GET');
+  const sellerAdjust = operation('/api/v1/seller/inventory/{id}/adjust-requests', 'POST');
+  const adminAdjustments = operation('/api/v1/admin/inventory/adjustments', 'GET');
+  const adminDecision = operation('/api/v1/admin/inventory/adjustments/{id}/decision', 'POST');
+  const sellerAlerts = operation('/api/v1/seller/inventory/alerts', 'GET');
+  const adminAlerts = operation('/api/v1/admin/inventory/alerts', 'GET');
+  const sellerReport = operation('/api/v1/seller/inventory/report', 'GET');
+  const adminReport = operation('/api/v1/admin/inventory/report', 'GET');
+
+  assert.ok(detail.includes('AdminOrderDetail'));
+  assert.ok(dashboard.includes('AdminDashboardMetrics'));
+  assert.ok(sellerInventory.includes('SellerInventoryList'));
+  assert.ok(movements.includes('InventoryMovementList'));
+  assert.ok(sellerAdjust.includes('InventoryAdjustmentRequest'));
+  assert.ok(sellerAdjust.includes("'201':"));
+  assert.ok(!sellerAdjust.includes("'200':"));
+  assert.ok(adminAdjustments.includes('AdminInventoryAdjustmentList'));
+  assert.ok(adminDecision.includes('InventoryAdjustmentDecisionInput'));
+  assert.ok(adminDecision.includes('InventoryAdjustmentDecision'));
+  assert.ok(sellerAlerts.includes('InventoryAlertList'));
+  assert.ok(adminAlerts.includes('InventoryAlertList'));
+  assert.ok(sellerReport.includes('InventoryReport'));
+  assert.ok(adminReport.includes('InventoryReport'));
+
+  for (const name of ['AdminOrderDetail','AdminOrderItem','AdminOrderSeller','AdminOrderEvent','AdminOrderPayment',
+    'AdminDashboardMetrics','SellerInventoryItem','InventoryMovement','InventoryAdjustmentInput',
+    'InventoryAdjustmentRequest','InventoryAdjustmentDecisionInput','InventoryAdjustmentDecision',
+    'InventoryAlert','InventoryReport']) {
+    assert.ok(spec.includes('    ' + name + ':'), 'Missing schema ' + name);
+  }
+  assert.match(spec, /idempotency_key: \\{ type: string, pattern:/);
+  assert.match(spec, /enum: \\[PENDING, APPROVED, REJECTED\\]/);
+});

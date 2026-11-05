@@ -1011,18 +1011,16 @@ paths:
       security: [{ bearerAuth: [] }]
       responses:
         '200':
-          description: Successful operation.
+          description: Inventory items owned by the authenticated seller.
           content:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    $ref: '#/components/schemas/SellerInventoryList'
+
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -1041,18 +1039,16 @@ paths:
           schema: { type: string, minLength: 1 }
       responses:
         '200':
-          description: Successful operation.
+          description: Stock movement ledger for the seller-owned product.
           content:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    $ref: '#/components/schemas/InventoryMovementList'
+
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -1074,22 +1070,19 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties: true
+              $ref: '#/components/schemas/InventoryAdjustmentInput'
       responses:
-        '200':
-          description: Successful operation.
+        '201':
+          description: Created inventory adjustment request; stock changes only after admin approval.
           content:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    $ref: '#/components/schemas/InventoryAdjustmentRequest'
+
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -1107,18 +1100,16 @@ paths:
           schema: { type: integer, minimum: 0, maximum: 1000, default: 5 }
       responses:
         '200':
-          description: Successful operation.
+          description: Low-stock products belonging to the authenticated seller.
           content:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    $ref: '#/components/schemas/InventoryAlertList'
+
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -1139,18 +1130,16 @@ paths:
           schema: { type: string, format: date }
       responses:
         '200':
-          description: Successful operation.
+          description: Seller inventory and movement totals for the requested date range.
           content:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    $ref: '#/components/schemas/InventoryReport'
+
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -1491,18 +1480,16 @@ paths:
           schema: { type: string, minLength: 1 }
       responses:
         '200':
-          description: Successful operation.
+          description: Administrative order detail including customer, seller, payment and event history.
           content:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    $ref: '#/components/schemas/AdminOrderDetail'
+
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -1588,18 +1575,16 @@ paths:
       security: [{ bearerAuth: [] }]
       responses:
         '200':
-          description: Successful operation.
+          description: Aggregated marketplace metrics for the administration dashboard.
           content:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    $ref: '#/components/schemas/AdminDashboardMetrics'
+
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -1611,20 +1596,22 @@ paths:
       description: >-
         PostgreSQL route restricted to an authenticated ADMIN account. Response fields reflect the mounted handler.
       security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [PENDING, APPROVED, REJECTED], default: PENDING }
       responses:
         '200':
-          description: Successful operation.
+          description: Inventory adjustment requests with product and seller context.
           content:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    $ref: '#/components/schemas/AdminInventoryAdjustmentList'
+
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -1646,22 +1633,19 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties: true
+              $ref: '#/components/schemas/InventoryAdjustmentDecisionInput'
       responses:
         '200':
-          description: Successful operation.
+          description: Recorded inventory adjustment decision and resulting stock values.
           content:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    $ref: '#/components/schemas/InventoryAdjustmentDecision'
+
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -1679,18 +1663,16 @@ paths:
           schema: { type: integer, minimum: 0, maximum: 1000, default: 5 }
       responses:
         '200':
-          description: Successful operation.
+          description: Low-stock products with seller and shop context.
           content:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    $ref: '#/components/schemas/InventoryAlertList'
+
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -1711,18 +1693,16 @@ paths:
           schema: { type: string, format: date }
       responses:
         '200':
-          description: Successful operation.
+          description: Inventory and movement totals for the requested date range.
           content:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    $ref: '#/components/schemas/InventoryReport'
+
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -2069,6 +2049,432 @@ components:
               - type: object
                 properties:
                   seller_order_id: { type: string }
+
+    AdminOrderDetail:
+      type: object
+      required: [id, orderNumber, status, total_bdt, subtotal_bdt, shipping_bdt, discount_bdt, coupon_code, created_at, customer, delivery, payment, admin_note, items, sellers, history, payments]
+      properties:
+        id: { type: string }
+        orderNumber: { type: string }
+        status: { type: string }
+        total_bdt: { type: number, minimum: 0 }
+        subtotal_bdt: { type: number, minimum: 0 }
+        shipping_bdt: { type: number, minimum: 0 }
+        discount_bdt: { type: number, minimum: 0 }
+        coupon_code: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        customer:
+          type: object
+          required: [id, name, phone, email]
+          properties:
+            id: { type: string, nullable: true }
+            name: { type: string, nullable: true }
+            phone: { type: string, nullable: true }
+            email: { type: string, nullable: true }
+        delivery:
+          type: object
+          required: [name, phone, address, area, note]
+          properties:
+            name: { type: string, nullable: true }
+            phone: { type: string, nullable: true }
+            address: { type: string, nullable: true }
+            area: { type: string, nullable: true }
+            note: { type: string, nullable: true }
+        payment:
+          type: object
+          required: [method, status]
+          properties:
+            method: { type: string }
+            status: { type: string }
+        admin_note: { type: string, nullable: true }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AdminOrderItem' }
+        sellers:
+          type: array
+          items: { $ref: '#/components/schemas/AdminOrderSeller' }
+        history:
+          type: array
+          items: { $ref: '#/components/schemas/AdminOrderEvent' }
+        payments:
+          type: array
+          items: { $ref: '#/components/schemas/AdminOrderPayment' }
+    AdminOrderItem:
+      type: object
+      required: [id, product_id, product_name_bn, quantity, unit_price_paisa, seller_id, seller_order_id, variant, unit_price_bdt]
+      properties:
+        id: { type: string }
+        product_id: { type: string }
+        product_name_bn: { type: string }
+        quantity: { type: integer, minimum: 1 }
+        unit_price_paisa: { type: integer, minimum: 0 }
+        unit_price_bdt: { type: number, minimum: 0 }
+        seller_id: { type: string }
+        seller_order_id: { type: string }
+        variant: { type: string, nullable: true }
+    AdminOrderSeller:
+      type: object
+      required: [id, seller_id, status, subtotal_paisa, commission_paisa, net_paisa, shop_name, seller_status, subtotal_bdt, commission_bdt, net_bdt]
+      properties:
+        id: { type: string }
+        seller_id: { type: string }
+        status: { type: string }
+        subtotal_paisa: { type: integer, minimum: 0 }
+        commission_paisa: { type: integer, minimum: 0 }
+        net_paisa: { type: integer, minimum: 0 }
+        subtotal_bdt: { type: number, minimum: 0 }
+        commission_bdt: { type: number, minimum: 0 }
+        net_bdt: { type: number, minimum: 0 }
+        shop_name: { type: string, nullable: true }
+        seller_status: { type: string, nullable: true }
+    AdminOrderEvent:
+      type: object
+      required: [status, note, created_at, seller_order_id, actor_id]
+      properties:
+        status: { type: string }
+        note: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        seller_order_id: { type: string, nullable: true }
+        actor_id: { type: string, nullable: true }
+    AdminOrderPayment:
+      type: object
+      required: [id, method, amount_paisa, amount_bdt, status, gateway_txn_id, created_at]
+      properties:
+        id: { type: string }
+        method: { type: string }
+        amount_paisa: { type: integer, minimum: 0 }
+        amount_bdt: { type: number, minimum: 0 }
+        status: { type: string }
+        gateway_txn_id: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+    AdminDashboardMetrics:
+      type: object
+      required: [total_revenue_bdt, total_orders, total_customers, total_sellers, pending_seller_applications, pending_product_approvals, total_products, active_products, cancelled_orders, pending_payouts, pending_payout_amount_bdt, platform_commission_bdt]
+      properties:
+        total_revenue_bdt: { type: number, minimum: 0 }
+        total_orders: { type: integer, minimum: 0 }
+        total_customers: { type: integer, minimum: 0 }
+        total_sellers: { type: integer, minimum: 0 }
+        pending_seller_applications: { type: integer, minimum: 0 }
+        pending_product_approvals: { type: integer, minimum: 0 }
+        total_products: { type: integer, minimum: 0 }
+        active_products: { type: integer, minimum: 0 }
+        cancelled_orders: { type: integer, minimum: 0 }
+        pending_payouts: { type: integer, minimum: 0 }
+        pending_payout_amount_bdt: { type: number, minimum: 0 }
+        platform_commission_bdt: { type: number, minimum: 0 }
+    SellerInventoryItem:
+      type: object
+      required: [id, name_bn, name_en, sku, stock, price_paisa, price_bdt, active, status, updated_at, low_stock]
+      properties:
+        id: { type: string }
+        name_bn: { type: string }
+        name_en: { type: string }
+        sku: { type: string, nullable: true }
+        stock: { type: integer, minimum: 0, maximum: 1000000 }
+        price_paisa: { type: integer, minimum: 0 }
+        price_bdt: { type: number, minimum: 0 }
+        active: { type: boolean }
+        status: { type: string }
+        updated_at: { type: string, format: date-time }
+        low_stock: { type: boolean }
+    InventoryMovement:
+      type: object
+      required: [id, quantity_delta, stock_before, stock_after, reason, created_at]
+      properties:
+        id: { type: string }
+        quantity_delta: { type: integer }
+        stock_before: { type: integer, minimum: 0 }
+        stock_after: { type: integer, minimum: 0 }
+        reason: { type: string }
+        created_at: { type: string, format: date-time }
+    InventoryAdjustmentInput:
+      type: object
+      additionalProperties: false
+      required: [delta, reason, idempotency_key]
+      properties:
+        delta:
+          oneOf:
+            - type: integer
+              minimum: -20
+              maximum: -1
+            - type: integer
+              minimum: 1
+              maximum: 20
+        reason: { type: string, minLength: 1, maxLength: 300 }
+        idempotency_key: { type: string, pattern: '^[A-Za-z0-9._:-]{8,100}      type: object
+      required: [id, name_bn, name_en, price_paisa, price_bdt, discount_paisa, discount_price_bdt, stock, status, sku, category_slug, description, active, image, updated_at]
+      properties:
+        id: { type: string }
+        name_bn: { type: string }
+        name_en: { type: string }
+        price_paisa: { type: integer, minimum: 1, description: Stored price in integer paisa. }
+        price_bdt: { type: number, exclusiveMinimum: 0 }
+        discount_paisa: { type: integer, nullable: true, minimum: 1 }
+        discount_price_bdt: { type: number, nullable: true, exclusiveMinimum: 0 }
+        stock: { type: integer, minimum: 0, maximum: 1000000 }
+        status: { type: string, enum: [PENDING_REVIEW, ACTIVE, REJECTED, SUSPENDED, ARCHIVED] }
+        sku: { type: string, nullable: true }
+        category_slug: { type: string, nullable: true }
+        description: { type: string }
+        active: { type: boolean }
+        image: { type: string, nullable: true }
+        updated_at: { type: string, format: date-time }
+    SellerProductDetail:
+      allOf:
+        - $ref: '#/components/schemas/SellerProductListItem'
+        - type: object
+          required: [variants, images]
+          properties:
+            variants:
+              type: array
+              maxItems: 30
+              items:
+                type: object
+                required: [label, sku]
+                properties:
+                  label: { type: string, maxLength: 60 }
+                  sku: { type: string, nullable: true, maxLength: 40 }
+            images:
+              type: array
+              maxItems: 6
+              items: { type: string, format: uri, pattern: '^https://' }
+    SellerProductMutationResult:
+      type: object
+      required: [id, status, message]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [PENDING_REVIEW] }
+        message: { type: string }
+    SellerProductArchiveResult:
+      type: object
+      required: [id, archived]
+      properties:
+        id: { type: string }
+        archived: { type: boolean, enum: [true] }
+    SellerProductInput:
+      type: object
+      additionalProperties: false
+      required: [name_bn, name_en, price_bdt, stock, category_slug]
+      properties:
+        name_bn: { type: string, minLength: 1, maxLength: 160 }
+        name_en: { type: string, minLength: 1, maxLength: 160 }
+        price_bdt: { type: number, exclusiveMinimum: 0, maximum: 100000000 }
+        discount_price_bdt: { type: number, nullable: true, exclusiveMinimum: 0 }
+        stock: { type: integer, minimum: 0, maximum: 1000000 }
+        category_slug: { type: string, minLength: 1 }
+        brand_slug: { type: string, nullable: true }
+        description: { type: string, maxLength: 5000 }
+        sku: { type: string, maxLength: 40, nullable: true }
+        images:
+          type: array
+          maxItems: 6
+          items: { type: string, format: uri, pattern: '^https://' }
+        variants:
+          type: array
+          maxItems: 30
+          items:
+            type: object
+            required: [label]
+            properties:
+              label: { type: string, maxLength: 60 }
+              sku: { type: string, maxLength: 40 }
+    SellerProductPatch:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        name_bn: { type: string, minLength: 1, maxLength: 160 }
+        name_en: { type: string, minLength: 1, maxLength: 160 }
+        price_bdt: { type: number, exclusiveMinimum: 0, maximum: 100000000 }
+        discount_price_bdt: { type: number, nullable: true, exclusiveMinimum: 0 }
+        stock: { type: integer, minimum: 0, maximum: 1000000 }
+        category_slug: { type: string, minLength: 1 }
+        brand_slug: { type: string, nullable: true }
+        description: { type: string, maxLength: 5000 }
+        sku: { type: string, maxLength: 40, nullable: true }
+        images:
+          type: array
+          maxItems: 6
+          items: { type: string, format: uri, pattern: '^https://' }
+        variants:
+          type: array
+          maxItems: 30
+          items: { type: object, additionalProperties: true }
+    SellerSettlement:
+      type: object
+      required: [kind, amount_paisa, amount_bdt, created_at, seller_order_id]
+      properties:
+        kind: { type: string }
+        amount_paisa: { type: integer, minimum: 0 }
+        amount_bdt: { type: number, minimum: 0 }
+        created_at: { type: string, format: date-time }
+        seller_order_id: { type: string, nullable: true }
+    SellerPayoutHistoryItem:
+      type: object
+      required: [id, amount_paisa, amount_bdt, method, account, status, note, created_at, decided_at]
+      properties:
+        id: { type: string }
+        amount_paisa: { type: integer, minimum: 1 }
+        amount_bdt: { type: number, exclusiveMinimum: 0 }
+        method: { type: string, enum: [BKASH, NAGAD, ROCKET, BANK] }
+        account: { type: string }
+        status: { type: string, enum: [REQUESTED, APPROVED, REJECTED] }
+        note: { type: string }
+        created_at: { type: string, format: date-time }
+        decided_at: { type: string, format: date-time, nullable: true }
+    SellerFinanceSummary:
+      type: object
+      required: [total_sales_bdt, commission_bdt, net_earnings_bdt, pending_balance_bdt, available_balance_bdt, paid_out_bdt, settlements, payouts]
+      properties:
+        total_sales_bdt: { type: number, minimum: 0 }
+        commission_bdt: { type: number, minimum: 0 }
+        net_earnings_bdt: { type: number, minimum: 0 }
+        pending_balance_bdt: { type: number, minimum: 0 }
+        available_balance_bdt: { type: number, minimum: 0 }
+        paid_out_bdt: { type: number, minimum: 0 }
+        settlements:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/SellerSettlement' }
+        payouts:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/SellerPayoutHistoryItem' }
+    SellerPayoutCreated:
+      type: object
+      required: [id, amount_bdt, status]
+      properties:
+        id: { type: string }
+        amount_bdt: { type: number, exclusiveMinimum: 0 }
+        status: { type: string, enum: [REQUESTED] }
+    AdminPayoutListItem:
+      type: object
+      required: [id, seller_id, amount_paisa, amount_bdt, method, account, status, note, created_at, decided_at, shop_name, seller_name, seller_phone]
+      properties:
+        id: { type: string }
+        seller_id: { type: string }
+        amount_paisa: { type: integer, minimum: 1 }
+        amount_bdt: { type: number, exclusiveMinimum: 0 }
+        method: { type: string, enum: [BKASH, NAGAD, ROCKET, BANK] }
+        account: { type: string }
+        status: { type: string, enum: [REQUESTED, APPROVED, REJECTED] }
+        note: { type: string }
+        created_at: { type: string, format: date-time }
+        decided_at: { type: string, format: date-time, nullable: true }
+        shop_name: { type: string }
+        seller_name: { type: string }
+        seller_phone: { type: string }
+    PayoutDecisionInput:
+      type: object
+      additionalProperties: false
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [APPROVE, REJECT] }
+        note: { type: string, maxLength: 300 }
+    AdminPayoutDecisionResult:
+      type: object
+      required: [id, status, decided_at]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [APPROVED, REJECTED] }
+        decided_at: { type: string, format: date-time }
+    SellerPayoutRequest:
+      type: object
+      additionalProperties: false
+      required: [amount_bdt, method, account]
+      properties:
+        amount_bdt: { type: number, exclusiveMinimum: 0, maximum: 100000000 }
+        method: { type: string, enum: [BKASH, NAGAD, ROCKET, BANK] }
+        account: { type: string, minLength: 1, maxLength: 100 }
+    AdminOrderNoteInput:
+      type: object
+      additionalProperties: false
+      required: [note]
+      properties:
+        note: { type: string, maxLength: 1000 }
+    AdminShippingInput:
+      type: object
+      additionalProperties: false
+      required: [shipping_bdt]
+      properties:
+        shipping_bdt: { type: number, minimum: 0, maximum: 100000 }
+ }
+    InventoryAdjustmentRequest:
+      type: object
+      required: [id, product_id, seller_id, quantity_delta, reason, status, created_at]
+      properties:
+        id: { type: string }
+        product_id: { type: string }
+        seller_id: { type: string }
+        quantity_delta: { type: integer, minimum: -20, maximum: 20 }
+        reason: { type: string }
+        status: { type: string, enum: [PENDING, APPROVED, REJECTED] }
+        created_at: { type: string, format: date-time }
+        product_name: { type: string }
+        shop_name: { type: string }
+        seller_name: { type: string }
+        seller_phone: { type: string }
+        duplicate: { type: boolean }
+    InventoryAdjustmentDecisionInput:
+      type: object
+      additionalProperties: false
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [APPROVE, REJECT] }
+        note: { type: string, maxLength: 300 }
+    InventoryAdjustmentDecision:
+      type: object
+      required: [id, status, stock]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [APPROVED, REJECTED] }
+        stock:
+          type: object
+          nullable: true
+          required: [before, after]
+          properties:
+            before: { type: integer, minimum: 0 }
+            after: { type: integer, minimum: 0 }
+    InventoryAlert:
+      type: object
+      required: [id, name_bn, name_en, stock, price_paisa, price_bdt, seller_id, shop_name, low_stock]
+      properties:
+        id: { type: string }
+        name_bn: { type: string }
+        name_en: { type: string }
+        stock: { type: integer, minimum: 0 }
+        price_paisa: { type: integer, minimum: 0 }
+        price_bdt: { type: number, minimum: 0 }
+        seller_id: { type: string }
+        shop_name: { type: string, nullable: true }
+        low_stock: { type: boolean, enum: [true] }
+    InventoryReport:
+      type: object
+      required: [product_count, units_in_stock, stock_value_paisa, low_stock_products, stock_value_bdt, movement_count, units_added, units_removed, from, to]
+      properties:
+        product_count: { type: integer, minimum: 0 }
+        units_in_stock: { type: integer, minimum: 0 }
+        stock_value_paisa: { type: integer, minimum: 0 }
+        low_stock_products: { type: integer, minimum: 0 }
+        stock_value_bdt: { type: number, minimum: 0 }
+        movement_count: { type: integer, minimum: 0 }
+        units_added: { type: integer, minimum: 0 }
+        units_removed: { type: integer, minimum: 0 }
+        from: { type: string, format: date, nullable: true }
+        to: { type: string, format: date, nullable: true }
+    SellerInventoryList:
+      type: array
+      items: { $ref: '#/components/schemas/SellerInventoryItem' }
+    InventoryMovementList:
+      type: array
+      items: { $ref: '#/components/schemas/InventoryMovement' }
+    AdminInventoryAdjustmentList:
+      type: array
+      items: { $ref: '#/components/schemas/InventoryAdjustmentRequest' }
+    InventoryAlertList:
+      type: array
+      items: { $ref: '#/components/schemas/InventoryAlert' }
 
     SellerProductListItem:
       type: object
