@@ -210,6 +210,23 @@ test('real PostgreSQL coupon preview, checkout redemption, rollback and lock con
       assert.equal(result.reason.status, 400);
       assert.deepEqual(await snapshot(buyer, code), before);
     });
+    await t.test('per-customer redemption limit is enforced in preview and serialized checkout but does not block another customer', async () => {
+      const limited = await makeCoupon();
+      await pool.query('UPDATE coupons SET max_uses_per_customer=1 WHERE code=$1', [limited]);
+      await cart.setItemQuantity(buyer.id, products[1], 1);
+      const first = await place(checkout, buyer, limited);
+      assert.equal(first.discount_bdt, 5);
+      await cart.setItemQuantity(buyer.id, products[1], 1);
+      assert.equal((await preview({ code: limited })).status, 400);
+      await assert.rejects(place(checkout, buyer, limited), error => error.status === 400);
+      assert.equal(await used(limited), 1);
+      await cart.setItemQuantity(other.id, products[1], 1);
+      const otherPreview = await preview({ code: limited }, other.token);
+      assert.equal(otherPreview.status, 200);
+      const second = await place(checkout, other, limited);
+      assert.equal(second.discount_bdt, 5);
+      assert.equal(await used(limited), 2);
+    });
   } finally {
     try {
       if (server?.listening) await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
