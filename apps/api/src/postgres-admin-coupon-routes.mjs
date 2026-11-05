@@ -51,6 +51,7 @@ const view = row => {
   return {
     code: row.code, type: row.type, value, min_order_paisa: minimum,
     max_uses: row.max_uses === null ? null : parseSafePostgresBigInt(row.max_uses),
+    max_uses_per_customer: row.max_uses_per_customer == null ? null : parseSafePostgresBigInt(row.max_uses_per_customer),
     used_count: parseSafePostgresBigInt(row.used_count), expires_at: row.expires_at,
     active: parseSafePostgresBigInt(row.active),
     value_bdt: row.type === 'FIXED' ? value / 100 : null, min_order_bdt: minimum / 100
@@ -76,20 +77,21 @@ export function registerPostgresAdminCouponRoutes(route, ok, { database, id: mak
     const limit = params.has('limit') ? integer(params.get('limit'), 1, 300, 'limit') : 100;
     const offset = params.has('offset') ? integer(params.get('offset'), 0, 10000, 'offset') : 0;
     const active = params.has('active') ? integer(params.get('active'), 0, 1, 'active filter') : null;
-    const rows = await q(`SELECT code,type,value,min_order_paisa,max_uses,used_count,expires_at,active
+    const rows = await q(`SELECT code,type,value,min_order_paisa,max_uses,max_uses_per_customer,used_count,expires_at,active
       FROM coupons${active === null ? '' : ' WHERE active=?'} ORDER BY code LIMIT ? OFFSET ?`)
       .all(...(active === null ? [limit, offset] : [active, limit, offset]));
     return ok(rows.map(view));
   });
 
   route('POST', '/api/v1/admin/coupons', ['ADMIN'], async ({ user, body }) => {
-    allowedFields(body, ['code', 'type', 'value', 'min_order_bdt', 'max_uses', 'expires_at', 'active']);
+    allowedFields(body, ['code', 'type', 'value', 'min_order_bdt', 'max_uses', 'max_uses_per_customer', 'expires_at', 'active']);
     const code = requiredCode(body.code);
     if (!['FIXED', 'PERCENT'].includes(body.type)) throw bad('type must be FIXED or PERCENT');
     const type = body.type;
     const value = type === 'FIXED' ? paisa(body.value, true, 'discount BDT') : integer(body.value, 1, 90, 'percentage');
     const minimum = paisa(body.min_order_bdt === undefined || body.min_order_bdt === '' ? 0 : body.min_order_bdt, false, 'minimum order BDT');
     const maxUses = body.max_uses === undefined || body.max_uses === null || body.max_uses === '' ? null : integer(body.max_uses, 1, Number.MAX_SAFE_INTEGER, 'maximum uses');
+    const maxUsesPerCustomer = body.max_uses_per_customer === undefined || body.max_uses_per_customer === null || body.max_uses_per_customer === '' ? null : integer(body.max_uses_per_customer, 1, Number.MAX_SAFE_INTEGER, 'maximum uses per customer');
     const expires = body.expires_at === undefined || body.expires_at === null || body.expires_at === '' ? null : expiryTime(body.expires_at);
     const active = body.active === undefined ? true : boolean(body.active);
     return database.tx(async () => {
@@ -97,9 +99,9 @@ export function registerPostgresAdminCouponRoutes(route, ok, { database, id: mak
       const timestamp = getNow();
       if (expires !== null && expires <= clock(timestamp)) throw bad('Coupon expiry must be in the future');
       const expiry = expires === null ? null : new Date(expires).toISOString();
-      await q('INSERT INTO coupons(code,type,value,min_order_paisa,max_uses,used_count,expires_at,active) VALUES(?,?,?,?,?,0,?,?)')
-        .run(code, type, value, minimum, maxUses, expiry, active ? 1 : 0);
-      await audit(user.id, 'COUPON_CREATE', code, { type, value, min_order_paisa: minimum, max_uses: maxUses, expires_at: expiry, active }, timestamp);
+      await q('INSERT INTO coupons(code,type,value,min_order_paisa,max_uses,max_uses_per_customer,used_count,expires_at,active) VALUES(?,?,?,?,?,?,0,?,?)')
+        .run(code, type, value, minimum, maxUses, maxUsesPerCustomer, expiry, active ? 1 : 0);
+      await audit(user.id, 'COUPON_CREATE', code, { type, value, min_order_paisa: minimum, max_uses: maxUses, max_uses_per_customer: maxUsesPerCustomer, expires_at: expiry, active }, timestamp);
       return ok({ code }, 201);
     });
   });
@@ -111,7 +113,7 @@ export function registerPostgresAdminCouponRoutes(route, ok, { database, id: mak
       await lockAdmin(user);
       // Same row lock as checkout redemption: disabling cannot race past a
       // pending use and toggling never overwrites/reset usage or monetary terms.
-      const coupon = await q('SELECT code,type,value,min_order_paisa,max_uses,used_count,expires_at,active FROM coupons WHERE code=? FOR UPDATE').get(code);
+      const coupon = await q('SELECT code,type,value,min_order_paisa,max_uses,max_uses_per_customer,used_count,expires_at,active FROM coupons WHERE code=? FOR UPDATE').get(code);
       if (!coupon) throw new HttpError(404, 'Coupon not found');
       const timestamp = getNow();
       if (active) canActivate(coupon, clock(timestamp));
