@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import { createPostgresApiServer } from '../apps/api/src/postgres-server.mjs';
 
 async function requestHeaders(env) {
-  const database = { q() { return { async get() { return { ok: 1 }; } }; } };
+  const database = {
+    q() { return { async get() { return { ok: 1 }; }, async all() { return []; }, async run() { return { changes: 0 }; } }; },
+    async tx(callback) { return callback(); }
+  };
   const server = createPostgresApiServer({
     database,
     catalogRepository: {},
