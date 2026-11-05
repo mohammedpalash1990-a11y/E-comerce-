@@ -58,7 +58,13 @@ test('seller/admin domain operations have authenticated OpenAPI contracts and ma
     if (['POST','PUT','PATCH'].includes(method)) assert.match(op, /requestBody:/);
     const source = path.includes('/inventory') ? inventory : modules;
     const normalized = path.replaceAll('{id}', ':id');
-    assert.ok(source.includes(normalized) || source.includes(normalized.replace(':id','')) ||
+    const dynamicInventoryPatterns = {
+      '/api/v1/seller/inventory/{id}/movements': 'const productMovement = path.match(/^\\/api\\/v1\\/seller\\/inventory\\/([^/]+)\\/movements$/);',
+      '/api/v1/seller/inventory/{id}/adjust-requests': 'const adjustmentRequest = path.match(/^\\/api\\/v1\\/seller\\/inventory\\/([^/]+)\\/adjust-requests$/);',
+      '/api/v1/admin/inventory/adjustments/{id}/decision': 'const requestDecision = path.match(/^\\/api\\/v1\\/admin\\/inventory\\/adjustments\\/([^/]+)\\/decision$/);'
+    };
+    const dynamicInventoryMatch = dynamicInventoryPatterns[path] && inventory.includes(dynamicInventoryPatterns[path]);
+    assert.ok(source.includes(normalized) || source.includes(normalized.replace(':id','')) || dynamicInventoryMatch ||
       (path.includes('/admin/products/{id}/') && source.includes("'/api/v1/admin/products/:id/' + action")),
       'Missing handler path reference: ' + method + ' ' + path);
   }
