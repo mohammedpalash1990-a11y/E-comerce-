@@ -104,8 +104,8 @@ test('seller product operations expose precise response schemas and creation sta
   assert.ok(update.includes('SellerProductMutationResult'));
   assert.ok(archive.includes('SellerProductArchiveResult'));
 
-  const schemaStart = spec.indexOf('    SellerProductListItem:\\n');
-  const schemaEnd = spec.indexOf('    SellerProductInput:\\n', schemaStart);
+  const schemaStart = spec.indexOf('    SellerProductListItem:');
+  const schemaEnd = spec.indexOf('    SellerProductInput:', schemaStart);
   assert.ok(schemaStart >= 0 && schemaEnd > schemaStart, 'Seller product response schemas must be defined');
   const schemas = spec.slice(schemaStart, schemaEnd);
   for (const field of ['price_paisa', 'price_bdt', 'discount_paisa', 'discount_price_bdt', 'stock', 'status', 'sku', 'category_slug', 'description', 'active', 'image', 'updated_at']) {
@@ -113,8 +113,8 @@ test('seller product operations expose precise response schemas and creation sta
   }
   assert.ok(schemas.includes('variants:'));
   assert.ok(schemas.includes('images:'));
-  assert.ok(schemas.includes('SellerProductMutationResult:\\n'));
+  assert.ok(schemas.includes('SellerProductMutationResult:'));
   assert.ok(schemas.includes('required: [id, status, message]'));
-  assert.ok(schemas.includes('SellerProductArchiveResult:\\n'));
+  assert.ok(schemas.includes('SellerProductArchiveResult:'));
   assert.ok(schemas.includes('required: [id, archived]'));
 });
