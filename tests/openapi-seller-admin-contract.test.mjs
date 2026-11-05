@@ -70,3 +70,14 @@ test('admin payout query contract matches handler limits and status values', () 
   assert.match(op, /REQUESTED, APPROVED, REJECTED/);
   assert.match(op, /maximum: 300/);
 });
+
+test('seller product, payout and admin order write operations reference bounded request schemas', () => {
+  assert.match(operation('/api/v1/seller/products','POST'), /SellerProductInput/);
+  assert.match(operation('/api/v1/seller/products/{id}','PUT'), /SellerProductPatch/);
+  assert.match(operation('/api/v1/seller/payouts','POST'), /SellerPayoutRequest/);
+  assert.match(operation('/api/v1/admin/orders/{id}/note','POST'), /AdminOrderNoteInput/);
+  assert.match(operation('/api/v1/admin/orders/{id}/shipping','POST'), /AdminShippingInput/);
+  assert.match(spec, /maxItems: 6/);
+  assert.match(spec, /maximum: 1000000/);
+  assert.match(spec, /enum: \[BKASH, NAGAD, ROCKET, BANK\]/);
+});
