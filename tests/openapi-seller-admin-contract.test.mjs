@@ -87,3 +87,31 @@ test('seller product, payout and admin order write operations reference bounded 
   assert.match(spec, /maximum: 1000000/);
   assert.match(spec, /enum: \[BKASH, NAGAD, ROCKET, BANK\]/);
 });
+
+
+test('seller product operations expose precise response schemas and creation status', () => {
+  const list = operation('/api/v1/seller/products', 'GET');
+  const create = operation('/api/v1/seller/products', 'POST');
+  const detail = operation('/api/v1/seller/products/{id}', 'GET');
+  const update = operation('/api/v1/seller/products/{id}', 'PUT');
+  const archive = operation('/api/v1/seller/products/{id}', 'DELETE');
+
+  assert.match(list, /items:\\s*\\n\\s+\\$ref: '#\\/components\\/schemas\\/SellerProductListItem'/);
+  assert.match(create, /'201':/);
+  assert.match(create, /SellerProductMutationResult/);
+  assert.doesNotMatch(create, /'200':/);
+  assert.match(detail, /SellerProductDetail/);
+  assert.match(update, /SellerProductMutationResult/);
+  assert.match(archive, /SellerProductArchiveResult/);
+
+  const start = spec.indexOf('    SellerProductListItem:\\n');
+  const end = spec.indexOf('    SellerProductInput:\\n', start);
+  assert.ok(start >= 0 && end > start, 'Seller product response schemas must be defined');
+  const schemas = spec.slice(start, end);
+  for (const field of ['price_paisa', 'price_bdt', 'discount_paisa', 'discount_price_bdt', 'stock', 'status', 'sku', 'category_slug', 'description', 'active', 'image', 'updated_at']) {
+    assert.ok(schemas.includes(field + ':'), 'Missing seller product response field ' + field);
+  }
+  assert.match(schemas, /variants:[\\s\\S]*images:/);
+  assert.match(schemas, /SellerProductMutationResult:[\\s\\S]*required: \\[id, status, message\\]/);
+  assert.match(schemas, /SellerProductArchiveResult:[\\s\\S]*required: \\[id, archived\\]/);
+});
