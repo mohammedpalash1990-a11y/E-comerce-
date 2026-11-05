@@ -94,3 +94,15 @@
 - `tests/postgres-auth-boundaries.test.mjs`-এ valid OTP একবার consume, replay rejection, পাঁচটি failed attempt-এর ceiling এবং expired code-এর attempt counter অপরিবর্তিত থাকার regression coverage যোগ হয়েছে।
 - Test harness বর্তমান repository contract অনুযায়ী OTP issuance-এর user-row lock এবং transaction statements-ও handle করে; এটি deterministic adapter test, live PostgreSQL concurrency proof নয়।
 - Production startup fail-closed থাকবে; এই test coverage একা PostgreSQL production readiness প্রমাণ করে না।
+
+## সর্বশেষ যাচাইকৃত অবস্থা — ২০২৬-১১-০৬
+
+এই অংশটি উপরের পুরোনো PostgreSQL status নোটগুলোকে supersede করে।
+
+- Neon project `haat-bangladesh`, database `haat`, Singapore region-এর main branch বর্তমানে reachable এবং ready।
+- Read-only যাচাইয়ে PostgreSQL database-এ ২৭টি table এবং `schema_migrations`-এ ৬টি applied migration পাওয়া গেছে: `001_init.sql`, `002_indexes.sql`, `003_seed_categories.sql`, `005_auth_integrity_indexes.sql`, `006_inventory_movements.sql`, `007_inventory_approval_queue.sql`।
+- ৮টি category seed করা আছে। যাচাইয়ের সময় `products` ও `users` table-এ কোনো row ছিল না; তাই database-কে populated marketplace বা live customer database বলা যাবে না।
+- আলাদা `apps/api/src/postgres-server.mjs` entrypoint PostgreSQL pool, migration runner, auth, catalog, customer, cart, coupon, seller/admin ও commerce route modules compose করে। `DATABASE_URL` এই explicit entrypoint-এ ব্যবহৃত হয়; default SQLite runtime আলাদা রাখা হয়েছে।
+- PostgreSQL API-র production startup gate এখনো ইচ্ছাকৃতভাবে বন্ধ। কোডে স্পষ্টভাবে বলা আছে যে seller/admin, commerce, payment ও delivery route integration/verification সম্পূর্ণ না হওয়া পর্যন্ত production startup হবে না। এই guard bypass করা যাবে না।
+- বর্তমান public link GitHub Pages-এর static preview; Render-এ Marketplace API service এখনো provision/deploy করা হয়নি। তাই public storefront preview-কে live order-taking marketplace হিসেবে ব্যবহার করা যাবে না।
+- পরবর্তী P0: remaining PostgreSQL route parity ও real PostgreSQL HTTP checkout/order/inventory tests; এরপর customer/seller/admin browser flow integration, তারপর private staging deploy ও security review। Real payment/courier integration, production secrets, monitoring, backup/restore এবং launch acceptance এখনো বাকি।
