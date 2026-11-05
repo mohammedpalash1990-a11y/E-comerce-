@@ -825,18 +825,17 @@ paths:
       security: [{ bearerAuth: [] }]
       responses:
         '200':
-          description: Successful operation.
+          description: Seller's own products; archived products are excluded.
           content:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SellerProductListItem'
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -854,19 +853,16 @@ paths:
             schema:
               $ref: '#/components/schemas/SellerProductInput'
       responses:
-        '200':
-          description: Successful operation.
+        '201':
+          description: Product submitted for administrator review.
           content:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    $ref: '#/components/schemas/SellerProductMutationResult'
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -885,18 +881,15 @@ paths:
           schema: { type: string, minLength: 1 }
       responses:
         '200':
-          description: Successful operation.
+          description: Seller-owned product detail, including variants and ordered image URLs.
           content:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    $ref: '#/components/schemas/SellerProductDetail'
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -920,18 +913,15 @@ paths:
               $ref: '#/components/schemas/SellerProductPatch'
       responses:
         '200':
-          description: Successful operation.
+          description: Updated product resubmitted for administrator review.
           content:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    $ref: '#/components/schemas/SellerProductMutationResult'
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -949,18 +939,15 @@ paths:
           schema: { type: string, minLength: 1 }
       responses:
         '200':
-          description: Successful operation.
+          description: Product archived; cart references are removed.
           content:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    $ref: '#/components/schemas/SellerProductArchiveResult'
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -2094,6 +2081,57 @@ components:
                 properties:
                   seller_order_id: { type: string }
 
+    SellerProductListItem:
+      type: object
+      required: [id, name_bn, name_en, price_paisa, price_bdt, discount_paisa, discount_price_bdt, stock, status, sku, category_slug, description, active, image, updated_at]
+      properties:
+        id: { type: string }
+        name_bn: { type: string }
+        name_en: { type: string }
+        price_paisa: { type: integer, minimum: 1, description: Stored price in integer paisa. }
+        price_bdt: { type: number, exclusiveMinimum: 0 }
+        discount_paisa: { type: integer, nullable: true, minimum: 1 }
+        discount_price_bdt: { type: number, nullable: true, exclusiveMinimum: 0 }
+        stock: { type: integer, minimum: 0, maximum: 1000000 }
+        status: { type: string, enum: [PENDING_REVIEW, ACTIVE, REJECTED, ARCHIVED] }
+        sku: { type: string, nullable: true }
+        category_slug: { type: string, nullable: true }
+        description: { type: string }
+        active: { type: boolean }
+        image: { type: string, nullable: true }
+        updated_at: { type: string, format: date-time }
+    SellerProductDetail:
+      allOf:
+        - $ref: '#/components/schemas/SellerProductListItem'
+        - type: object
+          required: [variants, images]
+          properties:
+            variants:
+              type: array
+              maxItems: 30
+              items:
+                type: object
+                required: [label, sku]
+                properties:
+                  label: { type: string, maxLength: 60 }
+                  sku: { type: string, nullable: true, maxLength: 40 }
+            images:
+              type: array
+              maxItems: 6
+              items: { type: string, format: uri, pattern: '^https://' }
+    SellerProductMutationResult:
+      type: object
+      required: [id, status, message]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [PENDING_REVIEW] }
+        message: { type: string }
+    SellerProductArchiveResult:
+      type: object
+      required: [id, archived]
+      properties:
+        id: { type: string }
+        archived: { type: boolean, enum: [true] }
     SellerProductInput:
       type: object
       additionalProperties: false
