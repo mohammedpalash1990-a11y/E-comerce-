@@ -852,8 +852,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties: true
+              $ref: '#/components/schemas/SellerProductInput'
       responses:
         '200':
           description: Successful operation.
@@ -918,8 +917,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties: true
+              $ref: '#/components/schemas/SellerProductPatch'
       responses:
         '200':
           description: Successful operation.
@@ -1004,8 +1002,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties: true
+              $ref: '#/components/schemas/SellerPayoutRequest'
       responses:
         '201':
           description: Successful operation.
@@ -1546,8 +1543,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties: true
+              $ref: '#/components/schemas/AdminOrderNoteInput'
       responses:
         '200':
           description: Successful operation.
@@ -1583,8 +1579,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties: true
+              $ref: '#/components/schemas/AdminShippingInput'
       responses:
         '200':
           description: Successful operation.
@@ -2098,3 +2093,73 @@ components:
               - type: object
                 properties:
                   seller_order_id: { type: string }
+
+    SellerProductInput:
+      type: object
+      additionalProperties: false
+      required: [name_bn, name_en, price_bdt, stock, category_slug]
+      properties:
+        name_bn: { type: string, minLength: 1, maxLength: 160 }
+        name_en: { type: string, minLength: 1, maxLength: 160 }
+        price_bdt: { type: number, exclusiveMinimum: 0, maximum: 100000000 }
+        discount_price_bdt: { type: number, nullable: true, exclusiveMinimum: 0 }
+        stock: { type: integer, minimum: 0, maximum: 1000000 }
+        category_slug: { type: string, minLength: 1 }
+        brand_slug: { type: string, nullable: true }
+        description: { type: string, maxLength: 5000 }
+        sku: { type: string, maxLength: 40, nullable: true }
+        images:
+          type: array
+          maxItems: 6
+          items: { type: string, format: uri, pattern: '^https://' }
+        variants:
+          type: array
+          maxItems: 30
+          items:
+            type: object
+            required: [label]
+            properties:
+              label: { type: string, maxLength: 60 }
+              sku: { type: string, maxLength: 40 }
+    SellerProductPatch:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        name_bn: { type: string, minLength: 1, maxLength: 160 }
+        name_en: { type: string, minLength: 1, maxLength: 160 }
+        price_bdt: { type: number, exclusiveMinimum: 0, maximum: 100000000 }
+        discount_price_bdt: { type: number, nullable: true, exclusiveMinimum: 0 }
+        stock: { type: integer, minimum: 0, maximum: 1000000 }
+        category_slug: { type: string, minLength: 1 }
+        brand_slug: { type: string, nullable: true }
+        description: { type: string, maxLength: 5000 }
+        sku: { type: string, maxLength: 40, nullable: true }
+        images:
+          type: array
+          maxItems: 6
+          items: { type: string, format: uri, pattern: '^https://' }
+        variants:
+          type: array
+          maxItems: 30
+          items: { type: object, additionalProperties: true }
+    SellerPayoutRequest:
+      type: object
+      additionalProperties: false
+      required: [amount_bdt, method, account]
+      properties:
+        amount_bdt: { type: number, exclusiveMinimum: 0, maximum: 100000000 }
+        method: { type: string, enum: [BKASH, NAGAD, ROCKET, BANK] }
+        account: { type: string, minLength: 1, maxLength: 100 }
+    AdminOrderNoteInput:
+      type: object
+      additionalProperties: false
+      required: [note]
+      properties:
+        note: { type: string, maxLength: 1000 }
+    AdminShippingInput:
+      type: object
+      additionalProperties: false
+      required: [shipping_bdt]
+      properties:
+        shipping_bdt: { type: number, minimum: 0, maximum: 100000 }
