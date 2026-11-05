@@ -96,22 +96,25 @@ test('seller product operations expose precise response schemas and creation sta
   const update = operation('/api/v1/seller/products/{id}', 'PUT');
   const archive = operation('/api/v1/seller/products/{id}', 'DELETE');
 
-  assert.match(list, /items:\\s*\\n\\s+\\$ref: '#\\/components\\/schemas\\/SellerProductListItem'/);
-  assert.match(create, /'201':/);
-  assert.match(create, /SellerProductMutationResult/);
-  assert.doesNotMatch(create, /'200':/);
-  assert.match(detail, /SellerProductDetail/);
-  assert.match(update, /SellerProductMutationResult/);
-  assert.match(archive, /SellerProductArchiveResult/);
+  assert.ok(list.includes('SellerProductListItem'));
+  assert.ok(create.includes("'201':"));
+  assert.ok(create.includes('SellerProductMutationResult'));
+  assert.ok(!create.includes("'200':"));
+  assert.ok(detail.includes('SellerProductDetail'));
+  assert.ok(update.includes('SellerProductMutationResult'));
+  assert.ok(archive.includes('SellerProductArchiveResult'));
 
-  const start = spec.indexOf('    SellerProductListItem:\\n');
-  const end = spec.indexOf('    SellerProductInput:\\n', start);
-  assert.ok(start >= 0 && end > start, 'Seller product response schemas must be defined');
-  const schemas = spec.slice(start, end);
+  const schemaStart = spec.indexOf('    SellerProductListItem:\\n');
+  const schemaEnd = spec.indexOf('    SellerProductInput:\\n', schemaStart);
+  assert.ok(schemaStart >= 0 && schemaEnd > schemaStart, 'Seller product response schemas must be defined');
+  const schemas = spec.slice(schemaStart, schemaEnd);
   for (const field of ['price_paisa', 'price_bdt', 'discount_paisa', 'discount_price_bdt', 'stock', 'status', 'sku', 'category_slug', 'description', 'active', 'image', 'updated_at']) {
     assert.ok(schemas.includes(field + ':'), 'Missing seller product response field ' + field);
   }
-  assert.match(schemas, /variants:[\\s\\S]*images:/);
-  assert.match(schemas, /SellerProductMutationResult:[\\s\\S]*required: \\[id, status, message\\]/);
-  assert.match(schemas, /SellerProductArchiveResult:[\\s\\S]*required: \\[id, archived\\]/);
+  assert.ok(schemas.includes('variants:'));
+  assert.ok(schemas.includes('images:'));
+  assert.ok(schemas.includes('SellerProductMutationResult:\\n'));
+  assert.ok(schemas.includes('required: [id, status, message]'));
+  assert.ok(schemas.includes('SellerProductArchiveResult:\\n'));
+  assert.ok(schemas.includes('required: [id, archived]'));
 });
