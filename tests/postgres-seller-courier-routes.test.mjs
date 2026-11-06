@@ -252,3 +252,15 @@ test('repeating DELIVERED safely retries a missed order lifecycle commit without
   assert.equal(h.lifecycleCalls.length, 1);
   assert.equal(h.state.events.length, 0);
 });
+
+
+test('courier cannot be booked before the seller marks the sub-order SHIPPED', async () => {
+  const h = harness({ orderStatus: 'PROCESSING' });
+  await assert.rejects(
+    h.find('POST', '/api/v1/seller/orders/:id/courier').handler({
+      user, params: ['seller-order-1'], body: { provider: 'PATHAO' }
+    }),
+    error => error.status === 409
+  );
+  assert.equal(h.state.shipment, null);
+});
