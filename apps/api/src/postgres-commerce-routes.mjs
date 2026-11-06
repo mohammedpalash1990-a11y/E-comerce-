@@ -31,7 +31,9 @@ export function registerPostgresCommerceRoutes(route, ok, options = {}) {
     shippingFor: options.shippingFor,
     couponFor: options.couponFor,
     paymentMethods: options.paymentMethods || ['COD'],
-    startPayment: options.startPayment,
+    initiatePayment: options.initiatePayment || (options.paymentRepository
+      ? input => options.paymentRepository.initiatePayment(input)
+      : options.startPayment),
     orderNo: orderNumber,
     notify: (uid, title, body) => notify(database, uid, title, body),
     addEvent: (oid, soid, status, note, actor) => writeEvent(database, oid, soid, status, note, actor),

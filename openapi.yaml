@@ -152,7 +152,7 @@ paths:
         '401': { description: Invalid credentials }
   /api/v1/checkout:
     post:
-      summary: Place COD order
+      summary: Place a COD or sandbox online-payment order
       security: [{ bearerAuth: [] }]
       responses:
         '201': { description: Order created }
@@ -1724,6 +1724,126 @@ paths:
         '403': { description: Authenticated account does not have the required role or ownership }
         '404': { description: Requested resource was not found }
         '409': { description: Operation conflicts with the current resource state }
+
+  /api/v1/customer/orders/{id}/pay:
+    post:
+      summary: Start or retry an owned order's online payment in sandbox mode
+      description: >-
+        Only an authenticated customer can start payment for their own order
+        while it is awaiting payment. The server calculates the amount from the
+        stored order total. The external gateway call occurs after the order
+        transaction commits. Live provider adapters are not enabled.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CustomerOrderPayInput' }
+      responses:
+        '201':
+          description: Payment intent initiated or an existing initiated intent returned.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/PaymentInitiation' }
+        '400': { description: Unsupported payment method or invalid order identifier }
+        '401': { description: Authentication required }
+        '404': { description: Order not found or not owned by the customer }
+        '409': { description: Order is not awaiting payment or another payment is being initiated }
+        '502': { description: Gateway did not return a usable transaction reference or redirect URL }
+  /api/v1/payments/{id}/status:
+    get:
+      summary: Read the status of an owned payment
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: Internal payment identifier.
+          schema: { type: string, minLength: 1, maxLength: 160 }
+      responses:
+        '200':
+          description: Payment status and amount; gateway payload and transaction references are not exposed.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/PaymentStatus' }
+        '401': { description: Authentication required }
+        '404': { description: Payment not found or not owned by the customer }
+  /api/v1/payments/sandbox/{id}/simulate:
+    post:
+      summary: Simulate a signed gateway result for the owner's sandbox payment
+      description: >-
+        Available only when PAYMENT_MODE=sandbox. Uses the same callback
+        signature verifier and database transition logic as the sandbox webhook.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: Internal payment identifier.
+          schema: { type: string, minLength: 1, maxLength: 160 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SandboxPaymentSimulationInput' }
+      responses:
+        '200':
+          description: Verified sandbox callback result.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/PaymentCallbackResult' }
+        '400': { description: Invalid simulation outcome }
+        '401': { description: Authentication required }
+        '404': { description: Payment not found or sandbox simulation is disabled }
+        '409': { description: Payment is no longer initiated }
+  /api/v1/payments/callback/{gateway}:
+    post:
+      summary: Accept a signed sandbox payment callback
+      description: >-
+        The callback is HMAC-verified over gateway transaction ID, integer
+        paisa amount and SUCCESS or FAILED status before any database write.
+        This endpoint is sandbox-only; live provider-specific signature
+        verification and raw-body validation are not implemented.
+      parameters:
+        - in: path
+          name: gateway
+          required: true
+          schema: { type: string, enum: [BKASH, NAGAD, ROCKET, SSLCOMMERZ] }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PaymentCallbackInput' }
+      responses:
+        '200':
+          description: Verified callback applied or acknowledged as a duplicate.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/PaymentCallbackResult' }
+        '400': { description: Malformed status or BDT amount }
+        '401': { description: Invalid callback signature }
+        '404': { description: Unknown gateway or transaction }
+        '409': { description: Payment is not initiated or state transition is invalid }
+        '501': { description: Live payment webhooks are not enabled }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1753,6 +1873,1160 @@ components:
             properties:
               data: { $ref: '#/components/schemas/CustomerCart' }
   schemas:
+    CustomerOrderPayInput:
+      type: object
+      additionalProperties: false
+      required: [method]
+      properties:
+        method: { type: string, enum: [BKASH, NAGAD, ROCKET, SSLCOMMERZ] }
+    PaymentInitiation:
+      type: object
+      required: [id, method, status, gateway_txn_id, redirect_url, sandbox]
+      properties:
+        id: { type: string }
+        method: { type: string, enum: [BKASH, NAGAD, ROCKET, SSLCOMMERZ] }
+        status: { type: string, enum: [INITIATED] }
+        gateway_txn_id: { type: string }
+        redirect_url: { type: string, format: uri-reference }
+        sandbox: { type: boolean, enum: [true] }
+    PaymentStatus:
+      type: object
+      required: [id, method, status, amount_bdt]
+      properties:
+        id: { type: string }
+        method: { type: string, enum: [BKASH, NAGAD, ROCKET, SSLCOMMERZ] }
+        status: { type: string, enum: [PENDING, INITIATING, INITIATED, PAID, FAILED, REFUNDED] }
+        amount_bdt: { type: number, minimum: 0 }
+    SandboxPaymentSimulationInput:
+      type: object
+      additionalProperties: false
+      required: [outcome]
+      properties:
+        outcome: { type: string, enum: [success, fail] }
+    PaymentCallbackInput:
+      type: object
+      additionalProperties: false
+      required: [gateway_txn_id, amount_bdt, status, signature]
+      properties:
+        gateway_txn_id: { type: string, minLength: 1, maxLength: 200 }
+        amount_bdt:
+          oneOf:
+            - type: string
+              pattern: '^\d{1,12}(?:\.\d{1,2})?
+    SellerProfile:
+      type: object
+      required: [id, name, phone, shop_name, shop_address, business_info, status, commission_bps, commission_percent, created_at]
+      properties:
+        id: { type: string }
+        name: { type: string, nullable: true }
+        phone: { type: string, nullable: true }
+        shop_name: { type: string }
+        shop_address: { type: string }
+        business_info: { type: string, nullable: true }
+        status: { type: string, enum: [PENDING, APPROVED, REJECTED, SUSPENDED] }
+        commission_bps: { type: integer, minimum: 0 }
+        commission_percent: { type: number, minimum: 0 }
+        created_at: { type: string, format: date-time }
+    SellerDashboardProductCounts:
+      type: object
+      required: [total, pending, approved, rejected]
+      properties:
+        total: { type: integer, minimum: 0 }
+        pending: { type: integer, minimum: 0 }
+        approved: { type: integer, minimum: 0 }
+        rejected: { type: integer, minimum: 0 }
+    SellerDashboardOrderCounts:
+      type: object
+      required: [total, confirmed, processing, shipped, delivered, cancelled]
+      properties:
+        total: { type: integer, minimum: 0 }
+        confirmed: { type: integer, minimum: 0 }
+        processing: { type: integer, minimum: 0 }
+        shipped: { type: integer, minimum: 0 }
+        delivered: { type: integer, minimum: 0 }
+        cancelled: { type: integer, minimum: 0 }
+    SellerDashboardFinance:
+      type: object
+      required: [total_sales_bdt, commission_bdt, net_earnings_bdt, pending_balance_bdt, available_balance_bdt, paid_out_bdt]
+      properties:
+        total_sales_bdt: { type: number, minimum: 0 }
+        commission_bdt: { type: number, minimum: 0 }
+        net_earnings_bdt: { type: number }
+        pending_balance_bdt: { type: number, minimum: 0 }
+        available_balance_bdt: { type: number }
+        paid_out_bdt: { type: number, minimum: 0 }
+    SellerRecentOrder:
+      type: object
+      required: [id, orderNumber, status, subtotal_bdt, commission_bdt, net_bdt, created_at]
+      properties:
+        id: { type: string }
+        orderNumber: { type: string }
+        status: { type: string }
+        subtotal_bdt: { type: number, minimum: 0 }
+        commission_bdt: { type: number, minimum: 0 }
+        net_bdt: { type: number }
+        created_at: { type: string, format: date-time }
+    SellerDashboard:
+      type: object
+      required: [shop_status, products, orders, finance, recent_orders]
+      properties:
+        shop_status: { type: string, enum: [PENDING, APPROVED, REJECTED, SUSPENDED] }
+        products: { $ref: '#/components/schemas/SellerDashboardProductCounts' }
+        orders: { $ref: '#/components/schemas/SellerDashboardOrderCounts' }
+        finance: { $ref: '#/components/schemas/SellerDashboardFinance' }
+        recent_orders:
+          type: array
+          maxItems: 5
+          items: { $ref: '#/components/schemas/SellerRecentOrder' }
+    SellerOrderListItem:
+      type: object
+      required: [id, order_id, orderNumber, status, subtotal_bdt, commission_bdt, net_bdt, created_at]
+      properties:
+        id: { type: string }
+        order_id: { type: string }
+        orderNumber: { type: string }
+        status: { type: string }
+        subtotal_bdt: { type: number, minimum: 0 }
+        commission_bdt: { type: number, minimum: 0 }
+        net_bdt: { type: number }
+        created_at: { type: string, format: date-time }
+    SellerOrderPayment:
+      type: object
+      required: [method, status]
+      properties:
+        method: { type: string }
+        status: { type: string }
+    SellerOrderDelivery:
+      type: object
+      required: [name, phone, address, area, note]
+      properties:
+        name: { type: string, nullable: true }
+        phone: { type: string, nullable: true }
+        address: { type: string, nullable: true }
+        area: { type: string, nullable: true }
+        note: { type: string, nullable: true }
+    SellerOrderLineItem:
+      type: object
+      required: [product_id, product_name_bn, quantity, unit_price_paisa, unit_price_bdt, variant]
+      properties:
+        product_id: { type: string }
+        product_name_bn: { type: string }
+        quantity: { type: integer, minimum: 1 }
+        unit_price_paisa: { type: integer, minimum: 0 }
+        unit_price_bdt: { type: number, minimum: 0 }
+        variant: { type: string, nullable: true }
+    SellerOrderDetail:
+      type: object
+      required: [id, order_id, orderNumber, status, subtotal_bdt, commission_bdt, net_bdt, payment, delivery, items, created_at]
+      properties:
+        id: { type: string }
+        order_id: { type: string }
+        orderNumber: { type: string }
+        status: { type: string }
+        subtotal_bdt: { type: number, minimum: 0 }
+        commission_bdt: { type: number, minimum: 0 }
+        net_bdt: { type: number }
+        payment: { $ref: '#/components/schemas/SellerOrderPayment' }
+        delivery: { $ref: '#/components/schemas/SellerOrderDelivery' }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/SellerOrderLineItem' }
+        created_at: { type: string, format: date-time }
+    SellerOrderStatusInput:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string, enum: [PROCESSING, SHIPPED, DELIVERED, CANCELLED] }
+        note: { type: string, maxLength: 300 }
+    SellerOrderStatusResult:
+      type: object
+      required: [id, status, parent_status]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [PROCESSING, SHIPPED, DELIVERED, CANCELLED] }
+        parent_status: { type: string }
+    AdminSellerListItem:
+      type: object
+      required: [user_id, shop_name, shop_address, business_info, status, commission_bps, created_at, name, phone, email, has_nid, has_trade_license]
+      properties:
+        user_id: { type: string }
+        shop_name: { type: string }
+        shop_address: { type: string }
+        business_info: { type: string, nullable: true }
+        status: { type: string, enum: [PENDING, APPROVED, REJECTED, SUSPENDED] }
+        commission_bps: { type: integer, minimum: 0 }
+        created_at: { type: string, format: date-time }
+        name: { type: string, nullable: true }
+        phone: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+        has_nid: { type: boolean }
+        has_trade_license: { type: boolean }
+    AdminSellerStatusInput:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string, enum: [APPROVED, REJECTED, SUSPENDED] }
+        note: { type: string, maxLength: 300 }
+    AdminSellerStatusResult:
+      type: object
+      required: [seller_id, shop_name, previous_status, status]
+      properties:
+        seller_id: { type: string }
+        shop_name: { type: string }
+        previous_status: { type: string, enum: [PENDING, APPROVED, SUSPENDED] }
+        status: { type: string, enum: [APPROVED, REJECTED, SUSPENDED] }
+    AdminProductListItem:
+      type: object
+      required: [id, name_bn, name_en, price_paisa, price_bdt, discount_paisa, discount_price_bdt, stock, status, sku, description, seller_id, category_slug, seller_name, image]
+      properties:
+        id: { type: string }
+        name_bn: { type: string }
+        name_en: { type: string }
+        price_paisa: { type: integer, minimum: 0 }
+        price_bdt: { type: number, minimum: 0 }
+        discount_paisa: { type: integer, nullable: true, minimum: 0 }
+        discount_price_bdt: { type: number, nullable: true, minimum: 0 }
+        stock: { type: integer, minimum: 0, maximum: 1000000 }
+        status: { type: string, enum: [PENDING_REVIEW, ACTIVE, REJECTED, SUSPENDED, ARCHIVED] }
+        sku: { type: string, nullable: true }
+        description: { type: string, nullable: true }
+        seller_id: { type: string, nullable: true }
+        category_slug: { type: string, nullable: true }
+        seller_name: { type: string, nullable: true }
+        image: { type: string, nullable: true }
+    AdminProductActionInput:
+      type: object
+      properties:
+        reason: { type: string, maxLength: 300 }
+    AdminProductActionResult:
+      type: object
+      required: [id, status]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [ACTIVE, REJECTED, SUSPENDED] }
+    AdminOrderListItem:
+      type: object
+      required: [id, orderNumber, customer_id, total_bdt, status, payment, created_at]
+      properties:
+        id: { type: string }
+        orderNumber: { type: string }
+        customer_id: { type: string }
+        total_bdt: { type: number, minimum: 0 }
+        status: { type: string }
+        payment: { $ref: '#/components/schemas/SellerOrderPayment' }
+        created_at: { type: string, format: date-time }
+    AdminOrderStatusInput:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string, enum: [CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED] }
+        note: { type: string, maxLength: 300 }
+    AdminOrderStatusResult:
+      type: object
+      required: [id, status]
+      properties:
+        id: { type: string }
+        status: { type: string }
+    AdminOrderNoteResult:
+      type: object
+      required: [id, saved]
+      properties:
+        id: { type: string }
+        saved: { type: boolean, enum: [true] }
+    AdminShippingResult:
+      type: object
+      required: [id, shipping_bdt, total_bdt]
+      properties:
+        id: { type: string }
+        shipping_bdt: { type: number, minimum: 0, maximum: 100000 }
+        total_bdt: { type: number, minimum: 0 }
+    Brand:
+      type: object
+      required: [slug, name]
+      properties:
+        slug: { type: string }
+        name: { type: string }
+    CatalogSuggestion:
+      type: object
+      required: [id, name_bn, name_en]
+      properties:
+        id: { type: string }
+        name_bn: { type: string }
+        name_en: { type: string }
+    CatalogProductListItem:
+      type: object
+      required: [id, name_bn, name_en, price_paisa, discount_paisa, stock, price_bdt, sale_price_bdt, discount_price_bdt, in_stock, category_slug, brand, image]
+      properties:
+        id: { type: string }
+        name_bn: { type: string }
+        name_en: { type: string }
+        price_paisa: { type: integer, minimum: 0, description: Stored price in integer paisa. }
+        discount_paisa: { type: integer, nullable: true, minimum: 0 }
+        stock: { type: integer, minimum: 0 }
+        price_bdt: { type: number, minimum: 0 }
+        sale_price_bdt: { type: number, minimum: 0, description: Effective selling price after a valid discount. }
+        discount_price_bdt: { type: number, nullable: true, minimum: 0 }
+        in_stock: { type: boolean }
+        category_slug: { type: string }
+        brand: { type: string, nullable: true }
+        image: { type: string, nullable: true }
+    CatalogProductDetail:
+      type: object
+      required: [id, name_bn, name_en, price_paisa, discount_paisa, stock, price_bdt, sale_price_bdt, discount_price_bdt, in_stock, category_slug, brand, seller_shop, variants, images, rating, review_count]
+      properties:
+        id: { type: string }
+        name_bn: { type: string }
+        name_en: { type: string }
+        price_paisa: { type: integer, minimum: 0 }
+        discount_paisa: { type: integer, nullable: true, minimum: 0 }
+        stock: { type: integer, minimum: 0 }
+        price_bdt: { type: number, minimum: 0 }
+        sale_price_bdt: { type: number, minimum: 0 }
+        discount_price_bdt: { type: number, nullable: true, minimum: 0 }
+        in_stock: { type: boolean }
+        category_slug: { type: string }
+        brand: { type: string, nullable: true }
+        seller_shop: { type: string }
+        variants:
+          type: array
+          items: { type: object, additionalProperties: true }
+        images:
+          type: array
+          items: { type: string }
+        rating: { type: number, minimum: 0, maximum: 5 }
+        review_count: { type: integer, minimum: 0 }
+    ProductReview:
+      type: object
+      required: [rating, comment, created_at, name]
+      properties:
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        comment: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        name: { type: string }
+    Address:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        name: { type: string }
+        phone: { type: string }
+        address: { type: string }
+        area: { type: string }
+        is_default: { type: integer, enum: [0, 1] }
+    AddressInput:
+      type: object
+      required: [phone, address, area]
+      properties:
+        label: { type: string, maxLength: 40 }
+        name: { type: string, maxLength: 100, description: Defaults to the account name when omitted. }
+        phone: { type: string, description: Bangladeshi mobile number normalized before storage. }
+        address: { type: string, maxLength: 500 }
+        area: { type: string, maxLength: 100 }
+        is_default: { type: boolean }
+    WishlistProduct:
+      type: object
+      properties:
+        id: { type: string }
+        name_bn: { type: string }
+        name_en: { type: string }
+        price_paisa: { type: integer }
+        price_bdt: { type: number }
+        discount_paisa: { type: integer, nullable: true }
+        sale_price_bdt: { type: number }
+        stock: { type: integer }
+        in_stock: { type: boolean }
+    AdminCoupon:
+      type: object
+      properties:
+        code: { type: string }
+        type: { type: string, enum: [FIXED, PERCENT] }
+        value: { type: integer, description: Stored paisa for FIXED; whole percentage for PERCENT. }
+        value_bdt: { type: number, nullable: true, description: FIXED value in BDT; null for PERCENT. }
+        min_order_paisa: { type: integer }
+        min_order_bdt: { type: number }
+        max_uses: { type: integer, nullable: true }
+        used_count: { type: integer }
+        expires_at: { type: string, nullable: true }
+        active: { type: integer, enum: [0, 1] }
+    AdminCouponCreate:
+      type: object
+      additionalProperties: false
+      required: [code, type, value]
+      properties:
+        code:
+          type: string
+          description: 1 to 30 ASCII letters/digits/underscores/hyphens after trimming; stored uppercase.
+        type: { type: string, enum: [FIXED, PERCENT] }
+        value:
+          description: FIXED input is positive BDT with at most two decimal places. PERCENT input is a whole number from 1 to 90. Prefer decimal strings for exact BDT inputs.
+          oneOf:
+            - type: number
+              minimum: 0
+              exclusiveMinimum: true
+            - type: string
+              pattern: '^\d+(?:\.\d{1,2})?$'
+        min_order_bdt:
+          description: Nonnegative BDT with at most two decimals; omitted or empty string means zero.
+          oneOf:
+            - type: number
+              minimum: 0
+            - type: string
+              pattern: '^(?:\d+(?:\.\d{1,2})?)?$'
+        max_uses:
+          description: Positive safe integer; omitted/null/empty string means unlimited global uses.
+          oneOf:
+            - type: integer
+              minimum: 1
+              nullable: true
+            - type: string
+              pattern: '^\d*$'
+        expires_at:
+          type: string
+          nullable: true
+          description: Future timezone-qualified ISO timestamp or legacy date at midnight UTC. Omitted/null/empty string means no expiry. Stored as canonical UTC ISO.
+        active: { type: boolean, default: true }
+    CustomerCart:
+      type: object
+      required: [items, subtotal_bdt, item_count]
+      properties:
+        subtotal_bdt: { type: number, description: Integer-paisa sum converted once to BDT. }
+        item_count: { type: integer, minimum: 0, description: Sum of quantities rather than number of product lines. }
+        items:
+          type: array
+          items:
+            type: object
+            required: [product_id, name_bn, name_en, quantity, stock, image, unit_price_bdt, line_total_bdt, available]
+            properties:
+              product_id: { type: string }
+              name_bn: { type: string }
+              name_en: { type: string }
+              quantity: { type: integer, minimum: 1 }
+              stock: { type: integer, minimum: 0 }
+              image: { type: string, nullable: true }
+              unit_price_bdt: { type: number }
+              line_total_bdt: { type: number }
+              available: { type: boolean }
+    Shipment:
+      type: object
+      required: [provider, tracking_id, status, mode]
+      properties:
+        provider: { type: string }
+        tracking_id: { type: string }
+        status: { type: string }
+        mode: { type: string, description: Stored provider mode; sandbox is not live fulfilment. }
+    CustomerOrder:
+      type: object
+      required: [id, orderNumber, status, total_bdt, subtotal_bdt, shipping_bdt, discount_bdt, payment, delivery, items, suborders]
+      properties:
+        id: { type: string }
+        orderNumber: { type: string }
+        status: { type: string }
+        total_bdt: { type: number, description: BDT converted from integer paisa. }
+        subtotal_bdt: { type: number }
+        shipping_bdt: { type: number }
+        discount_bdt: { type: number }
+        coupon_code: { type: string, nullable: true }
+        created_at: { type: string }
+        payment:
+          type: object
+          properties:
+            method: { type: string }
+            status: { type: string }
+        delivery:
+          type: object
+          properties:
+            name: { type: string }
+            phone: { type: string }
+            address: { type: string }
+            area: { type: string }
+            note: { type: string, description: The customer's own delivery note. }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              product_id: { type: string }
+              name_bn: { type: string }
+              quantity: { type: integer }
+              unit_price_bdt: { type: number }
+              variant: { type: string }
+              seller_order_id: { type: string, nullable: true }
+        suborders:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              shop: { type: string, nullable: true }
+              status: { type: string }
+              subtotal_bdt: { type: number }
+              shipment:
+                type: object
+                nullable: true
+                description: Latest stored shipment by created_at then ID, or null.
+                allOf:
+                  - $ref: '#/components/schemas/Shipment'
+    CustomerTracking:
+      type: object
+      required: [orderNumber, status, events, shipments]
+      properties:
+        orderNumber: { type: string }
+        status: { type: string }
+        events:
+          type: array
+          items:
+            type: object
+            properties:
+              status: { type: string }
+              created_at: { type: string }
+              seller_order_id: { type: string, nullable: true }
+        shipments:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/Shipment'
+              - type: object
+                properties:
+                  seller_order_id: { type: string }
+
+    AdminOrderDetail:
+      type: object
+      required: [id, orderNumber, status, total_bdt, subtotal_bdt, shipping_bdt, discount_bdt, coupon_code, created_at, customer, delivery, payment, admin_note, items, sellers, history, payments]
+      properties:
+        id: { type: string }
+        orderNumber: { type: string }
+        status: { type: string }
+        total_bdt: { type: number, minimum: 0 }
+        subtotal_bdt: { type: number, minimum: 0 }
+        shipping_bdt: { type: number, minimum: 0 }
+        discount_bdt: { type: number, minimum: 0 }
+        coupon_code: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        customer:
+          type: object
+          required: [id, name, phone, email]
+          properties:
+            id: { type: string, nullable: true }
+            name: { type: string, nullable: true }
+            phone: { type: string, nullable: true }
+            email: { type: string, nullable: true }
+        delivery:
+          type: object
+          required: [name, phone, address, area, note]
+          properties:
+            name: { type: string, nullable: true }
+            phone: { type: string, nullable: true }
+            address: { type: string, nullable: true }
+            area: { type: string, nullable: true }
+            note: { type: string, nullable: true }
+        payment:
+          type: object
+          required: [method, status]
+          properties:
+            method: { type: string }
+            status: { type: string }
+        admin_note: { type: string, nullable: true }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AdminOrderItem' }
+        sellers:
+          type: array
+          items: { $ref: '#/components/schemas/AdminOrderSeller' }
+        history:
+          type: array
+          items: { $ref: '#/components/schemas/AdminOrderEvent' }
+        payments:
+          type: array
+          items: { $ref: '#/components/schemas/AdminOrderPayment' }
+    AdminOrderItem:
+      type: object
+      required: [id, product_id, product_name_bn, quantity, unit_price_paisa, seller_id, seller_order_id, variant, unit_price_bdt]
+      properties:
+        id: { type: string }
+        product_id: { type: string }
+        product_name_bn: { type: string }
+        quantity: { type: integer, minimum: 1 }
+        unit_price_paisa: { type: integer, minimum: 0 }
+        unit_price_bdt: { type: number, minimum: 0 }
+        seller_id: { type: string }
+        seller_order_id: { type: string }
+        variant: { type: string, nullable: true }
+    AdminOrderSeller:
+      type: object
+      required: [id, seller_id, status, subtotal_paisa, commission_paisa, net_paisa, shop_name, seller_status, subtotal_bdt, commission_bdt, net_bdt]
+      properties:
+        id: { type: string }
+        seller_id: { type: string }
+        status: { type: string }
+        subtotal_paisa: { type: integer, minimum: 0 }
+        commission_paisa: { type: integer, minimum: 0 }
+        net_paisa: { type: integer, minimum: 0 }
+        subtotal_bdt: { type: number, minimum: 0 }
+        commission_bdt: { type: number, minimum: 0 }
+        net_bdt: { type: number, minimum: 0 }
+        shop_name: { type: string, nullable: true }
+        seller_status: { type: string, nullable: true }
+    AdminOrderEvent:
+      type: object
+      required: [status, note, created_at, seller_order_id, actor_id]
+      properties:
+        status: { type: string }
+        note: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        seller_order_id: { type: string, nullable: true }
+        actor_id: { type: string, nullable: true }
+    AdminOrderPayment:
+      type: object
+      required: [id, method, amount_paisa, amount_bdt, status, gateway_txn_id, created_at]
+      properties:
+        id: { type: string }
+        method: { type: string }
+        amount_paisa: { type: integer, minimum: 0 }
+        amount_bdt: { type: number, minimum: 0 }
+        status: { type: string }
+        gateway_txn_id: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+    AdminDashboardMetrics:
+      type: object
+      required: [total_revenue_bdt, total_orders, total_customers, total_sellers, pending_seller_applications, pending_product_approvals, total_products, active_products, cancelled_orders, pending_payouts, pending_payout_amount_bdt, platform_commission_bdt]
+      properties:
+        total_revenue_bdt: { type: number, minimum: 0 }
+        total_orders: { type: integer, minimum: 0 }
+        total_customers: { type: integer, minimum: 0 }
+        total_sellers: { type: integer, minimum: 0 }
+        pending_seller_applications: { type: integer, minimum: 0 }
+        pending_product_approvals: { type: integer, minimum: 0 }
+        total_products: { type: integer, minimum: 0 }
+        active_products: { type: integer, minimum: 0 }
+        cancelled_orders: { type: integer, minimum: 0 }
+        pending_payouts: { type: integer, minimum: 0 }
+        pending_payout_amount_bdt: { type: number, minimum: 0 }
+        platform_commission_bdt: { type: number, minimum: 0 }
+    SellerInventoryItem:
+      type: object
+      required: [id, name_bn, name_en, sku, stock, price_paisa, price_bdt, active, status, updated_at, low_stock]
+      properties:
+        id: { type: string }
+        name_bn: { type: string }
+        name_en: { type: string }
+        sku: { type: string, nullable: true }
+        stock: { type: integer, minimum: 0, maximum: 1000000 }
+        price_paisa: { type: integer, minimum: 0 }
+        price_bdt: { type: number, minimum: 0 }
+        active: { type: boolean }
+        status: { type: string }
+        updated_at: { type: string, format: date-time }
+        low_stock: { type: boolean }
+    InventoryMovement:
+      type: object
+      required: [id, quantity_delta, stock_before, stock_after, reason, created_at]
+      properties:
+        id: { type: string }
+        quantity_delta: { type: integer }
+        stock_before: { type: integer, minimum: 0 }
+        stock_after: { type: integer, minimum: 0 }
+        reason: { type: string }
+        created_at: { type: string, format: date-time }
+    InventoryAdjustmentInput:
+      type: object
+      additionalProperties: false
+      required: [delta, reason, idempotency_key]
+      properties:
+        delta:
+          oneOf:
+            - type: integer
+              minimum: -20
+              maximum: -1
+            - type: integer
+              minimum: 1
+              maximum: 20
+        reason: { type: string, minLength: 1, maxLength: 300 }
+        idempotency_key: { type: string, pattern: '^[A-Za-z0-9._:-]{8,100}      type: object
+      required: [id, name_bn, name_en, price_paisa, price_bdt, discount_paisa, discount_price_bdt, stock, status, sku, category_slug, description, active, image, updated_at]
+      properties:
+        id: { type: string }
+        name_bn: { type: string }
+        name_en: { type: string }
+        price_paisa: { type: integer, minimum: 1, description: Stored price in integer paisa. }
+        price_bdt: { type: number, exclusiveMinimum: 0 }
+        discount_paisa: { type: integer, nullable: true, minimum: 1 }
+        discount_price_bdt: { type: number, nullable: true, exclusiveMinimum: 0 }
+        stock: { type: integer, minimum: 0, maximum: 1000000 }
+        status: { type: string, enum: [PENDING_REVIEW, ACTIVE, REJECTED, SUSPENDED, ARCHIVED] }
+        sku: { type: string, nullable: true }
+        category_slug: { type: string, nullable: true }
+        description: { type: string }
+        active: { type: boolean }
+        image: { type: string, nullable: true }
+        updated_at: { type: string, format: date-time }
+    SellerProductDetail:
+      allOf:
+        - $ref: '#/components/schemas/SellerProductListItem'
+        - type: object
+          required: [variants, images]
+          properties:
+            variants:
+              type: array
+              maxItems: 30
+              items:
+                type: object
+                required: [label, sku]
+                properties:
+                  label: { type: string, maxLength: 60 }
+                  sku: { type: string, nullable: true, maxLength: 40 }
+            images:
+              type: array
+              maxItems: 6
+              items: { type: string, format: uri, pattern: '^https://' }
+    SellerProductMutationResult:
+      type: object
+      required: [id, status, message]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [PENDING_REVIEW] }
+        message: { type: string }
+    SellerProductArchiveResult:
+      type: object
+      required: [id, archived]
+      properties:
+        id: { type: string }
+        archived: { type: boolean, enum: [true] }
+    SellerProductInput:
+      type: object
+      additionalProperties: false
+      required: [name_bn, name_en, price_bdt, stock, category_slug]
+      properties:
+        name_bn: { type: string, minLength: 1, maxLength: 160 }
+        name_en: { type: string, minLength: 1, maxLength: 160 }
+        price_bdt: { type: number, exclusiveMinimum: 0, maximum: 100000000 }
+        discount_price_bdt: { type: number, nullable: true, exclusiveMinimum: 0 }
+        stock: { type: integer, minimum: 0, maximum: 1000000 }
+        category_slug: { type: string, minLength: 1 }
+        brand_slug: { type: string, nullable: true }
+        description: { type: string, maxLength: 5000 }
+        sku: { type: string, maxLength: 40, nullable: true }
+        images:
+          type: array
+          maxItems: 6
+          items: { type: string, format: uri, pattern: '^https://' }
+        variants:
+          type: array
+          maxItems: 30
+          items:
+            type: object
+            required: [label]
+            properties:
+              label: { type: string, maxLength: 60 }
+              sku: { type: string, maxLength: 40 }
+    SellerProductPatch:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        name_bn: { type: string, minLength: 1, maxLength: 160 }
+        name_en: { type: string, minLength: 1, maxLength: 160 }
+        price_bdt: { type: number, exclusiveMinimum: 0, maximum: 100000000 }
+        discount_price_bdt: { type: number, nullable: true, exclusiveMinimum: 0 }
+        stock: { type: integer, minimum: 0, maximum: 1000000 }
+        category_slug: { type: string, minLength: 1 }
+        brand_slug: { type: string, nullable: true }
+        description: { type: string, maxLength: 5000 }
+        sku: { type: string, maxLength: 40, nullable: true }
+        images:
+          type: array
+          maxItems: 6
+          items: { type: string, format: uri, pattern: '^https://' }
+        variants:
+          type: array
+          maxItems: 30
+          items: { type: object, additionalProperties: true }
+    SellerSettlement:
+      type: object
+      required: [kind, amount_paisa, amount_bdt, created_at, seller_order_id]
+      properties:
+        kind: { type: string }
+        amount_paisa: { type: integer, minimum: 0 }
+        amount_bdt: { type: number, minimum: 0 }
+        created_at: { type: string, format: date-time }
+        seller_order_id: { type: string, nullable: true }
+    SellerPayoutHistoryItem:
+      type: object
+      required: [id, amount_paisa, amount_bdt, method, account, status, note, created_at, decided_at]
+      properties:
+        id: { type: string }
+        amount_paisa: { type: integer, minimum: 1 }
+        amount_bdt: { type: number, exclusiveMinimum: 0 }
+        method: { type: string, enum: [BKASH, NAGAD, ROCKET, BANK] }
+        account: { type: string }
+        status: { type: string, enum: [REQUESTED, APPROVED, REJECTED] }
+        note: { type: string }
+        created_at: { type: string, format: date-time }
+        decided_at: { type: string, format: date-time, nullable: true }
+    SellerFinanceSummary:
+      type: object
+      required: [total_sales_bdt, commission_bdt, net_earnings_bdt, pending_balance_bdt, available_balance_bdt, paid_out_bdt, settlements, payouts]
+      properties:
+        total_sales_bdt: { type: number, minimum: 0 }
+        commission_bdt: { type: number, minimum: 0 }
+        net_earnings_bdt: { type: number, minimum: 0 }
+        pending_balance_bdt: { type: number, minimum: 0 }
+        available_balance_bdt: { type: number, minimum: 0 }
+        paid_out_bdt: { type: number, minimum: 0 }
+        settlements:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/SellerSettlement' }
+        payouts:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/SellerPayoutHistoryItem' }
+    SellerPayoutCreated:
+      type: object
+      required: [id, amount_bdt, status]
+      properties:
+        id: { type: string }
+        amount_bdt: { type: number, exclusiveMinimum: 0 }
+        status: { type: string, enum: [REQUESTED] }
+    AdminPayoutListItem:
+      type: object
+      required: [id, seller_id, amount_paisa, amount_bdt, method, account, status, note, created_at, decided_at, shop_name, seller_name, seller_phone]
+      properties:
+        id: { type: string }
+        seller_id: { type: string }
+        amount_paisa: { type: integer, minimum: 1 }
+        amount_bdt: { type: number, exclusiveMinimum: 0 }
+        method: { type: string, enum: [BKASH, NAGAD, ROCKET, BANK] }
+        account: { type: string }
+        status: { type: string, enum: [REQUESTED, APPROVED, REJECTED] }
+        note: { type: string }
+        created_at: { type: string, format: date-time }
+        decided_at: { type: string, format: date-time, nullable: true }
+        shop_name: { type: string }
+        seller_name: { type: string }
+        seller_phone: { type: string }
+    PayoutDecisionInput:
+      type: object
+      additionalProperties: false
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [APPROVE, REJECT] }
+        note: { type: string, maxLength: 300 }
+    AdminPayoutDecisionResult:
+      type: object
+      required: [id, status, decided_at]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [APPROVED, REJECTED] }
+        decided_at: { type: string, format: date-time }
+    SellerPayoutRequest:
+      type: object
+      additionalProperties: false
+      required: [amount_bdt, method, account]
+      properties:
+        amount_bdt: { type: number, exclusiveMinimum: 0, maximum: 100000000 }
+        method: { type: string, enum: [BKASH, NAGAD, ROCKET, BANK] }
+        account: { type: string, minLength: 1, maxLength: 100 }
+    AdminOrderNoteInput:
+      type: object
+      additionalProperties: false
+      required: [note]
+      properties:
+        note: { type: string, maxLength: 1000 }
+    AdminShippingInput:
+      type: object
+      additionalProperties: false
+      required: [shipping_bdt]
+      properties:
+        shipping_bdt: { type: number, minimum: 0, maximum: 100000 }
+ }
+    InventoryAdjustmentRequest:
+      type: object
+      required: [id, product_id, seller_id, quantity_delta, reason, status, created_at]
+      properties:
+        id: { type: string }
+        product_id: { type: string }
+        seller_id: { type: string }
+        quantity_delta: { type: integer, minimum: -20, maximum: 20 }
+        reason: { type: string }
+        status: { type: string, enum: [PENDING, APPROVED, REJECTED] }
+        created_at: { type: string, format: date-time }
+        product_name: { type: string }
+        shop_name: { type: string }
+        seller_name: { type: string }
+        seller_phone: { type: string }
+        duplicate: { type: boolean }
+    InventoryAdjustmentDecisionInput:
+      type: object
+      additionalProperties: false
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [APPROVE, REJECT] }
+        note: { type: string, maxLength: 300 }
+    InventoryAdjustmentDecision:
+      type: object
+      required: [id, status, stock]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [APPROVED, REJECTED] }
+        stock:
+          type: object
+          nullable: true
+          required: [before, after]
+          properties:
+            before: { type: integer, minimum: 0 }
+            after: { type: integer, minimum: 0 }
+    InventoryAlert:
+      type: object
+      required: [id, name_bn, name_en, stock, price_paisa, price_bdt, seller_id, shop_name, low_stock]
+      properties:
+        id: { type: string }
+        name_bn: { type: string }
+        name_en: { type: string }
+        stock: { type: integer, minimum: 0 }
+        price_paisa: { type: integer, minimum: 0 }
+        price_bdt: { type: number, minimum: 0 }
+        seller_id: { type: string }
+        shop_name: { type: string, nullable: true }
+        low_stock: { type: boolean, enum: [true] }
+    InventoryReport:
+      type: object
+      required: [product_count, units_in_stock, stock_value_paisa, low_stock_products, stock_value_bdt, movement_count, units_added, units_removed, from, to]
+      properties:
+        product_count: { type: integer, minimum: 0 }
+        units_in_stock: { type: integer, minimum: 0 }
+        stock_value_paisa: { type: integer, minimum: 0 }
+        low_stock_products: { type: integer, minimum: 0 }
+        stock_value_bdt: { type: number, minimum: 0 }
+        movement_count: { type: integer, minimum: 0 }
+        units_added: { type: integer, minimum: 0 }
+        units_removed: { type: integer, minimum: 0 }
+        from: { type: string, format: date, nullable: true }
+        to: { type: string, format: date, nullable: true }
+    SellerInventoryList:
+      type: array
+      items: { $ref: '#/components/schemas/SellerInventoryItem' }
+    InventoryMovementList:
+      type: array
+      items: { $ref: '#/components/schemas/InventoryMovement' }
+    AdminInventoryAdjustmentList:
+      type: array
+      items: { $ref: '#/components/schemas/InventoryAdjustmentRequest' }
+    InventoryAlertList:
+      type: array
+      items: { $ref: '#/components/schemas/InventoryAlert' }
+
+    SellerProductListItem:
+      type: object
+      required: [id, name_bn, name_en, price_paisa, price_bdt, discount_paisa, discount_price_bdt, stock, status, sku, category_slug, description, active, image, updated_at]
+      properties:
+        id: { type: string }
+        name_bn: { type: string }
+        name_en: { type: string }
+        price_paisa: { type: integer, minimum: 1, description: Stored price in integer paisa. }
+        price_bdt: { type: number, exclusiveMinimum: 0 }
+        discount_paisa: { type: integer, nullable: true, minimum: 1 }
+        discount_price_bdt: { type: number, nullable: true, exclusiveMinimum: 0 }
+        stock: { type: integer, minimum: 0, maximum: 1000000 }
+        status: { type: string, enum: [PENDING_REVIEW, ACTIVE, REJECTED, SUSPENDED, ARCHIVED] }
+        sku: { type: string, nullable: true }
+        category_slug: { type: string, nullable: true }
+        description: { type: string }
+        active: { type: boolean }
+        image: { type: string, nullable: true }
+        updated_at: { type: string, format: date-time }
+    SellerProductDetail:
+      allOf:
+        - $ref: '#/components/schemas/SellerProductListItem'
+        - type: object
+          required: [variants, images]
+          properties:
+            variants:
+              type: array
+              maxItems: 30
+              items:
+                type: object
+                required: [label, sku]
+                properties:
+                  label: { type: string, maxLength: 60 }
+                  sku: { type: string, nullable: true, maxLength: 40 }
+            images:
+              type: array
+              maxItems: 6
+              items: { type: string, format: uri, pattern: '^https://' }
+    SellerProductMutationResult:
+      type: object
+      required: [id, status, message]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [PENDING_REVIEW] }
+        message: { type: string }
+    SellerProductArchiveResult:
+      type: object
+      required: [id, archived]
+      properties:
+        id: { type: string }
+        archived: { type: boolean, enum: [true] }
+    SellerProductInput:
+      type: object
+      additionalProperties: false
+      required: [name_bn, name_en, price_bdt, stock, category_slug]
+      properties:
+        name_bn: { type: string, minLength: 1, maxLength: 160 }
+        name_en: { type: string, minLength: 1, maxLength: 160 }
+        price_bdt: { type: number, exclusiveMinimum: 0, maximum: 100000000 }
+        discount_price_bdt: { type: number, nullable: true, exclusiveMinimum: 0 }
+        stock: { type: integer, minimum: 0, maximum: 1000000 }
+        category_slug: { type: string, minLength: 1 }
+        brand_slug: { type: string, nullable: true }
+        description: { type: string, maxLength: 5000 }
+        sku: { type: string, maxLength: 40, nullable: true }
+        images:
+          type: array
+          maxItems: 6
+          items: { type: string, format: uri, pattern: '^https://' }
+        variants:
+          type: array
+          maxItems: 30
+          items:
+            type: object
+            required: [label]
+            properties:
+              label: { type: string, maxLength: 60 }
+              sku: { type: string, maxLength: 40 }
+    SellerProductPatch:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        name_bn: { type: string, minLength: 1, maxLength: 160 }
+        name_en: { type: string, minLength: 1, maxLength: 160 }
+        price_bdt: { type: number, exclusiveMinimum: 0, maximum: 100000000 }
+        discount_price_bdt: { type: number, nullable: true, exclusiveMinimum: 0 }
+        stock: { type: integer, minimum: 0, maximum: 1000000 }
+        category_slug: { type: string, minLength: 1 }
+        brand_slug: { type: string, nullable: true }
+        description: { type: string, maxLength: 5000 }
+        sku: { type: string, maxLength: 40, nullable: true }
+        images:
+          type: array
+          maxItems: 6
+          items: { type: string, format: uri, pattern: '^https://' }
+        variants:
+          type: array
+          maxItems: 30
+          items: { type: object, additionalProperties: true }
+    SellerSettlement:
+      type: object
+      required: [kind, amount_paisa, amount_bdt, created_at, seller_order_id]
+      properties:
+        kind: { type: string }
+        amount_paisa: { type: integer, minimum: 0 }
+        amount_bdt: { type: number, minimum: 0 }
+        created_at: { type: string, format: date-time }
+        seller_order_id: { type: string, nullable: true }
+    SellerPayoutHistoryItem:
+      type: object
+      required: [id, amount_paisa, amount_bdt, method, account, status, note, created_at, decided_at]
+      properties:
+        id: { type: string }
+        amount_paisa: { type: integer, minimum: 1 }
+        amount_bdt: { type: number, exclusiveMinimum: 0 }
+        method: { type: string, enum: [BKASH, NAGAD, ROCKET, BANK] }
+        account: { type: string }
+        status: { type: string, enum: [REQUESTED, APPROVED, REJECTED] }
+        note: { type: string }
+        created_at: { type: string, format: date-time }
+        decided_at: { type: string, format: date-time, nullable: true }
+    SellerFinanceSummary:
+      type: object
+      required: [total_sales_bdt, commission_bdt, net_earnings_bdt, pending_balance_bdt, available_balance_bdt, paid_out_bdt, settlements, payouts]
+      properties:
+        total_sales_bdt: { type: number, minimum: 0 }
+        commission_bdt: { type: number, minimum: 0 }
+        net_earnings_bdt: { type: number, minimum: 0 }
+        pending_balance_bdt: { type: number, minimum: 0 }
+        available_balance_bdt: { type: number, minimum: 0 }
+        paid_out_bdt: { type: number, minimum: 0 }
+        settlements:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/SellerSettlement' }
+        payouts:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/SellerPayoutHistoryItem' }
+    SellerPayoutCreated:
+      type: object
+      required: [id, amount_bdt, status]
+      properties:
+        id: { type: string }
+        amount_bdt: { type: number, exclusiveMinimum: 0 }
+        status: { type: string, enum: [REQUESTED] }
+    AdminPayoutListItem:
+      type: object
+      required: [id, seller_id, amount_paisa, amount_bdt, method, account, status, note, created_at, decided_at, shop_name, seller_name, seller_phone]
+      properties:
+        id: { type: string }
+        seller_id: { type: string }
+        amount_paisa: { type: integer, minimum: 1 }
+        amount_bdt: { type: number, exclusiveMinimum: 0 }
+        method: { type: string, enum: [BKASH, NAGAD, ROCKET, BANK] }
+        account: { type: string }
+        status: { type: string, enum: [REQUESTED, APPROVED, REJECTED] }
+        note: { type: string }
+        created_at: { type: string, format: date-time }
+        decided_at: { type: string, format: date-time, nullable: true }
+        shop_name: { type: string }
+        seller_name: { type: string }
+        seller_phone: { type: string }
+    PayoutDecisionInput:
+      type: object
+      additionalProperties: false
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [APPROVE, REJECT] }
+        note: { type: string, maxLength: 300 }
+    AdminPayoutDecisionResult:
+      type: object
+      required: [id, status, decided_at]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [APPROVED, REJECTED] }
+        decided_at: { type: string, format: date-time }
+    SellerPayoutRequest:
+      type: object
+      additionalProperties: false
+      required: [amount_bdt, method, account]
+      properties:
+        amount_bdt: { type: number, exclusiveMinimum: 0, maximum: 100000000 }
+        method: { type: string, enum: [BKASH, NAGAD, ROCKET, BANK] }
+        account: { type: string, minLength: 1, maxLength: 100 }
+    AdminOrderNoteInput:
+      type: object
+      additionalProperties: false
+      required: [note]
+      properties:
+        note: { type: string, maxLength: 1000 }
+    AdminShippingInput:
+      type: object
+      additionalProperties: false
+      required: [shipping_bdt]
+      properties:
+        shipping_bdt: { type: number, minimum: 0, maximum: 100000 }
+
+            - type: number
+              exclusiveMinimum: 0
+        status: { type: string, enum: [SUCCESS, FAILED] }
+        signature: { type: string, minLength: 1, maxLength: 128 }
+    PaymentCallbackResult:
+      type: object
+      required: [duplicate, status]
+      properties:
+        duplicate: { type: boolean }
+        status: { type: string, enum: [PAID, FAILED] }
 
     SellerProfile:
       type: object

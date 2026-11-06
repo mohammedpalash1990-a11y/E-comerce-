@@ -548,3 +548,44 @@ test('customer account HTTP surface keeps address, wishlist and review routes CU
     assert.equal((await fetch(base + '/api/v1/customer/wishlist/p1', { method: 'DELETE', headers: customer })).status, 200);
   });
 });
+
+
+test('PostgreSQL sandbox payment routes are mounted with customer ownership and verified public callbacks', async () => {
+  await withServer({}, async base => {
+    const statusWithoutSession = await fetch(base + '/api/v1/payments/payment-1/status');
+    assert.equal(statusWithoutSession.status, 401);
+
+    const payWithoutSession = await fetch(base + '/api/v1/customer/orders/order-1/pay', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ method: 'BKASH' })
+    });
+    assert.equal(payWithoutSession.status, 401);
+
+    const simulateWithoutSession = await fetch(base + '/api/v1/payments/sandbox/payment-1/simulate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ outcome: 'success' })
+    });
+    assert.equal(simulateWithoutSession.status, 401);
+
+    const forgedCallback = await fetch(base + '/api/v1/payments/callback/BKASH', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        gateway_txn_id: 'SBX-BKASH-forged',
+        amount_bdt: '160.00',
+        status: 'SUCCESS',
+        signature: 'forged'
+      })
+    });
+    assert.equal(forgedCallback.status, 401, 'a public callback must reject a forged signature');
+  });
+});
+
+test('payment server routes stay in the isolated PostgreSQL import graph', async () => {
+  const files = await importGraph(entry);
+  assert.ok([...files].some(file => file.endsWith('/postgres-payment-routes.mjs')));
+  assert.ok([...files].some(file => file.endsWith('/postgres-checkout.mjs')));
+  assert.ok([...files].some(file => file.endsWith('/postgres-commerce-routes.mjs')));
+});

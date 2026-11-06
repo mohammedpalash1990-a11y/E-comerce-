@@ -57,5 +57,15 @@ State transition allowlist ছাড়া client/API request দিয়ে payment 
 - Out-of-order event পুরনো state-এ payment ফিরিয়ে নিতে পারবে না।
 - Browser redirect একা order fulfilment trigger করবে না।
 
-## Integration boundary
-বর্তমান checkout repository online gateway dependency inject করার সুযোগ রাখে, কিন্তু provider adapter, webhook HTTP route, credentials, signature verification, sandbox/live test এবং reconciliation worker এখনো আলাদা কাজ।
+## বর্তমান PostgreSQL sandbox implementation
+- PostgreSQL checkout এখন COD এবং sandbox online payment intent তৈরি করতে পারে।
+- Online checkout-এর order/stock/payment row transaction commit হওয়ার পরে gateway initiation হয়; gateway call database transaction-এর ভিতরে চলে না।
+- Customer order-এর মালিকানা যাচাই করে `POST /api/v1/customer/orders/{id}/pay` দিয়ে payment শুরু/পুনরায় শুরু করতে পারে।
+- `GET /api/v1/payments/{id}/status` শুধু মালিকের payment status ও amount দেয়; provider payload প্রকাশ করে না।
+- `POST /api/v1/payments/sandbox/{id}/simulate` sandbox-এ signed success/failure callback simulate করে।
+- `POST /api/v1/payments/callback/{gateway}` sandbox HMAC signature, transaction ID, BDT amount ও outcome যাচাই করে; replay/duplicate success ledger-এ দ্বিতীয়বার লেখা হয় না।
+- Callback-এর পর payment, order status, seller order, transaction ledger, notification, audit এবং প্রয়োজনে cancelled order-এর bounded refund request একই PostgreSQL transaction-এ সংরক্ষিত হয়।
+- `PAYMENT_MODE=sandbox` দিয়ে test mode নির্বাচন করা হয়। `PAYMENT_WEBHOOK_SECRET` অবশ্যই server-side secret হিসেবে রাখতে হবে।
+
+## Production/live integration boundary
+বর্তমান implementation sandbox-only। এটি live bKash/Nagad/Rocket/SSLCOMMERZ adapter বা production webhook নয়। Production-এর আগে provider-specific raw-body signature verification, timestamp/replay tolerance, key rotation, provider event-ID idempotency, merchant reference/currency verification, timeout/reconciliation worker, refund-provider lifecycle, structured redacted monitoring এবং provider-এর official sandbox acceptance tests আবশ্যক। কোনো live gateway credential দিয়ে payment নেওয়া যাবে না। PostgreSQL production startup gate seller/admin, delivery এবং live payment integration সম্পূর্ণ যাচাই না হওয়া পর্যন্ত fail-closed থাকবে।
