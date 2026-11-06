@@ -47,7 +47,7 @@ test('admin financial report uses Dhaka calendar boundaries and isolates seller 
     const orders = [
       [orderA,'2026-11-05T18:30:00.000Z',11000,10000,1500,500],
       [orderB,'2026-11-05T19:10:00.000Z',22000,20000,2000,0],
-      [orderOutside,'2026-11-05T18:29:59.000Z',4400,4000,400,0]
+      [orderOutside,'2026-11-05T17:59:59.000Z',4400,4000,400,0]
     ];
     for (const [id,created,total,subtotal,shipping,discount] of orders) {
       await pool.query(
@@ -61,7 +61,7 @@ test('admin financial report uses Dhaka calendar boundaries and isolates seller 
     const sellerOrders = [
       [sellerOrderA,orderA,sellerA,10000,800,9200,500,'2026-11-05T18:31:00.000Z'],
       [sellerOrderB,orderB,sellerB,20000,1600,18400,0,'2026-11-05T19:11:00.000Z'],
-      [sellerOrderOutside,orderOutside,sellerA,4000,320,3680,0,'2026-11-05T18:29:59.000Z']
+      [sellerOrderOutside,orderOutside,sellerA,4000,320,3680,0,'2026-11-05T17:59:59.000Z']
     ];
     for (const [id,orderId,sellerId,subtotal,commission,net,couponDiscount,created] of sellerOrders) {
       await pool.query(
@@ -77,8 +77,8 @@ test('admin financial report uses Dhaka calendar boundaries and isolates seller 
       [ids.transactions[1],'SELLER_EARNING',orderA,sellerOrderA,sellerA,9200,'earning:' + sellerOrderA,'2026-11-05T19:00:00.000Z'],
       [ids.transactions[2],'COMMISSION',orderB,sellerOrderB,sellerB,1600,'commission:' + sellerOrderB,'2026-11-05T19:10:00.000Z'],
       [ids.transactions[3],'SELLER_EARNING',orderB,sellerOrderB,sellerB,18400,'earning:' + sellerOrderB,'2026-11-05T19:10:00.000Z'],
-      [ids.transactions[4],'COMMISSION',orderOutside,sellerOrderOutside,sellerA,320,'commission:' + sellerOrderOutside,'2026-11-05T18:29:59.000Z'],
-      [ids.transactions[5],'SELLER_EARNING',orderOutside,sellerOrderOutside,sellerA,3680,'earning:' + sellerOrderOutside,'2026-11-05T18:29:59.000Z']
+      [ids.transactions[4],'COMMISSION',orderOutside,sellerOrderOutside,sellerA,320,'commission:' + sellerOrderOutside,'2026-11-05T17:59:59.000Z'],
+      [ids.transactions[5],'SELLER_EARNING',orderOutside,sellerOrderOutside,sellerA,3680,'earning:' + sellerOrderOutside,'2026-11-05T17:59:59.000Z']
     ];
     for (const [id,kind,orderId,sellerOrderId,sellerId,amount,ref,created] of ledger) {
       await pool.query(
@@ -89,7 +89,7 @@ test('admin financial report uses Dhaka calendar boundaries and isolates seller 
     const refunds = [
       [ids.refunds[0],orderA,300,'REQUESTED','2026-11-05T19:02:00.000Z'],
       [ids.refunds[1],orderB,400,'REQUESTED','2026-11-05T19:12:00.000Z'],
-      [ids.refunds[2],orderOutside,500,'REQUESTED','2026-11-05T18:29:59.000Z']
+      [ids.refunds[2],orderOutside,500,'REQUESTED','2026-11-05T17:59:59.000Z']
     ];
     for (const [id,orderId,amount,status,created] of refunds) {
       await pool.query(
@@ -100,7 +100,7 @@ test('admin financial report uses Dhaka calendar boundaries and isolates seller 
     const payouts = [
       [ids.payouts[0],sellerA,1000,'REQUESTED','2026-11-05T19:03:00.000Z'],
       [ids.payouts[1],sellerA,2000,'APPROVED','2026-11-05T19:04:00.000Z'],
-      [ids.payouts[2],sellerA,500,'REJECTED','2026-11-05T18:29:59.000Z'],
+      [ids.payouts[2],sellerA,500,'REJECTED','2026-11-05T17:59:59.000Z'],
       [ids.payouts[3],sellerB,3000,'REQUESTED','2026-11-05T19:13:00.000Z']
     ];
     for (const [id,sellerId,amount,status,created] of payouts) {
