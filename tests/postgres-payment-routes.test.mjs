@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import {
   createPostgresPaymentRepository,
   registerPostgresPaymentRoutes
@@ -367,4 +368,21 @@ test('payment received after order cancellation creates a bounded refund request
   assert.equal(h.state.refunds.length, 1);
   assert.equal(h.state.refunds[0].amount_paisa, 16000);
   assert.equal(h.state.refunds[0].status, 'REQUESTED');
+});
+
+
+test('OpenAPI documents all PostgreSQL sandbox payment endpoints and bounded inputs', async () => {
+  const spec = await readFile(new URL('../openapi.yaml', import.meta.url), 'utf8');
+  for (const route of [
+    '/api/v1/customer/orders/{id}/pay',
+    '/api/v1/payments/{id}/status',
+    '/api/v1/payments/sandbox/{id}/simulate',
+    '/api/v1/payments/callback/{gateway}'
+  ]) assert.ok(spec.includes(route), 'missing OpenAPI route ' + route);
+  for (const schema of [
+    'CustomerOrderPayInput', 'PaymentInitiation', 'PaymentStatus',
+    'SandboxPaymentSimulationInput', 'PaymentCallbackInput', 'PaymentCallbackResult'
+  ]) assert.ok(spec.includes('    ' + schema + ':'), 'missing OpenAPI schema ' + schema);
+  assert.match(spec, /PAYMENT_MODE=sandbox/);
+  assert.match(spec, /Live provider-specific signature verification/);
 });
