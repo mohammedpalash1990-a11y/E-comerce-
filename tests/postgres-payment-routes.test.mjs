@@ -373,6 +373,7 @@ test('payment received after order cancellation creates a bounded refund request
 
 test('OpenAPI documents all PostgreSQL sandbox payment endpoints and bounded inputs', async () => {
   const spec = await readFile(new URL('../openapi.yaml', import.meta.url), 'utf8');
+  const env = await readFile(new URL('../.env.example', import.meta.url), 'utf8');
   for (const route of [
     '/api/v1/customer/orders/{id}/pay',
     '/api/v1/payments/{id}/status',
@@ -383,6 +384,8 @@ test('OpenAPI documents all PostgreSQL sandbox payment endpoints and bounded inp
     'CustomerOrderPayInput', 'PaymentInitiation', 'PaymentStatus',
     'SandboxPaymentSimulationInput', 'PaymentCallbackInput', 'PaymentCallbackResult'
   ]) assert.ok(spec.includes('    ' + schema + ':'), 'missing OpenAPI schema ' + schema);
-  assert.match(spec, /PAYMENT_MODE=sandbox/);
-  assert.match(spec, /live provider-specific signature verification/i);
+  assert.match(env, /^PAYMENT_MODE=sandbox$/m);
+  assert.match(spec, /This endpoint is sandbox-only/);
+  assert.match(spec, /live provider-specific signature\\s+verification and raw-body validation are not implemented/i);
+  assert.match(spec, /'501': \\{ description: Live payment webhooks are not enabled \\}/);
 });
