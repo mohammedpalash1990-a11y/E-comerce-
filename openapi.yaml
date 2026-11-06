@@ -1933,7 +1933,7 @@ components:
         status: { type: string, enum: [PENDING_REVIEW, ACTIVE, REJECTED, SUSPENDED, ARCHIVED] }
         sku: { type: string, nullable: true }
         description: { type: string, nullable: true }
-        seller_id: { type: string }
+        seller_id: { type: string, nullable: true }
         category_slug: { type: string, nullable: true }
         seller_name: { type: string, nullable: true }
         image: { type: string, nullable: true }
