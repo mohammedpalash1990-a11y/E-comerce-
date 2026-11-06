@@ -75,7 +75,7 @@ export function registerPostgresCommerceRoutes(route, ok, options = {}) {
           ) ORDER BY oi.id)
           FROM order_items oi WHERE oi.seller_order_id=so.id
         ),'[]'::json) AS items,
-        sh.provider AS shipment_provider,sh.tracking_id AS shipment_tracking_id,
+        sh.id AS shipment_id,sh.provider AS shipment_provider,sh.tracking_id AS shipment_tracking_id,
         sh.status AS shipment_status,sh.mode AS shipment_mode
       FROM seller_orders so
       JOIN orders o ON o.id=so.order_id
@@ -101,7 +101,7 @@ export function registerPostgresCommerceRoutes(route, ok, options = {}) {
         unit_price_bdt: Number(item.unit_price_bdt), variant: item.variant || ''
       })),
       shipment: row.shipment_tracking_id ? {
-        provider: row.shipment_provider, tracking_id: row.shipment_tracking_id,
+        id: row.shipment_id, provider: row.shipment_provider, tracking_id: row.shipment_tracking_id,
         status: row.shipment_status, mode: row.shipment_mode
       } : null
     })));
