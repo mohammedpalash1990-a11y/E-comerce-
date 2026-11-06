@@ -9,7 +9,8 @@ import { createPostgresAuthRepository } from './postgres-auth.mjs';
 import { createPostgresCustomerRepository } from './postgres-customer.mjs';
 import { handlePostgresInventoryWorkspace } from './postgres-inventory-workspace.mjs';
 import { registerPostgresCommerceRoutes } from './postgres-commerce-routes.mjs';
-import { shippingFor } from './gateways.mjs';
+import { shippingFor, initiateGateway, signCallback, verifySignature, PAYMENT_METHODS } from './gateways.mjs';
+import { createPostgresPaymentRepository, registerPostgresPaymentRoutes } from './postgres-payment-routes.mjs';
 import { registerPostgresAdminSellerRoutes } from './postgres-admin-seller-routes.mjs';
 import { registerPostgresSellerWorkspaceRoutes } from './postgres-seller-workspace-routes.mjs';
 import { registerPostgresSellerProductRoutes } from './postgres-seller-product-routes.mjs';
@@ -120,10 +121,23 @@ export function createPostgresApiServer({ database, catalogRepository, authRepos
     domainRoutes.push({ method: routeMethod, re: new RegExp('^' + routePattern + '$'), roles, handler, limit: opts.limit || MAX_BODY_BYTES });
   };
   const response = (data, status = 200) => ({ status, body: { data } });
+  const paymentMode = String(env.PAYMENT_MODE || 'sandbox').toLowerCase();
+  const paymentRepository = createPostgresPaymentRepository(database, {
+    gatewayInitiate: initiateGateway,
+    methods: PAYMENT_METHODS
+  });
   registerPostgresCommerceRoutes(registerDomainRoute, response, {
     database,
     shippingFor,
+    paymentMethods: PAYMENT_METHODS,
+    paymentRepository,
     inventoryRepository: createPostgresInventoryRepository(database)
+  });
+  registerPostgresPaymentRoutes(registerDomainRoute, response, {
+    paymentRepository,
+    paymentMode,
+    gatewaySign: signCallback,
+    gatewayVerify: verifySignature
   });
   registerPostgresAdminSellerRoutes(registerDomainRoute, response, { database });
   registerPostgresSellerWorkspaceRoutes(registerDomainRoute, response, { database });
