@@ -291,10 +291,11 @@ export async function createPostgresApi({
   verifyConnection = verifyPostgresConnection, migrate = runPostgresMigrations,
   createServer = createPostgresApiServer
 } = {}) {
-  // Customer accounts are now mounted, but seller/admin workspaces, commerce,
-  // payment and delivery routes remain incomplete. Keep production fail-closed.
+  // Seller/admin, commerce, payment and sandbox courier routes are mounted.
+  // Production remains fail-closed until live PostgreSQL HTTP/checkout/order/inventory
+  // verification, production payment/courier adapters, and operational recovery checks pass.
   if (env.NODE_ENV === 'production') {
-    throw new Error('PostgreSQL API is incomplete; production startup remains blocked until seller, admin, commerce, payment and delivery routes are integrated and verified');
+    throw new Error('PostgreSQL production startup remains blocked until live database HTTP and commerce flows, production payment/courier adapters, and backup/restore and deployment security checks are verified');
   }
   postgresPoolOptions(env);
   const pool = await createPool({ env });
