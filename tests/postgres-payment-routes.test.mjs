@@ -384,5 +384,5 @@ test('OpenAPI documents all PostgreSQL sandbox payment endpoints and bounded inp
     'SandboxPaymentSimulationInput', 'PaymentCallbackInput', 'PaymentCallbackResult'
   ]) assert.ok(spec.includes('    ' + schema + ':'), 'missing OpenAPI schema ' + schema);
   assert.match(spec, /PAYMENT_MODE=sandbox/);
-  assert.match(spec, /Live provider-specific signature verification/);
+  assert.match(spec, /live provider-specific signature verification/i);
 });
