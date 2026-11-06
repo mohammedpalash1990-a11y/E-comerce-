@@ -154,7 +154,7 @@ test('seller cannot book courier for another seller order', async () => {
 });
 
 test('courier booking is atomic, ownership-scoped and idempotently rejects a second active shipment', async () => {
-  const h = harness();
+  const h = harness({ orderStatus: 'SHIPPED' });
   const result = await h.find('POST', '/api/v1/seller/orders/:id/courier').handler({
     user, params: ['seller-order-1'], body: { provider: 'PATHAO' }
   });
@@ -263,4 +263,20 @@ test('courier cannot be booked before the seller marks the sub-order SHIPPED', a
     error => error.status === 409
   );
   assert.equal(h.state.shipment, null);
+});
+
+
+test('courier status endpoint cannot be used to manufacture the initial BOOKED state', async () => {
+  const h = harness({
+    shipment: {
+      id: 'shipment-1', seller_order_id: 'seller-order-1', provider: 'PATHAO',
+      tracking_id: 'PA-123', status: 'BOOKED', mode: 'sandbox'
+    }
+  });
+  await assert.rejects(
+    h.find('POST', '/api/v1/seller/shipments/:id/status').handler({
+      user, params: ['shipment-1'], body: { status: 'BOOKED' }
+    }),
+    error => error.status === 400
+  );
 });
