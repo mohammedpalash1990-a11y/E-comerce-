@@ -1872,7 +1872,7 @@ paths:
     post:
       summary: Create a sandbox courier shipment for an owned seller order
       description: >-
-        Requires an APPROVED seller and a PROCESSING or SHIPPED seller order.
+        Requires an APPROVED seller and a SHIPPED seller order.
         Only one active shipment can exist for a seller order. This creates
         a sandbox tracking reference; it does not contact a live courier.
       security: [{ bearerAuth: [] }]
