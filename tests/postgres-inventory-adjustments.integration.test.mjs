@@ -5,7 +5,6 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createPostgresPool, verifyPostgresConnection, closePostgresPool } from '../apps/api/src/postgres-pool.mjs';
 import { createPostgresDatabase } from '../apps/api/src/postgres-runtime.mjs';
-import { createPostgresAuthRepository } from '../apps/api/src/postgres-auth.mjs';
 import { createPostgresInventoryRepository } from '../apps/api/src/postgres-inventory.mjs';
 import { runPostgresMigrations } from '../apps/api/src/postgres-migrations.mjs';
 
@@ -29,24 +28,22 @@ test('real PostgreSQL seller stock adjustments are idempotent, serialized and ow
     await verifyPostgresConnection(pool);
     await runPostgresMigrations(pool, migrationDirectory);
     const database = createPostgresDatabase(pool);
-    const auth = createPostgresAuthRepository(database);
+    const createdAt = new Date().toISOString();
     for (const [target, phone, label] of [
       [seller, sellerPhone, 'Primary'],
       [otherSeller, otherSellerPhone, 'Other']
     ]) {
-      const registered = await auth.registerSeller({
-        name: label + ' Inventory Integration Seller',
-        phone,
-        email: 'inventory-idempotency-' + label.toLowerCase() + '-' + suffix + '@example.test',
-        password: 'Integration@123',
-        confirm_password: 'Integration@123',
-        shop_name: label + ' Inventory Integration Shop ' + suffix,
-        shop_address: 'Dhaka',
-        business_info: 'Disposable inventory idempotency fixture',
-        kyc_nid: label === 'Primary' ? '1234567890123' : '1234567890124'
-      });
-      target.id = registered.data.id;
-      await pool.query("UPDATE seller_profiles SET status='APPROVED' WHERE user_id=$1", [target.id]);
+      target.id = randomUUID();
+      await pool.query(
+        'INSERT INTO users(id,phone,name,password,role,status,created_at) VALUES($1,$2,$3,$4,$5,$6,$7)',
+        [target.id, phone, label + ' Inventory Integration Seller', 'integration-only-password', 'SELLER', 'ACTIVE', createdAt]
+      );
+      await pool.query(
+        `INSERT INTO seller_profiles(user_id,shop_name,shop_address,business_info,kyc_nid,status,commission_bps,created_at)
+         VALUES($1,$2,'Dhaka','Disposable inventory idempotency fixture',$3,'APPROVED',0,$4)`,
+        [target.id, label + ' Inventory Integration Shop ' + suffix,
+          label === 'Primary' ? '1234567890123' : '1234567890124', createdAt]
+      );
     }
 
     await pool.query(`INSERT INTO products
