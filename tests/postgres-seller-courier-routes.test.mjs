@@ -27,6 +27,7 @@ function harness({
       return {
         async get(...args) {
           calls.push({ method: 'get', sql, args });
+          const normalizedSql = sql.replace(/\\s+/g, ' ');
           if (sql.includes('FROM seller_profiles sp JOIN users')) return state.seller;
           if (sql.includes('FROM seller_orders so JOIN orders o')) {
             return owned && args[0] === state.order.id && args[1] === 'seller-1'
@@ -37,7 +38,7 @@ function harness({
             return row && row.seller_order_id === args[0] &&
               !['FAILED_DELIVERY', 'RETURNED'].includes(row.status) ? { ...row } : undefined;
           }
-          if (sql.includes('FROM shipments sh JOIN seller_orders so')) {
+          if (normalizedSql.includes('FROM shipments sh JOIN seller_orders so')) {
             const row = state.shipment;
             return row && row.id === args[0] && owned && args[1] === 'seller-1'
               ? {
