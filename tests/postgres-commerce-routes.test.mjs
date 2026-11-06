@@ -26,7 +26,7 @@ function setup({ ownedSellerOrder = true, customerOrder = true, sellerStatus = '
             delivery_name: 'Buyer', delivery_phone: '01700000000',
             delivery_address: 'Road 1', delivery_area: 'Dhaka', customer_note: 'Call first',
             items: [{ name_bn: 'চা', quantity: '2', unit_price_bdt: '60', variant: 'Large' }],
-            shipment_provider: 'PATHAO', shipment_tracking_id: 'PA-123',
+            shipment_id: 'shipment-1', shipment_provider: 'PATHAO', shipment_tracking_id: 'PA-123',
             shipment_status: 'BOOKED', shipment_mode: 'sandbox'
           }];
           return [];
@@ -126,7 +126,7 @@ test('seller order list returns buyer, delivery, purchased items and current cou
   assert.equal(order.delivery.note, 'Call first');
   assert.deepEqual(order.items, [{ name_bn: 'চা', quantity: 2, unit_price_bdt: 60, variant: 'Large' }]);
   assert.deepEqual(order.shipment, {
-    provider: 'PATHAO', tracking_id: 'PA-123', status: 'BOOKED', mode: 'sandbox'
+    id: 'shipment-1', provider: 'PATHAO', tracking_id: 'PA-123', status: 'BOOKED', mode: 'sandbox'
   });
   assert.ok(h.calls.some(call => call.sql.includes('LEFT JOIN LATERAL') && call.sql.includes('FROM shipments')));
 });
