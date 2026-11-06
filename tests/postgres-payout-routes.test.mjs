@@ -78,6 +78,7 @@ test('payout request validates method and amount',async()=>{
   const h=setup();
   await assert.rejects(find(h,'POST','/api/v1/seller/payouts').handler({user:sellerUser,body:{amount_bdt:10,method:'PAYPAL',account:'abc'}}),e=>e.status===400);
   await assert.rejects(find(h,'POST','/api/v1/seller/payouts').handler({user:sellerUser,body:{amount_bdt:-1,method:'BKASH',account:'abc'}}),e=>e.status===400);
+  await assert.rejects(find(h,'POST','/api/v1/seller/payouts').handler({user:sellerUser,body:{amount_bdt:10.001,method:'BKASH',account:'abc'}}),e=>e.status===400);
 });
 
 test('admin can list requested payouts with seller context',async()=>{
