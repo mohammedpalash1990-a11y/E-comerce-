@@ -11,7 +11,7 @@ async function requestHeaders(env) {
     database,
     catalogRepository: {},
     authRepository: {},
-    customerRepository: {},
+    customerRepository: { async listAddresses() { return []; } },
     env
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
