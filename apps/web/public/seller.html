@@ -57,7 +57,7 @@ async function loadOrders(){
     ' · Sandbox'+(courierActions.length?'<div class="toolbar">'+courierActions.map(a=>
       '<button class="btn" data-courier-id="'+esc(shipment.id)+'" data-courier-status="'+a[0]+'">'+a[1]+'</button>'
      ).join('')+'</div>':'')+'</div>'
-   :(['PROCESSING','SHIPPED'].includes(o.status)
+   :(o.status==='SHIPPED'
      ?'<div class="toolbar"><label>কুরিয়ার <select data-courier-provider><option value="PATHAO">Pathao</option><option value="REDX">RedX</option><option value="STEADFAST">Steadfast</option></select></label><button class="btn" data-book-courier="'+esc(o.id)+'">Sandbox কুরিয়ার বুক করুন</button></div><small class="muted">এটি পরীক্ষামূলক courier booking; বাস্তব pickup request নয়।</small>'
      :'');
   return '<article class="notice" data-order-card="'+esc(o.id)+'" data-area="'+esc(o.delivery?.area||'')+'">'+
