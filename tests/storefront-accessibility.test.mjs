@@ -33,7 +33,7 @@ test('cart keyboard flow returns focus, closes on Escape and traps Tab', () => {
 });
 
 test('existing demo cart persistence and non-live-order guard remain intact', () => {
-  assert.match(html, /localStorage\.getItem\('haat_cart_demo'/);
-  assert.match(html, /localStorage\.setItem\('haat_cart_demo'/);
+  assert.match(html, /localStorage\.getItem\(CART_STORAGE_KEY\)/);
+  assert.match(html, /localStorage\.setItem\(CART_STORAGE_KEY/);
   assert.match(html, /এটি শুধু ডেমো—লাইভ অর্ডার এখনো চালু হয়নি/);
 });
