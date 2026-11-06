@@ -204,7 +204,7 @@ test('shipment status only follows forward courier transitions and rejects forei
   const handler = h.find('POST', '/api/v1/seller/shipments/:id/status').handler;
   const picked = await handler({ user, params: ['shipment-1'], body: { status: 'PICKED_UP' } });
   assert.equal(picked.body.data.status, 'PICKED_UP');
-  await assert.rejects(handler({ user, params: ['shipment-1'], body: { status: 'BOOKED' } }), error => error.status === 400);
+  await assert.rejects(handler({ user, params: ['shipment-1'], body: { status: 'BOOKED' } }), /কুরিয়ার স্ট্যাটাস সঠিক নয়/);
   const foreign = harness({
     owned: false,
     shipment: {
