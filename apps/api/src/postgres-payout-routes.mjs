@@ -6,8 +6,11 @@ const STATES = ['REQUESTED', 'APPROVED', 'REJECTED'];
 const toPaisa = value => {
   const amount = Number(value);
   if (!Number.isFinite(amount) || amount <= 0 || amount > 100000000) throw new HttpError(400, 'পেআউটের পরিমাণ সঠিক নয়');
-  const paisa = Math.round(amount * 100);
-  if (!Number.isSafeInteger(paisa) || paisa <= 0) throw new HttpError(400, 'পেআউটের পরিমাণ সঠিক নয়');
+  const scaled = amount * 100;
+  const paisa = Math.round(scaled);
+  if (!Number.isSafeInteger(paisa) || paisa <= 0 || Math.abs(scaled - paisa) > 1e-7) {
+    throw new HttpError(400, 'পেআউটের পরিমাণ সর্বোচ্চ দুই দশমিক ঘরে দিতে হবে');
+  }
   return paisa;
 };
 const bdt = value => Number(value || 0) / 100;
