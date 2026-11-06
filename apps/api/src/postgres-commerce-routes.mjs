@@ -81,7 +81,7 @@ export function registerPostgresCommerceRoutes(route, ok, options = {}) {
       JOIN orders o ON o.id=so.order_id
       LEFT JOIN users u ON u.id=o.user_id
       LEFT JOIN LATERAL (
-        SELECT provider,tracking_id,status,mode
+        SELECT id,provider,tracking_id,status,mode
         FROM shipments WHERE seller_order_id=so.id
         ORDER BY created_at DESC,id DESC LIMIT 1
       ) sh ON TRUE
