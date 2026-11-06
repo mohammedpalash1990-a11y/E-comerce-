@@ -27,7 +27,7 @@ export function createPostgresCheckoutRepository(database, options = {}) {
   const shippingFor = options.shippingFor;
   const couponFor = options.couponFor || createPostgresCouponRepository(database, { now: getNow }).validateCoupon;
   const paymentMethods = new Set(options.paymentMethods || ['COD']);
-  const startPayment = options.startPayment;
+  const initiatePayment = options.initiatePayment || options.startPayment;
   const notify = options.notify || (async () => {});
   const audit = options.audit || (async () => {});
   const addEvent = options.addEvent || (async () => {});
@@ -47,7 +47,7 @@ export function createPostgresCheckoutRepository(database, options = {}) {
 
     const method = String(body.payment_method || 'COD').toUpperCase();
     if (!paymentMethods.has(method)) throw bad('অজানা পেমেন্ট পদ্ধতি');
-    if (method !== 'COD' && typeof startPayment !== 'function') {
+    if (method !== 'COD' && typeof initiatePayment !== 'function') {
       throw bad('অনলাইন পেমেন্ট সার্ভিস এখনো সংযুক্ত নয়');
     }
     if (typeof shippingFor !== 'function') {
@@ -57,6 +57,7 @@ export function createPostgresCheckoutRepository(database, options = {}) {
     const couponCode = normalizeCouponCode(body.coupon_code);
     const fromCart = !Array.isArray(body.items);
     const orderId = generateId();
+    const paymentId = generateId();
     const result = await database.tx(async () => {
       // The same per-customer lock used by cart mutations protects snapshot and
       // cleanup together. Lock even explicit-item checkout: it removes cart lines.
@@ -187,7 +188,7 @@ export function createPostgresCheckoutRepository(database, options = {}) {
       await query(`INSERT INTO payments(
         id,order_id,method,amount_paisa,status,gateway_txn_id,raw,created_at,updated_at
       ) VALUES(?,?,?,?,?,?,?,?,?)`).run(
-        generateId(), orderId, method, total, 'PENDING', null, '{}', timestamp, timestamp
+        paymentId, orderId, method, total, 'PENDING', null, '{}', timestamp, timestamp
       );
 
       if (fromCart) {
@@ -201,13 +202,16 @@ export function createPostgresCheckoutRepository(database, options = {}) {
       await addEvent(orderId, null, initialStatus, 'অর্ডার তৈরি', user.id);
       await audit(user.id, 'CHECKOUT', 'order', orderId, { total, method });
 
-      let payment = { method, status: 'PENDING' };
-      if (online) {
-        await query("DELETE FROM payments WHERE order_id=? AND method=? AND status='PENDING'").run(orderId, method);
-        payment = await startPayment({ id: orderId, total_paisa: total }, method);
-      }
-      return { total, subtotal, shipping, discount, status: initialStatus, payment };
+      return { total, subtotal, shipping, discount, status: initialStatus };
     });
+
+    // Start the external gateway only after the checkout transaction commits.
+    // The payment repository records INITIATED in a separate, row-locked transaction.
+    const payment = method === 'COD'
+      ? { method, status: 'PENDING' }
+      : await initiatePayment({
+          userId: user.id, paymentId, method, amountPaisa: result.total
+        });
 
     return {
       id: orderId,
@@ -217,7 +221,7 @@ export function createPostgresCheckoutRepository(database, options = {}) {
       shipping_bdt: result.shipping / 100,
       discount_bdt: result.discount / 100,
       status: result.status,
-      payment: result.payment
+      payment
     };
   }
 
