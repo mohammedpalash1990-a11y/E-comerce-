@@ -13,6 +13,7 @@ function harness({
   const routes = [], calls = [];
   const state = {
     seller: { status: sellerStatus, account_status: accountStatus },
+    sellerOrderStatus,
     order: {
       id: 'seller-order-1', order_id: 'parent-order-1', status: orderStatus,
       delivery_area: 'Dhaka', user_id: 'customer-1'
@@ -40,7 +41,7 @@ function harness({
             const row = state.shipment;
             return row && row.id === args[0] && owned && args[1] === 'seller-1'
               ? {
-                  ...row, order_id: state.order.order_id, seller_order_status: state.order.status,
+                  ...row, order_id: state.order.order_id, seller_order_status: state.sellerOrderStatus,
                   user_id: state.order.user_id
                 } : undefined;
           }
@@ -93,7 +94,7 @@ function harness({
     async applySellerStatus(...args) {
       assert.equal(state.transactionDepth, 0, 'order lifecycle must run after the shipment transaction commits');
       lifecycleCalls.push(args);
-      state.order.status = args[1];
+      state.sellerOrderStatus = args[1];
       return 'DELIVERED';
     }
   };
