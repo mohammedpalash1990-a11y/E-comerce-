@@ -22,7 +22,7 @@ export function expiryTime(value) {
   if (value === null) return null;
   // Legacy date-only records mean midnight UTC at the START of that date.
   // Timestamp records require an explicit zone; never use the server locale.
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}(?:T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,3})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d))?$/.test(value)) throw unavailable();
+  if (typeof value !== 'string' || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}(?:T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:[.][0-9]{1,3})?(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9]))?$/.test(value)) throw unavailable();
   const date = value.slice(0, 10), day = Date.parse(date + 'T00:00:00.000Z');
   if (!Number.isFinite(day) || new Date(day).toISOString().slice(0, 10) !== date) throw unavailable();
   const expiry = Date.parse(value);
@@ -30,24 +30,34 @@ export function expiryTime(value) {
   return expiry;
 }
 
-// Adapted from the existing PR #6 validation contract. Preview is read-only;
-// checkout must call with lock:true inside its surrounding order transaction.
+// Preview is read-only. Checkout must call with lock:true and userId inside its
+// surrounding order transaction. The coupon row lock serializes customer-limit
+// checks across concurrent redemptions of the same code.
 export function createPostgresCouponRepository(database, { now = defaultNow } = {}) {
   if (!database?.q) throw new TypeError('PostgreSQL database is required');
 
-  async function validateCoupon(value, subtotalPaisa, { lock = false } = {}) {
+  async function validateCoupon(value, subtotalPaisa, { lock = false, userId = null } = {}) {
     const code = normalizeCouponCode(value);
     if (code === null) return null;
     let subtotal;
     try { subtotal = parseSafePostgresBigInt(subtotalPaisa); }
     catch { throw bad('Invalid order subtotal'); }
     if (subtotal < 0) throw bad('Invalid order subtotal');
-    const coupon = await database.q(`SELECT code,type,value,min_order_paisa,max_uses,used_count,expires_at,active
+    const coupon = await database.q(`SELECT code,type,value,min_order_paisa,max_uses,used_count,
+        max_uses_per_customer,expires_at,active
       FROM coupons WHERE code=?${lock ? ' FOR UPDATE' : ''}`).get(code);
     if (!coupon || Number(coupon.active) !== 1) throw unavailable();
     const used = storedInteger(coupon.used_count);
     const maximum = coupon.max_uses === null ? null : storedInteger(coupon.max_uses, 1);
     if (used >= Number.MAX_SAFE_INTEGER || (maximum !== null && used >= maximum)) throw unavailable();
+    const perCustomer = coupon.max_uses_per_customer == null
+      ? null : storedInteger(coupon.max_uses_per_customer, 1);
+    if (perCustomer !== null) {
+      if (typeof userId !== 'string' || !userId) throw unavailable();
+      const row = await database.q(`SELECT COUNT(*) AS redemption_count
+        FROM coupon_redemptions WHERE coupon_code=? AND user_id=? AND restored_at IS NULL`).get(code, userId);
+      if (storedInteger(row?.redemption_count) >= perCustomer) throw unavailable();
+    }
     const expiry = expiryTime(coupon.expires_at);
     // Sample the clock AFTER the row lock is acquired: a waiting checkout must
     // not redeem a coupon that expired while another transaction held the lock.
@@ -58,7 +68,6 @@ export function createPostgresCouponRepository(database, { now = defaultNow } = 
     if (subtotal < minimum) throw bad('Coupon minimum order amount has not been met');
     const amount = storedInteger(coupon.value, 1);
     if (!['FIXED', 'PERCENT'].includes(coupon.type)) throw unavailable();
-    // Preserve the existing admin coupon contract, not a new commission policy.
     if (coupon.type === 'PERCENT' && amount > 90) throw unavailable();
     const discount = coupon.type === 'PERCENT'
       ? Number(BigInt(subtotal) * BigInt(amount) / 100n)
