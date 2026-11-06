@@ -85,10 +85,16 @@ test('real PostgreSQL payment initiation, signed-result persistence and duplicat
       error => error.status === 400
     );
 
-    const paid = await payments.recordVerifiedPaymentCallback({
-      method: 'BKASH', gatewayTxnId, amountPaisa: amount, status: 'SUCCESS'
-    });
-    assert.deepEqual(paid, { duplicate: false, status: 'PAID' });
+    const callbackResults = await Promise.all([
+      payments.recordVerifiedPaymentCallback({ method: 'BKASH', gatewayTxnId, amountPaisa: amount, status: 'SUCCESS' }),
+      payments.recordVerifiedPaymentCallback({ method: 'BKASH', gatewayTxnId, amountPaisa: amount, status: 'SUCCESS' })
+    ]);
+    assert.deepEqual(
+      callbackResults.map(result => result.duplicate).sort(),
+      [false, true],
+      'concurrent duplicate success callbacks must produce exactly one state transition'
+    );
+    assert.deepEqual(callbackResults.map(result => result.status), ['PAID', 'PAID']);
 
     const rows = await pool.query(
       `SELECT p.status payment_status,o.status order_status,o.payment_status order_payment_status,
@@ -113,10 +119,6 @@ test('real PostgreSQL payment initiation, signed-result persistence and duplicat
     assert.equal(Number(ledger.rows[0].amount_paisa), amount);
     assert.equal(ledger.rows[0].ref, paymentId);
 
-    const duplicate = await payments.recordVerifiedPaymentCallback({
-      method: 'BKASH', gatewayTxnId, amountPaisa: amount, status: 'SUCCESS'
-    });
-    assert.deepEqual(duplicate, { duplicate: true, status: 'PAID' });
     const finalLedger = await pool.query(
       "SELECT COUNT(*)::int AS count FROM transactions WHERE order_id=$1 AND kind='ORDER_PAYMENT'",
       [orderId]
