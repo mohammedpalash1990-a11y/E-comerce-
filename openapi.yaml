@@ -1844,6 +1844,97 @@ paths:
         '409': { description: Payment is not initiated or state transition is invalid }
         '501': { description: Live payment webhooks are not enabled }
 
+
+  /api/v1/seller/courier/quote:
+    get:
+      summary: Get sandbox courier price estimates for a seller delivery area
+      description: >-
+        Requires an active APPROVED seller. Estimates are simulated and do not
+        represent a real courier booking or pickup request.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: area
+          schema: { type: string, maxLength: 100 }
+      responses:
+        '200':
+          description: Sandbox price estimates by supported courier.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/SellerCourierQuote' }
+        '401': { description: Authentication required }
+        '403': { description: Active approved seller account required }
+  /api/v1/seller/orders/{id}/courier:
+    post:
+      summary: Create a sandbox courier shipment for an owned seller order
+      description: >-
+        Requires an APPROVED seller and a SHIPPED seller order.
+        Only one active shipment can exist for a seller order. This creates
+        a sandbox tracking reference; it does not contact a live courier.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SellerCourierBookingInput' }
+      responses:
+        '201':
+          description: Sandbox tracking reference created.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/SellerCourierBookingResult' }
+        '400': { description: Unsupported courier provider }
+        '401': { description: Authentication required }
+        '403': { description: Active approved seller account required }
+        '404': { description: Seller order not found or not owned by the seller }
+        '409': { description: Seller order is not ready or an active shipment already exists }
+  /api/v1/seller/shipments/{id}/status:
+    post:
+      summary: Advance the status of an owned sandbox shipment
+      description: >-
+        Status transitions are restricted. DELIVERED is accepted only after
+        the seller order is SHIPPED and then invokes the canonical order
+        lifecycle so seller earnings and commission are recorded.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SellerShipmentStatusInput' }
+      responses:
+        '200':
+          description: Shipment status updated, or duplicate delivered request safely retried.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/SellerShipmentStatusResult' }
+        '400': { description: Unsupported shipment status }
+        '401': { description: Authentication required }
+        '403': { description: Active approved seller account required }
+        '404': { description: Shipment not found or not owned by the seller }
+        '409': { description: Invalid shipment state transition or seller order is not SHIPPED }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1873,6 +1964,51 @@ components:
             properties:
               data: { $ref: '#/components/schemas/CustomerCart' }
   schemas:
+    SellerCourierQuote:
+      type: object
+      required: [mode, quotes_bdt]
+      properties:
+        mode: { type: string, enum: [sandbox] }
+        quotes_bdt:
+          type: object
+          additionalProperties: false
+          required: [PATHAO, REDX, STEADFAST]
+          properties:
+            PATHAO: { type: number, minimum: 0 }
+            REDX: { type: number, minimum: 0 }
+            STEADFAST: { type: number, minimum: 0 }
+    SellerCourierBookingInput:
+      type: object
+      additionalProperties: false
+      required: [provider]
+      properties:
+        provider: { type: string, enum: [PATHAO, REDX, STEADFAST] }
+    SellerCourierBookingResult:
+      type: object
+      required: [id, seller_order_id, provider, tracking_id, status, charge_bdt, mode]
+      properties:
+        id: { type: string }
+        seller_order_id: { type: string }
+        provider: { type: string, enum: [PATHAO, REDX, STEADFAST] }
+        tracking_id: { type: string }
+        status: { type: string, enum: [BOOKED] }
+        charge_bdt: { type: number, minimum: 0 }
+        mode: { type: string, enum: [sandbox] }
+    SellerShipmentStatusInput:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string, enum: [PICKED_UP, IN_TRANSIT, DELIVERED, FAILED_DELIVERY, RETURNED] }
+    SellerShipmentStatusResult:
+      type: object
+      required: [id, seller_order_id, status, duplicate]
+      properties:
+        id: { type: string }
+        seller_order_id: { type: string }
+        status: { type: string, enum: [BOOKED, PICKED_UP, IN_TRANSIT, DELIVERED, FAILED_DELIVERY, RETURNED] }
+        duplicate: { type: boolean }
+        parent_status: { type: string, nullable: true }
     CustomerOrderPayInput:
       type: object
       additionalProperties: false

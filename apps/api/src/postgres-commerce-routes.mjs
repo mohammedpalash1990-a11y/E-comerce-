@@ -65,10 +65,46 @@ export function registerPostgresCommerceRoutes(route, ok, options = {}) {
 
   route('GET', '/api/v1/seller/orders', ['SELLER'], async ({ user, url }) => {
     const status = url.searchParams.get('status');
-    const rows = await database.q(`SELECT so.id,so.order_id,so.status,so.subtotal_paisa,so.commission_paisa,so.net_paisa,so.created_at
-      FROM seller_orders so WHERE so.seller_id=? AND so.status<>'AWAITING_PAYMENT'${status ? ' AND so.status=?' : ''}
+    const rows = await database.q(`SELECT so.id,so.order_id,so.status,so.subtotal_paisa,so.commission_paisa,so.net_paisa,so.created_at,
+        o.delivery_name,o.delivery_phone,o.delivery_address,o.delivery_area,o.customer_note,
+        u.name AS customer_name,u.phone AS customer_phone,
+        COALESCE((
+          SELECT json_agg(json_build_object(
+            'name_bn',oi.product_name_bn,'quantity',oi.quantity,
+            'unit_price_bdt',oi.unit_price_paisa::numeric/100,'variant',oi.variant
+          ) ORDER BY oi.id)
+          FROM order_items oi WHERE oi.seller_order_id=so.id
+        ),'[]'::json) AS items,
+        sh.id AS shipment_id,sh.provider AS shipment_provider,sh.tracking_id AS shipment_tracking_id,
+        sh.status AS shipment_status,sh.mode AS shipment_mode
+      FROM seller_orders so
+      JOIN orders o ON o.id=so.order_id
+      LEFT JOIN users u ON u.id=o.user_id
+      LEFT JOIN LATERAL (
+        SELECT id,provider,tracking_id,status,mode
+        FROM shipments WHERE seller_order_id=so.id
+        ORDER BY created_at DESC,id DESC LIMIT 1
+      ) sh ON TRUE
+      WHERE so.seller_id=? AND so.status<>'AWAITING_PAYMENT'${status ? ' AND so.status=?' : ''}
       ORDER BY so.created_at DESC,so.id DESC LIMIT 200`).all(...(status ? [user.id, status] : [user.id]));
-    return ok(rows.map(row => ({ id: row.id, order_id: row.order_id, orderNumber: orderNumber(row.order_id), status: row.status, subtotal_bdt: money(row.subtotal_paisa), commission_bdt: money(row.commission_paisa), net_bdt: money(row.net_paisa), created_at: row.created_at })));
+    return ok(rows.map(row => ({
+      id: row.id, order_id: row.order_id, orderNumber: orderNumber(row.order_id), status: row.status,
+      subtotal_bdt: money(row.subtotal_paisa), commission_bdt: money(row.commission_paisa),
+      net_bdt: money(row.net_paisa), created_at: row.created_at,
+      customer: { name: row.customer_name, phone: row.customer_phone },
+      delivery: {
+        name: row.delivery_name, phone: row.delivery_phone, address: row.delivery_address,
+        area: row.delivery_area, note: row.customer_note
+      },
+      items: (Array.isArray(row.items) ? row.items : []).map(item => ({
+        name_bn: item.name_bn, quantity: Number(item.quantity),
+        unit_price_bdt: Number(item.unit_price_bdt), variant: item.variant || ''
+      })),
+      shipment: row.shipment_tracking_id ? {
+        id: row.shipment_id, provider: row.shipment_provider, tracking_id: row.shipment_tracking_id,
+        status: row.shipment_status, mode: row.shipment_mode
+      } : null
+    })));
   });
 
   route('POST', '/api/v1/seller/orders/:id/status', ['SELLER'], async ({ user, params, body }) => {

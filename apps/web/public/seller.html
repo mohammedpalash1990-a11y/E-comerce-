@@ -36,7 +36,88 @@ function show(){ $('#login').classList.toggle('hidden',!!token);$('#workspace').
 function fail(e){$('#formMsg').textContent=e.message;$('#formMsg').classList.remove('hidden')}
 async function boot(){const cats=await call('/categories');$('#category').innerHTML=cats.data.map(c=>'<option value="'+esc(c.slug)+'">'+esc(c.name_bn)+'</option>').join('');await Promise.all([loadProducts(),loadOrders()]);try{await loadInventory()}catch(error){$('#inventorySummary').textContent='Inventory service এখনো সংযুক্ত নয়: '+error.message;$('#sellerLowStock').textContent='Inventory API unavailable'}}
 async function loadProducts(){const result=await call('/seller/products');$('#productRows').innerHTML=result.data.map(p=>'<tr><td>'+(p.image?'<img src="'+esc(p.image)+'" alt="" loading="lazy" style="width:52px;height:52px;object-fit:contain;border-radius:8px">':'—')+'</td><td><b>'+esc(p.name_bn)+'</b><br><small class="muted">'+esc(p.name_en)+'</small></td><td>'+money(p.price_bdt)+'</td><td>'+p.stock+'</td><td><span class="status">'+esc(({PENDING_REVIEW:'অনুমোদনের অপেক্ষায়',ACTIVE:'অনুমোদিত',REJECTED:'বাতিল'}[p.status]||p.status))+'</span></td></tr>').join('')||'<tr><td colspan="5">এখনো কোনো পণ্য যোগ করা হয়নি।</td></tr>'}
-async function loadOrders(){const result=await call('/seller/orders');$('#orderCards').innerHTML=result.data.map(o=>{const actions=({CONFIRMED:[['PROCESSING','কাজ শুরু'],['CANCELLED','বাতিল']],PROCESSING:[['SHIPPED','কুরিয়ারে পাঠানো'],['CANCELLED','বাতিল']],SHIPPED:[['DELIVERED','ডেলিভারি সম্পন্ন']]}[o.status]||[]);return '<article class="notice"><div class="toolbar"><b>'+esc(o.orderNumber)+'</b><span class="status">'+esc(({CONFIRMED:'নতুন অর্ডার',PROCESSING:'প্রসেসিং',SHIPPED:'পাঠানো হয়েছে',DELIVERED:'ডেলিভারি সম্পন্ন',CANCELLED:'বাতিল'}[o.status]||o.status))+'</span></div><p><b>ক্রেতা:</b> '+esc(o.customer.name)+' · '+esc(o.customer.phone)+'</p><p><b>ডেলিভারি:</b> '+esc(o.delivery.name)+' · '+esc(o.delivery.phone)+'<br>'+esc(o.delivery.area)+' — '+esc(o.delivery.address)+'</p>'+(o.delivery.note?'<p><b>নোট:</b> '+esc(o.delivery.note)+'</p>':'')+'<ul>'+o.items.map(i=>'<li>'+esc(i.name_bn)+' × '+i.quantity+' — '+money(i.unit_price_bdt)+'</li>').join('')+'</ul><p><b>আপনার সাব-অর্ডার:</b> '+money(o.subtotal_bdt)+'</p>'+(actions.length?'<div class="toolbar">'+actions.map(a=>'<button class="btn" data-order="'+esc(o.id)+'" data-status="'+a[0]+'">'+a[1]+'</button>').join('')+'</div>':'')+'</article>'}).join('')||'<p class="muted">এখনো আপনার কোনো অর্ডার নেই।</p>';$('#orderCards').querySelectorAll('[data-order]').forEach(button=>button.onclick=async()=>{button.disabled=true;try{await call('/seller/orders/'+button.dataset.order+'/status',{method:'POST',body:JSON.stringify({status:button.dataset.status})});await loadOrders()}catch(error){alert(error.message);button.disabled=false}})}
+async function loadOrders(){
+ const result=await call('/seller/orders');
+ $('#orderCards').innerHTML=result.data.map(o=>{
+  const actions=({
+   CONFIRMED:[['PROCESSING','কাজ শুরু'],['CANCELLED','বাতিল']],
+   PROCESSING:[['SHIPPED','কুরিয়ারে পাঠানো'],['CANCELLED','বাতিল']],
+   SHIPPED:[['DELIVERED','ডেলিভারি সম্পন্ন']]
+  }[o.status]||[]);
+  const shipment=o.shipment;
+  const courierActions=shipment?({
+   BOOKED:[['PICKED_UP','কুরিয়ার পিকআপ'],['FAILED_DELIVERY','ডেলিভারি ব্যর্থ'],['RETURNED','ফেরত']],
+   PICKED_UP:[['IN_TRANSIT','পথে পাঠানো'],['FAILED_DELIVERY','ডেলিভারি ব্যর্থ'],['RETURNED','ফেরত']],
+   IN_TRANSIT:[['DELIVERED','ডেলিভারি সম্পন্ন'],['FAILED_DELIVERY','ডেলিভারি ব্যর্থ'],['RETURNED','ফেরত']],
+   FAILED_DELIVERY:[['PICKED_UP','পুনরায় পিকআপ'],['IN_TRANSIT','আবার পাঠানো'],['RETURNED','ফেরত']]
+  }[shipment.status]||[]):[];
+  const shipmentHtml=shipment
+   ?'<div class="notice"><b>কুরিয়ার:</b> '+esc(shipment.provider)+' · '+esc(shipment.tracking_id)+
+    '<br><b>অবস্থা:</b> '+esc(({BOOKED:'বুকড',PICKED_UP:'পিকআপ হয়েছে',IN_TRANSIT:'পথে',DELIVERED:'ডেলিভারি সম্পন্ন',FAILED_DELIVERY:'ডেলিভারি ব্যর্থ',RETURNED:'ফেরত'}[shipment.status]||shipment.status))+
+    ' · Sandbox'+(courierActions.length?'<div class="toolbar">'+courierActions.map(a=>
+      '<button class="btn" data-courier-id="'+esc(shipment.id)+'" data-courier-status="'+a[0]+'">'+a[1]+'</button>'
+     ).join('')+'</div>':'')+'</div>'
+   :(o.status==='SHIPPED'
+     ?'<div class="toolbar"><label>কুরিয়ার <select data-courier-provider><option value="PATHAO">Pathao</option><option value="REDX">RedX</option><option value="STEADFAST">Steadfast</option></select></label><button class="btn" data-book-courier="'+esc(o.id)+'">Sandbox কুরিয়ার বুক করুন</button></div><small class="muted">এটি পরীক্ষামূলক courier booking; বাস্তব pickup request নয়।</small>'
+     :'');
+  return '<article class="notice" data-order-card="'+esc(o.id)+'" data-area="'+esc(o.delivery?.area||'')+'">'+
+   '<div class="toolbar"><b>'+esc(o.orderNumber)+'</b><span class="status">'+
+   esc(({CONFIRMED:'নতুন অর্ডার',PROCESSING:'প্রসেসিং',SHIPPED:'পাঠানো হয়েছে',DELIVERED:'ডেলিভারি সম্পন্ন',CANCELLED:'বাতিল'}[o.status]||o.status))+'</span></div>'+
+   '<p><b>ক্রেতা:</b> '+esc(o.customer?.name||'')+' · '+esc(o.customer?.phone||'')+'</p>'+
+   '<p><b>ডেলিভারি:</b> '+esc(o.delivery?.name||'')+' · '+esc(o.delivery?.phone||'')+'<br>'+
+   esc(o.delivery?.area||'')+' — '+esc(o.delivery?.address||'')+'</p>'+
+   (o.delivery?.note?'<p><b>নোট:</b> '+esc(o.delivery.note)+'</p>':'')+
+   '<ul>'+(o.items||[]).map(i=>'<li>'+esc(i.name_bn)+' × '+Number(i.quantity)+' — '+money(i.unit_price_bdt)+'</li>').join('')+'</ul>'+
+   '<p><b>আপনার সাব-অর্ডার:</b> '+money(o.subtotal_bdt)+'</p>'+
+   (actions.length?'<div class="toolbar">'+actions.map(a=>
+     '<button class="btn" data-order="'+esc(o.id)+'" data-status="'+a[0]+'">'+a[1]+'</button>'
+    ).join('')+'</div>':'')+shipmentHtml+'</article>';
+ }).join('')||'<p class="muted">এখনো আপনার কোনো অর্ডার নেই।</p>';
+}
+$('#orderCards').onclick=async e=>{
+ const statusButton=e.target.closest('[data-order][data-status]');
+ const bookButton=e.target.closest('[data-book-courier]');
+ const shipmentButton=e.target.closest('[data-courier-id][data-courier-status]');
+ try{
+  if(statusButton){
+   statusButton.disabled=true;
+   await call('/seller/orders/'+encodeURIComponent(statusButton.dataset.order)+'/status',{
+    method:'POST',body:JSON.stringify({status:statusButton.dataset.status})
+   });
+   await loadOrders();
+   return;
+  }
+  if(bookButton){
+   bookButton.disabled=true;
+   const card=bookButton.closest('[data-order-card]');
+   const provider=card.querySelector('[data-courier-provider]').value;
+   const quote=await call('/seller/courier/quote?area='+encodeURIComponent(card.dataset.area||''));
+   const amount=quote.data.quotes_bdt[provider];
+   if(!confirm(provider+' sandbox courier estimate: '+money(amount)+'. এটি বাস্তব courier booking নয়। চালাবেন?')){
+    bookButton.disabled=false;
+    return;
+   }
+   const result=await call('/seller/orders/'+encodeURIComponent(bookButton.dataset.bookCourier)+'/courier',{
+    method:'POST',body:JSON.stringify({provider})
+   });
+   alert('Sandbox courier tracking তৈরি হয়েছে: '+result.data.tracking_id);
+   await loadOrders();
+   return;
+  }
+  if(shipmentButton){
+   shipmentButton.disabled=true;
+   await call('/seller/shipments/'+encodeURIComponent(shipmentButton.dataset.courierId)+'/status',{
+    method:'POST',body:JSON.stringify({status:shipmentButton.dataset.courierStatus})
+   });
+   await loadOrders();
+  }
+ }catch(error){
+  alert(error.message);
+  if(statusButton)statusButton.disabled=false;
+  if(bookButton)bookButton.disabled=false;
+  if(shipmentButton)shipmentButton.disabled=false;
+ }
+};
 $('#loginForm').onsubmit=async e=>{e.preventDefault();$('#loginMsg').textContent='লগইন হচ্ছে...';try{const form=Object.fromEntries(new FormData(e.target));const r=await fetch(api+'/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(form)});const d=await r.json();if(!r.ok)throw Error(d.error);if(d.data.role!=='SELLER')throw Error('এই অ্যাকাউন্টটি বিক্রেতার নয়');token=d.token;localStorage.setItem('haat_seller_token',token);show()}catch(err){$('#loginMsg').textContent=err.message}};
 $('#productForm').onsubmit=async e=>{e.preventDefault();const b=$('#formMsg');b.classList.remove('hidden');b.textContent='পণ্য জমা হচ্ছে...';try{const body=Object.fromEntries(new FormData(e.target));const imageUrl=String(body.image_url||'').trim();delete body.image_url;const result=await call('/seller/products',{method:'POST',body:JSON.stringify({...body,images:imageUrl?[imageUrl]:[],price_bdt:Number(body.price_bdt),stock:Number(body.stock)})});b.textContent=result.data.message;e.target.reset();await loadProducts()}catch(err){b.textContent=err.message}};
 
