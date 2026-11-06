@@ -90,12 +90,32 @@ export function registerPostgresPayoutRoutes(route, ok, { database, id = randomU
     const note = text(body.note, 300, 'নোট', { required: false });
     const status = decision === 'APPROVE' ? 'APPROVED' : 'REJECTED';
     return database.tx(async () => {
+      const candidate = await q('SELECT seller_id FROM payouts WHERE id=?').get(params[0]);
+      if (!candidate) throw new HttpError(404, 'পেআউট অনুরোধ পাওয়া যায়নি');
+      // Serialize payout decisions with seller payout requests on the same profile row.
+      const seller = await q('SELECT user_id FROM seller_profiles WHERE user_id=? FOR UPDATE').get(candidate.seller_id);
+      if (!seller) throw new HttpError(404, 'বিক্রেতা প্রোফাইল পাওয়া যায়নি');
       const payout = await q('SELECT id,seller_id,amount_paisa,status FROM payouts WHERE id=? FOR UPDATE').get(params[0]);
-      if (!payout) throw new HttpError(404, 'পেআউট অনুরোধ পাওয়া যায়নি');
+      if (!payout || payout.seller_id !== candidate.seller_id) throw new HttpError(404, 'পেআউট অনুরোধ পাওয়া যায়নি');
       if (payout.status !== 'REQUESTED') throw new HttpError(409, 'এই পেআউটের সিদ্ধান্ত আগেই দেওয়া হয়েছে');
+
+      if (decision === 'APPROVE') {
+        const totals = await q(`SELECT
+          COALESCE((SELECT SUM(amount_paisa) FROM payouts WHERE seller_id=? AND status IN ('REQUESTED','APPROVED')),0) AS reserved,
+          COALESCE((SELECT SUM(amount_paisa) FROM transactions WHERE seller_id=? AND kind IN ('SELLER_EARNING','SELLER_REVERSAL')),0) AS earned
+        `).get(payout.seller_id, payout.seller_id);
+        const reserved = Number(totals?.reserved || 0);
+        const earned = Number(totals?.earned || 0);
+        if (!Number.isSafeInteger(reserved) || !Number.isSafeInteger(earned) ||
+            reserved < 0 || earned < 0 || reserved > earned) {
+          throw new HttpError(409, 'বিক্রেতার বর্তমান earned balance দিয়ে সব payout reservation সমর্থিত নয়');
+        }
+      }
+
       const timestamp = now();
-      await q('UPDATE payouts SET status=?,note=?,decided_at=? WHERE id=? AND status=\'REQUESTED\'')
+      const changed = await q("UPDATE payouts SET status=?,note=?,decided_at=? WHERE id=? AND status='REQUESTED'")
         .run(status,note,timestamp,payout.id);
+      if (changed.changes !== 1) throw new HttpError(409, 'এই পেআউটের সিদ্ধান্ত আগেই দেওয়া হয়েছে');
       await q('INSERT INTO audit_logs(id,actor_id,action,entity,entity_id,detail,created_at) VALUES(?,?,?,?,?,?,?)')
         .run(id(),user.id,'PAYOUT_' + status,'payout',payout.id,JSON.stringify({ seller_id:payout.seller_id,amount_paisa:Number(payout.amount_paisa),note }),timestamp);
       await q('INSERT INTO notifications(id,user_id,title,body,read,created_at) VALUES(?,?,?,?,0,?)')
