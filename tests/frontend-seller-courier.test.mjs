@@ -18,7 +18,7 @@ test('seller courier controls are clearly sandbox-only and support each provider
   assert.ok(seller.includes('Sandbox কুরিয়ার বুক করুন'));
   assert.ok(seller.includes('বাস্তব courier booking নয়'));
   assert.ok(seller.includes('/seller/courier/quote?area='));
-  assert.ok(seller.includes('/courier',{'));
+  assert.ok(seller.includes("'/courier',{")));
 });
 
 test('seller shipment workflow exposes only forward status actions', () => {
