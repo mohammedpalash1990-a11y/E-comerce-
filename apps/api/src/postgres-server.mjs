@@ -295,7 +295,7 @@ export async function createPostgresApi({
   // Production remains fail-closed until live PostgreSQL HTTP/checkout/order/inventory
   // verification, production payment/courier adapters, and operational recovery checks pass.
   if (env.NODE_ENV === 'production') {
-    throw new Error('PostgreSQL production startup remains blocked until live database HTTP and commerce flows, production payment/courier adapters, and backup/restore and deployment security checks are verified');
+    throw new Error('PostgreSQL API is incomplete; production startup remains blocked until live database HTTP and commerce flows, production payment/courier adapters, and backup/restore and deployment security checks are verified');
   }
   postgresPoolOptions(env);
   const pool = await createPool({ env });
