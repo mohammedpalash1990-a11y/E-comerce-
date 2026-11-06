@@ -150,38 +150,55 @@ async function loadOrders(){
    ?'<button data-retry-payment="'+esc(o.id)+'">পেমেন্ট পুনরায় শুরু</button>':'';
   return '<article class="item"><div class="toolbar"><b>'+esc(o.orderNumber)+'</b><span class="status">'+esc(o.status)+'</span></div>'+
    '<p>মোট: '+money(o.total_bdt)+' · '+esc(o.created_at)+'</p>'+
-   '<p class="muted">পেমেন্ট: '+esc(o.payment?.method||'—')+' · '+esc(paymentStatu$('#orderList').onclick=async e=>{
- const d=e.target.closest('[data-order-detail]'),c=e.target.closest('[data-order-cancel]'),retry=e.target.closest('[data-retry-payment]');
+   '<p class="muted">পেমেন্ট: '+esc(o.payment?.method||'—')+' · '+esc(paymentStatus||'—')+'</p>'+
+   '<div class="actions"><button data-order-detail="'+esc(o.id)+'">বিস্তারিত / ট্র্যাকিং</button>'+retry+
+   (['CONFIRMED','AWAITING_PAYMENT'].includes(o.status)?'<button class="danger" data-order-cancel="'+esc(o.id)+'">বাতিল</button>':'')+
+   '</div></article>';
+ }).join('')||'<p class="empty">এখনো কোনো অর্ডার নেই।</p>';
+}
+$('#orderList').onclick=async e=>{
+ const detail=e.target.closest('[data-order-detail]');
+ const cancel=e.target.closest('[data-order-cancel]');
+ const retry=e.target.closest('[data-retry-payment]');
  try{
-  if(d){
-   const [o,t]=await Promise.all([
-    request('/customer/orders/'+encodeURIComponent(d.dataset.orderDetail)),
-    request('/customer/orders/'+encodeURIComponent(d.dataset.orderDetail)+'/tracking')
+  if(detail){
+   const [order,tracking]=await Promise.all([
+    request('/customer/orders/'+encodeURIComponent(detail.dataset.orderDetail)),
+    request('/customer/orders/'+encodeURIComponent(detail.dataset.orderDetail)+'/tracking')
    ]);
-   const x=o.data;
-   message($('#orderDetail'),'অর্ডার '+x.orderNumber+' · '+x.status+' · '+money(x.total_bdt)+'\\n'+
-    (x.suborders||[]).map(s=>(s.shop||'বিক্রেতা')+': '+s.status+(s.shipment?' · ট্র্যাকিং '+(s.shipment.tracking_id||''):'')).join('\\n')+
-    '\\n'+(t.data.events||[]).map(v=>v.status+' · '+esc(v.created_at||'')).join('\\n'),'success');
+   const value=order.data;
+   const shipmentText=(value.suborders||[]).map(item=>
+    (item.shop||'বিক্রেতা')+': '+item.status+
+    (item.shipment?' · ট্র্যাকিং '+(item.shipment.tracking_id||''):'')
+   ).join(' · ');
+   const eventText=(tracking.data.events||[]).map(item=>
+    item.status+' · '+esc(item.created_at||'')
+   ).join(' · ');
+   message($('#orderDetail'),'অর্ডার '+value.orderNumber+' · '+value.status+
+    ' · '+money(value.total_bdt)+' · '+shipmentText+' · '+eventText,'success');
   }
   if(retry){
-   const r=await request('/customer/orders/'+encodeURIComponent(retry.dataset.retryPayment)+'/pay',{
+   const result=await request('/customer/orders/'+encodeURIComponent(retry.dataset.retryPayment)+'/pay',{
     method:'POST',body:JSON.stringify({method:$('#paymentMethod').value})
    });
-   if(r.data.sandbox===true&&r.data.status==='INITIATED'){
-    showSandboxPayment(r.data.id,r.data.method);
+   if(result.data.sandbox===true&&result.data.status==='INITIATED'){
+    showSandboxPayment(result.data.id,result.data.method);
     view('orders');
    }else{
     throw Error('এই সার্ভারে sandbox payment চালু নেই');
    }
   }
-  if(c&&confirm('এই অর্ডার বাতিলের অনুরোধ করবেন?')){
-   await request('/customer/orders/'+encodeURIComponent(c.dataset.orderCancel)+'/cancel',{
+  if(cancel&&confirm('এই অর্ডার বাতিলের অনুরোধ করবেন?')){
+   await request('/customer/orders/'+encodeURIComponent(cancel.dataset.orderCancel)+'/cancel',{
     method:'POST',body:JSON.stringify({reason:'Customer request'})
    });
    await loadOrders();
   }
- }catch(err){message($('#orderDetail'),err.message,'error')}
-};async function boot(){await checkApi();if(token){try{await enter()}catch{showAuth()}}}
+ }catch(err){
+  message($('#orderDetail'),err.message,'error');
+ }
+};
+async function boot(){await checkApi();if(token){try{await enter()}catch{showAuth()}}}
 boot();
 </script>
 </body></html>
