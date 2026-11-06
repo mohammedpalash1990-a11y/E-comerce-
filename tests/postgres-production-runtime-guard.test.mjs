@@ -12,7 +12,7 @@ test('PostgreSQL API refuses production startup before opening a database pool',
         throw new Error('database pool must not be created');
       }
     }),
-    /PostgreSQL API is incomplete; production startup remains blocked/
+    /PostgreSQL production startup remains blocked until live database HTTP and commerce flows/
   );
   assert.equal(poolCreated, false, 'production guard must run before database initialization');
 });
@@ -30,7 +30,7 @@ test('PostgreSQL API production guard cannot be bypassed by injected runtime dep
         return {};
       }
     }),
-    /PostgreSQL API is incomplete; production startup remains blocked/
+    /PostgreSQL production startup remains blocked until live database HTTP and commerce flows/
   );
   assert.equal(serverCreated, false, 'production guard must run before server composition');
 });
