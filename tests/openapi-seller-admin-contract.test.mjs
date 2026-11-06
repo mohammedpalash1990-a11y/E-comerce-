@@ -179,3 +179,49 @@ test('admin order detail, dashboard and seller/admin inventory use typed respons
   assert.match(spec, /idempotency_key: \{ type: string, pattern:/);
   assert.match(spec, /enum: \[PENDING, APPROVED, REJECTED\]/);
 });
+
+
+test('seller workspace and commerce operations expose handler-matched response schemas', () => {
+  const expected = [
+    ['/api/v1/seller/profile', 'GET', 'SellerProfile'],
+    ['/api/v1/seller/dashboard', 'GET', 'SellerDashboard'],
+    ['/api/v1/seller/orders', 'GET', 'SellerOrderListItem'],
+    ['/api/v1/seller/orders/{id}', 'GET', 'SellerOrderDetail'],
+    ['/api/v1/seller/orders/{id}/status', 'POST', 'SellerOrderStatusResult'],
+    ['/api/v1/admin/sellers', 'GET', 'AdminSellerListItem'],
+    ['/api/v1/admin/sellers/{id}/status', 'PATCH', 'AdminSellerStatusResult'],
+    ['/api/v1/admin/products', 'GET', 'AdminProductListItem'],
+    ['/api/v1/admin/products/pending', 'GET', 'AdminProductListItem'],
+    ['/api/v1/admin/products/{id}/approve', 'POST', 'AdminProductActionResult'],
+    ['/api/v1/admin/products/{id}/reject', 'POST', 'AdminProductActionResult'],
+    ['/api/v1/admin/products/{id}/suspend', 'POST', 'AdminProductActionResult'],
+    ['/api/v1/admin/products/{id}/unsuspend', 'POST', 'AdminProductActionResult'],
+    ['/api/v1/admin/orders', 'GET', 'AdminOrderListItem'],
+    ['/api/v1/admin/orders/{id}/status', 'POST', 'AdminOrderStatusResult'],
+    ['/api/v1/admin/orders/{id}/note', 'POST', 'AdminOrderNoteResult'],
+    ['/api/v1/admin/orders/{id}/shipping', 'POST', 'AdminShippingResult']
+  ];
+  for (const [path, method, schema] of expected) {
+    assert.ok(operation(path, method).includes("#/components/schemas/" + schema), method + " " + path + " response must reference " + schema);
+    assert.ok(spec.includes('    ' + schema + ':') || spec.includes('    ' + schema + ':\n'),
+      "Missing response schema " + schema);
+  }
+});
+
+test('seller/admin status mutations use typed, bounded request bodies', () => {
+  const inputs = [
+    ['/api/v1/seller/orders/{id}/status', 'POST', 'SellerOrderStatusInput'],
+    ['/api/v1/admin/sellers/{id}/status', 'PATCH', 'AdminSellerStatusInput'],
+    ['/api/v1/admin/products/{id}/approve', 'POST', 'AdminProductActionInput'],
+    ['/api/v1/admin/products/{id}/reject', 'POST', 'AdminProductActionInput'],
+    ['/api/v1/admin/products/{id}/suspend', 'POST', 'AdminProductActionInput'],
+    ['/api/v1/admin/products/{id}/unsuspend', 'POST', 'AdminProductActionInput'],
+    ['/api/v1/admin/orders/{id}/status', 'POST', 'AdminOrderStatusInput']
+  ];
+  for (const [path, method, schema] of inputs) {
+    assert.ok(operation(path, method).includes("#/components/schemas/" + schema), method + " " + path + " request must reference " + schema);
+  }
+  assert.match(spec, /SellerOrderStatusInput:[\s\S]*?enum: \[PROCESSING, SHIPPED, DELIVERED, CANCELLED\]/);
+  assert.match(spec, /AdminSellerStatusInput:[\s\S]*?enum: \[APPROVED, REJECTED, SUSPENDED\]/);
+  assert.match(spec, /AdminOrderStatusInput:[\s\S]*?enum: \[CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED\]/);
+});
