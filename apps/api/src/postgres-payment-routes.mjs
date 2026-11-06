@@ -250,7 +250,7 @@ export function createPostgresPaymentRepository(database, {
         return { duplicate: false, status: 'FAILED' };
       }
 
-      if (payment.order_status !== 'CANCELLED' && payment.payment_status === 'PAID') {
+      if (payment.payment_status === 'PAID') {
         throw new HttpError(409, 'অর্ডার ইতিমধ্যে পরিশোধ করা হয়েছে');
       }
       await query(`UPDATE payments SET status='PAID',updated_at=? WHERE id=? AND status='INITIATED'`)
@@ -350,14 +350,15 @@ export function registerPostgresPaymentRoutes(route, ok, {
       amountPaisa: payment.amount_paisa,
       status
     };
+    const signature = gatewaySign(signed);
+    if (!gatewayVerify(signed, signature)) throw new HttpError(401, 'Invalid sandbox signature');
     return ok({
       sandbox: true,
       ...(await paymentRepository.recordVerifiedPaymentCallback({
         method: payment.method,
         gatewayTxnId: signed.gatewayTxnId,
         amountPaisa: signed.amountPaisa,
-        status: signed.status,
-        signature: gatewaySign(signed)
+        status: signed.status
       }))
     });
   });
