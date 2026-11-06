@@ -27,7 +27,7 @@ function harness({
       return {
         async get(...args) {
           calls.push({ method: 'get', sql, args });
-          const normalizedSql = sql.replace(/\\s+/g, ' ');
+          const normalizedSql = sql.replace(/\s+/g, ' ');
           if (sql.includes('FROM seller_profiles sp JOIN users')) return state.seller;
           if (sql.includes('FROM seller_orders so JOIN orders o')) {
             return owned && args[0] === state.order.id && args[1] === 'seller-1'
