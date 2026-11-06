@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPostgresCheckoutRepository } from '../apps/api/src/postgres-checkout.mjs';
 
-function checkoutHarness({ stock = 8, coupon = null, paymentMethods = ['COD'], shippingFor = () => 6000, cart = [], owner = true } = {}) {
+function checkoutHarness({ stock = 8, coupon = null, paymentMethods = ['COD'], shippingFor = () => 6000, cart = [], owner = true, initiatePayment } = {}) {
   const products = new Map([['p-1', {
     id: 'p-1', name_bn: 'শার্ট', price_paisa: '12000', discount_paisa: '10000',
     stock, active: 1, status: 'ACTIVE', seller_id: 'seller-1'
@@ -72,6 +72,7 @@ function checkoutHarness({ stock = 8, coupon = null, paymentMethods = ['COD'], s
     addEvent: async (...args) => events.push(args),
     audit: async (...args) => audits.push(args),
     paymentMethods,
+    initiatePayment,
     orderNo: id => 'HAAT-' + id
   });
   return { repo, products, calls, tables, notices, events, audits };
@@ -216,4 +217,35 @@ test('malformed injected coupon results cannot silently consume a code without a
     assert.equal(h.tables.orders.length, 0);
     assert.ok(!h.calls.some(call => call.sql.includes('UPDATE coupons')));
   }
+});
+
+
+test('online checkout starts the gateway only after the stock/order transaction commits', async () => {
+  const initiated = [];
+  const h = checkoutHarness({
+    paymentMethods: ['COD', 'BKASH'],
+    initiatePayment: async input => {
+      assert.equal(h.calls.at(-1).sql, 'COMMIT', 'external gateway must not run inside checkout transaction');
+      initiated.push(input);
+      return {
+        id: input.paymentId, method: input.method, status: 'INITIATED',
+        gateway_txn_id: 'SBX-BKASH-123', redirect_url: '/api/v1/payments/sandbox/' + input.paymentId + '/simulate',
+        sandbox: true
+      };
+    }
+  });
+  const result = await h.repo.checkout(customer, {
+    delivery, items: [{ productId: 'p-1', quantity: 1 }], payment_method: 'BKASH'
+  });
+  assert.equal(result.status, 'AWAITING_PAYMENT');
+  assert.equal(result.payment.method, 'BKASH');
+  assert.equal(result.payment.status, 'INITIATED');
+  assert.equal(result.payment.sandbox, true);
+  assert.equal(initiated.length, 1);
+  assert.equal(initiated[0].userId, customer.id);
+  assert.equal(initiated[0].method, 'BKASH');
+  assert.equal(initiated[0].amountPaisa, 16000);
+  assert.equal(initiated[0].paymentId, h.tables.payments[0][0]);
+  assert.equal(h.tables.payments.length, 1, 'the pending payment row is retained for gateway initiation');
+  assert.equal(h.calls.some(call => call.sql.includes('DELETE FROM payments')), false);
 });
