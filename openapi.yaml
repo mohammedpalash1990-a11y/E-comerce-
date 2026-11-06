@@ -688,13 +688,10 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    $ref: '#/components/schemas/SellerProfile'
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -713,13 +710,10 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    $ref: '#/components/schemas/SellerDashboard'
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -738,13 +732,12 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SellerOrderListItem'
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -768,13 +761,10 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    $ref: '#/components/schemas/SellerOrderDetail'
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -796,8 +786,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties: true
+              $ref: '#/components/schemas/SellerOrderStatusInput'
       responses:
         '200':
           description: Successful operation.
@@ -805,13 +794,10 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    $ref: '#/components/schemas/SellerOrderStatusResult'
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -1158,13 +1144,12 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminSellerListItem'
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -1186,8 +1171,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties: true
+              $ref: '#/components/schemas/AdminSellerStatusInput'
       responses:
         '200':
           description: Successful operation.
@@ -1195,13 +1179,10 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    $ref: '#/components/schemas/AdminSellerStatusResult'
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -1220,13 +1201,12 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminProductListItem'
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -1245,13 +1225,12 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminProductListItem'
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -1273,8 +1252,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties: true
+              $ref: '#/components/schemas/AdminProductActionInput'
       responses:
         '200':
           description: Successful operation.
@@ -1282,13 +1260,10 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    $ref: '#/components/schemas/AdminProductActionResult'
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -1310,8 +1285,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties: true
+              $ref: '#/components/schemas/AdminProductActionInput'
       responses:
         '200':
           description: Successful operation.
@@ -1319,13 +1293,10 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    $ref: '#/components/schemas/AdminProductActionResult'
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -1347,8 +1318,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties: true
+              $ref: '#/components/schemas/AdminProductActionInput'
       responses:
         '200':
           description: Successful operation.
@@ -1356,13 +1326,10 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    $ref: '#/components/schemas/AdminProductActionResult'
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -1384,8 +1351,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties: true
+              $ref: '#/components/schemas/AdminProductActionInput'
       responses:
         '200':
           description: Successful operation.
@@ -1393,13 +1359,10 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    $ref: '#/components/schemas/AdminProductActionResult'
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -1418,13 +1381,12 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminOrderListItem'
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -1446,8 +1408,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties: true
+              $ref: '#/components/schemas/AdminOrderStatusInput'
       responses:
         '200':
           description: Successful operation.
@@ -1455,13 +1416,10 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    $ref: '#/components/schemas/AdminOrderStatusResult'
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -1519,13 +1477,10 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    $ref: '#/components/schemas/AdminOrderNoteResult'
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -1555,13 +1510,10 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - type: object
-                        additionalProperties: true
-                      - type: array
-                        items: { type: object, additionalProperties: true }
+                    $ref: '#/components/schemas/AdminShippingResult'
         '400': { description: Invalid request parameters or body }
         '401': { description: Missing, invalid, revoked or expired session }
         '403': { description: Authenticated account does not have the required role or ownership }
@@ -1801,6 +1753,237 @@ components:
             properties:
               data: { $ref: '#/components/schemas/CustomerCart' }
   schemas:
+
+    SellerProfile:
+      type: object
+      required: [id, name, phone, shop_name, shop_address, business_info, status, commission_bps, commission_percent, created_at]
+      properties:
+        id: { type: string }
+        name: { type: string, nullable: true }
+        phone: { type: string, nullable: true }
+        shop_name: { type: string }
+        shop_address: { type: string }
+        business_info: { type: string, nullable: true }
+        status: { type: string, enum: [PENDING, APPROVED, REJECTED, SUSPENDED] }
+        commission_bps: { type: integer, minimum: 0 }
+        commission_percent: { type: number, minimum: 0 }
+        created_at: { type: string, format: date-time }
+    SellerDashboardProductCounts:
+      type: object
+      required: [total, pending, approved, rejected]
+      properties:
+        total: { type: integer, minimum: 0 }
+        pending: { type: integer, minimum: 0 }
+        approved: { type: integer, minimum: 0 }
+        rejected: { type: integer, minimum: 0 }
+    SellerDashboardOrderCounts:
+      type: object
+      required: [total, confirmed, processing, shipped, delivered, cancelled]
+      properties:
+        total: { type: integer, minimum: 0 }
+        confirmed: { type: integer, minimum: 0 }
+        processing: { type: integer, minimum: 0 }
+        shipped: { type: integer, minimum: 0 }
+        delivered: { type: integer, minimum: 0 }
+        cancelled: { type: integer, minimum: 0 }
+    SellerDashboardFinance:
+      type: object
+      required: [total_sales_bdt, commission_bdt, net_earnings_bdt, pending_balance_bdt, available_balance_bdt, paid_out_bdt]
+      properties:
+        total_sales_bdt: { type: number, minimum: 0 }
+        commission_bdt: { type: number, minimum: 0 }
+        net_earnings_bdt: { type: number }
+        pending_balance_bdt: { type: number, minimum: 0 }
+        available_balance_bdt: { type: number }
+        paid_out_bdt: { type: number, minimum: 0 }
+    SellerRecentOrder:
+      type: object
+      required: [id, orderNumber, status, subtotal_bdt, commission_bdt, net_bdt, created_at]
+      properties:
+        id: { type: string }
+        orderNumber: { type: string }
+        status: { type: string }
+        subtotal_bdt: { type: number, minimum: 0 }
+        commission_bdt: { type: number, minimum: 0 }
+        net_bdt: { type: number }
+        created_at: { type: string, format: date-time }
+    SellerDashboard:
+      type: object
+      required: [shop_status, products, orders, finance, recent_orders]
+      properties:
+        shop_status: { type: string, enum: [PENDING, APPROVED, REJECTED, SUSPENDED] }
+        products: { $ref: '#/components/schemas/SellerDashboardProductCounts' }
+        orders: { $ref: '#/components/schemas/SellerDashboardOrderCounts' }
+        finance: { $ref: '#/components/schemas/SellerDashboardFinance' }
+        recent_orders:
+          type: array
+          maxItems: 5
+          items: { $ref: '#/components/schemas/SellerRecentOrder' }
+    SellerOrderListItem:
+      type: object
+      required: [id, order_id, orderNumber, status, subtotal_bdt, commission_bdt, net_bdt, created_at]
+      properties:
+        id: { type: string }
+        order_id: { type: string }
+        orderNumber: { type: string }
+        status: { type: string }
+        subtotal_bdt: { type: number, minimum: 0 }
+        commission_bdt: { type: number, minimum: 0 }
+        net_bdt: { type: number }
+        created_at: { type: string, format: date-time }
+    SellerOrderPayment:
+      type: object
+      required: [method, status]
+      properties:
+        method: { type: string }
+        status: { type: string }
+    SellerOrderDelivery:
+      type: object
+      required: [name, phone, address, area, note]
+      properties:
+        name: { type: string, nullable: true }
+        phone: { type: string, nullable: true }
+        address: { type: string, nullable: true }
+        area: { type: string, nullable: true }
+        note: { type: string, nullable: true }
+    SellerOrderLineItem:
+      type: object
+      required: [product_id, product_name_bn, quantity, unit_price_paisa, unit_price_bdt, variant]
+      properties:
+        product_id: { type: string }
+        product_name_bn: { type: string }
+        quantity: { type: integer, minimum: 1 }
+        unit_price_paisa: { type: integer, minimum: 0 }
+        unit_price_bdt: { type: number, minimum: 0 }
+        variant: { type: string, nullable: true }
+    SellerOrderDetail:
+      type: object
+      required: [id, order_id, orderNumber, status, subtotal_bdt, commission_bdt, net_bdt, payment, delivery, items, created_at]
+      properties:
+        id: { type: string }
+        order_id: { type: string }
+        orderNumber: { type: string }
+        status: { type: string }
+        subtotal_bdt: { type: number, minimum: 0 }
+        commission_bdt: { type: number, minimum: 0 }
+        net_bdt: { type: number }
+        payment: { $ref: '#/components/schemas/SellerOrderPayment' }
+        delivery: { $ref: '#/components/schemas/SellerOrderDelivery' }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/SellerOrderLineItem' }
+        created_at: { type: string, format: date-time }
+    SellerOrderStatusInput:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string, enum: [PROCESSING, SHIPPED, DELIVERED, CANCELLED] }
+        note: { type: string, maxLength: 300 }
+    SellerOrderStatusResult:
+      type: object
+      required: [id, status, parent_status]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [PROCESSING, SHIPPED, DELIVERED, CANCELLED] }
+        parent_status: { type: string }
+    AdminSellerListItem:
+      type: object
+      required: [user_id, shop_name, shop_address, business_info, status, commission_bps, created_at, name, phone, email, has_nid, has_trade_license]
+      properties:
+        user_id: { type: string }
+        shop_name: { type: string }
+        shop_address: { type: string }
+        business_info: { type: string, nullable: true }
+        status: { type: string, enum: [PENDING, APPROVED, REJECTED, SUSPENDED] }
+        commission_bps: { type: integer, minimum: 0 }
+        created_at: { type: string, format: date-time }
+        name: { type: string, nullable: true }
+        phone: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+        has_nid: { type: boolean }
+        has_trade_license: { type: boolean }
+    AdminSellerStatusInput:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string, enum: [APPROVED, REJECTED, SUSPENDED] }
+        note: { type: string, maxLength: 300 }
+    AdminSellerStatusResult:
+      type: object
+      required: [seller_id, shop_name, previous_status, status]
+      properties:
+        seller_id: { type: string }
+        shop_name: { type: string }
+        previous_status: { type: string, enum: [PENDING, APPROVED, SUSPENDED] }
+        status: { type: string, enum: [APPROVED, REJECTED, SUSPENDED] }
+    AdminProductListItem:
+      type: object
+      required: [id, name_bn, name_en, price_paisa, price_bdt, discount_paisa, discount_price_bdt, stock, status, sku, description, seller_id, category_slug, seller_name, image]
+      properties:
+        id: { type: string }
+        name_bn: { type: string }
+        name_en: { type: string }
+        price_paisa: { type: integer, minimum: 0 }
+        price_bdt: { type: number, minimum: 0 }
+        discount_paisa: { type: integer, nullable: true, minimum: 0 }
+        discount_price_bdt: { type: number, nullable: true, minimum: 0 }
+        stock: { type: integer, minimum: 0, maximum: 1000000 }
+        status: { type: string, enum: [PENDING_REVIEW, ACTIVE, REJECTED, SUSPENDED, ARCHIVED] }
+        sku: { type: string, nullable: true }
+        description: { type: string, nullable: true }
+        seller_id: { type: string }
+        category_slug: { type: string, nullable: true }
+        seller_name: { type: string, nullable: true }
+        image: { type: string, nullable: true }
+    AdminProductActionInput:
+      type: object
+      properties:
+        reason: { type: string, maxLength: 300 }
+    AdminProductActionResult:
+      type: object
+      required: [id, status]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [ACTIVE, REJECTED, SUSPENDED] }
+    AdminOrderListItem:
+      type: object
+      required: [id, orderNumber, customer_id, total_bdt, status, payment, created_at]
+      properties:
+        id: { type: string }
+        orderNumber: { type: string }
+        customer_id: { type: string }
+        total_bdt: { type: number, minimum: 0 }
+        status: { type: string }
+        payment: { $ref: '#/components/schemas/SellerOrderPayment' }
+        created_at: { type: string, format: date-time }
+    AdminOrderStatusInput:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string, enum: [CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED] }
+        note: { type: string, maxLength: 300 }
+    AdminOrderStatusResult:
+      type: object
+      required: [id, status]
+      properties:
+        id: { type: string }
+        status: { type: string }
+    AdminOrderNoteResult:
+      type: object
+      required: [id, saved]
+      properties:
+        id: { type: string }
+        saved: { type: boolean, enum: [true] }
+    AdminShippingResult:
+      type: object
+      required: [id, shipping_bdt, total_bdt]
+      properties:
+        id: { type: string }
+        shipping_bdt: { type: number, minimum: 0, maximum: 100000 }
+        total_bdt: { type: number, minimum: 0 }
     Brand:
       type: object
       required: [slug, name]
