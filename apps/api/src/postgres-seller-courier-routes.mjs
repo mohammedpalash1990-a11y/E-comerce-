@@ -120,6 +120,9 @@ export function registerPostgresSellerCourierRoutes(route, ok, {
       if (!shipment) throw new HttpError(404, 'আপনার shipment পাওয়া যায়নি');
 
       const duplicate = shipment.status === next;
+      if (next === 'DELIVERED' && shipment.seller_order_status !== 'SHIPPED') {
+        throw new HttpError(409, 'ডেলিভারি সম্পন্ন করার আগে বিক্রেতার অর্ডার SHIPPED অবস্থায় থাকতে হবে');
+      }
       if (!duplicate && !activeTransitions[shipment.status]?.has(next)) {
         throw new HttpError(409, 'এই courier status transition অনুমোদিত নয়');
       }
