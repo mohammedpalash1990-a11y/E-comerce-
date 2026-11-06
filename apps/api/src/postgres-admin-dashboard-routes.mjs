@@ -7,7 +7,8 @@ const integer = value => Number(value || 0);
 function reportPeriod(url) {
   const from = url?.searchParams?.get('from') || '';
   const to = url?.searchParams?.get('to') || '';
-  const sellerId = url?.searchParams?.get('seller_id') || null;
+  const rawSellerId = url?.searchParams?.get('seller_id');
+  const sellerId = rawSellerId === null || rawSellerId === undefined ? null : rawSellerId;
   const validDate = value => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
     const timestamp = Date.parse(value + 'T00:00:00.000Z');
