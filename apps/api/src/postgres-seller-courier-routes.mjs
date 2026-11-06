@@ -100,7 +100,7 @@ export function registerPostgresSellerCourierRoutes(route, ok, {
   route('POST', '/api/v1/seller/shipments/:id/status', ['SELLER'], async ({ user, params, body }) => {
     const shipmentId = text(params[0], 128, 'Shipment ID');
     const next = String(body.status || '').trim().toUpperCase();
-    if (!SHIPMENT_STATUSES.includes(next)) throw new HttpError(400, 'কুরিয়ার স্ট্যাটাস সঠিক নয়');
+    if (!SHIPMENT_STATUSES.includes(next) || next === 'BOOKED') throw new HttpError(400, 'কুরিয়ার স্ট্যাটাস সঠিক নয়');
 
     const result = await database.tx(async () => {
       const seller = await q(`SELECT sp.status,u.status AS account_status
