@@ -175,20 +175,28 @@ export function createPostgresPaymentRepository(database, {
 
     const raw = JSON.stringify({ sandbox: gateway.sandbox === true, redirect_url: redirectUrl });
     const stamp = now();
-    await database.tx(async () => {
-      const current = await query(`SELECT p.id,p.status,p.method,o.status AS order_status,o.payment_status
-        FROM payments p JOIN orders o ON o.id=p.order_id
-        WHERE p.id=? AND o.user_id=? FOR UPDATE OF p,o`).get(pid, customerId);
-      if (!current || current.status !== 'INITIATING' || current.method !== expectedMethod ||
-          current.order_status !== 'AWAITING_PAYMENT' || current.payment_status === 'PAID') {
-        throw new HttpError(409, 'পেমেন্ট চালু করার সময় অর্ডারের অবস্থা বদলে গেছে');
-      }
-      const updated = await query(`UPDATE payments SET status='INITIATED',gateway_txn_id=?,raw=?,updated_at=?
-        WHERE id=? AND status='INITIATING' RETURNING id`).all(
-        gateway.gatewayTxnId.trim(), raw, stamp, pid
-      );
-      if (updated.length !== 1) throw new HttpError(409, 'পেমেন্ট সংরক্ষণ করা যায়নি');
-    });
+    try {
+      await database.tx(async () => {
+        const current = await query(`SELECT p.id,p.status,p.method,o.status AS order_status,o.payment_status
+          FROM payments p JOIN orders o ON o.id=p.order_id
+          WHERE p.id=? AND o.user_id=? FOR UPDATE OF p,o`).get(pid, customerId);
+        if (!current || current.status !== 'INITIATING' || current.method !== expectedMethod ||
+            current.order_status !== 'AWAITING_PAYMENT' || current.payment_status === 'PAID') {
+          throw new HttpError(409, 'পেমেন্ট চালু করার সময় অর্ডারের অবস্থা বদলে গেছে');
+        }
+        const updated = await query(`UPDATE payments SET status='INITIATED',gateway_txn_id=?,raw=?,updated_at=?
+          WHERE id=? AND status='INITIATING' RETURNING id`).all(
+          gateway.gatewayTxnId.trim(), raw, stamp, pid
+        );
+        if (updated.length !== 1) throw new HttpError(409, 'পেমেন্ট সংরক্ষণ করা যায়নি');
+      });
+    } catch (error) {
+      await database.tx(async () => {
+        await query(`UPDATE payments SET status='PENDING',updated_at=?
+          WHERE id=? AND status='INITIATING'`).run(now(), pid);
+      });
+      throw error;
+    }
 
     return {
       id: pid,
