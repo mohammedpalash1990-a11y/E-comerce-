@@ -16,7 +16,21 @@ function setup({ ownedSellerOrder = true, customerOrder = true, sellerStatus = '
           if (sql.includes('FROM orders WHERE id=?')) return { id: args[0] };
           return undefined;
         },
-        async all(...args) { calls.push({ sql, args, method: 'all' }); return []; },
+        async all(...args) {
+          calls.push({ sql, args, method: 'all' });
+          if (sql.includes('FROM seller_orders so') && sql.includes('LEFT JOIN LATERAL')) return [{
+            id: 'seller-order-1', order_id: 'parent-order-1', status: 'PROCESSING',
+            subtotal_paisa: 12000, commission_paisa: 960, net_paisa: 11040,
+            created_at: '2026-11-06T00:00:00.000Z',
+            customer_name: 'Buyer', customer_phone: '01700000000',
+            delivery_name: 'Buyer', delivery_phone: '01700000000',
+            delivery_address: 'Road 1', delivery_area: 'Dhaka', customer_note: 'Call first',
+            items: [{ name_bn: 'চা', quantity: '2', unit_price_bdt: '60', variant: 'Large' }],
+            shipment_provider: 'PATHAO', shipment_tracking_id: 'PA-123',
+            shipment_status: 'BOOKED', shipment_mode: 'sandbox'
+          }];
+          return [];
+        },
         async run(...args) { calls.push({ sql, args, method: 'run' }); return { changes: 1, rows: [] }; }
       };
     },
@@ -98,4 +112,21 @@ test('pending or suspended sellers cannot mutate order status', async () => {
     }), error => error.status === 403);
     assert.equal(h.calls.some(x => x.lifecycle === 'seller'), false);
   }
+});
+
+
+test('seller order list returns buyer, delivery, purchased items and current courier tracking data', async () => {
+  const h = setup();
+  const response = await find(h, 'GET', '/api/v1/seller/orders').handler({
+    user: { id: 'seller-1' }, url: new URL('https://shop.example/api/v1/seller/orders')
+  });
+  const order = response.body.data[0];
+  assert.equal(order.customer.name, 'Buyer');
+  assert.equal(order.delivery.area, 'Dhaka');
+  assert.equal(order.delivery.note, 'Call first');
+  assert.deepEqual(order.items, [{ name_bn: 'চা', quantity: 2, unit_price_bdt: 60, variant: 'Large' }]);
+  assert.deepEqual(order.shipment, {
+    provider: 'PATHAO', tracking_id: 'PA-123', status: 'BOOKED', mode: 'sandbox'
+  });
+  assert.ok(h.calls.some(call => call.sql.includes('LEFT JOIN LATERAL') && call.sql.includes('FROM shipments')));
 });
