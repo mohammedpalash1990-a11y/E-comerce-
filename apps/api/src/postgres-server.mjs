@@ -11,6 +11,7 @@ import { handlePostgresInventoryWorkspace } from './postgres-inventory-workspace
 import { registerPostgresCommerceRoutes } from './postgres-commerce-routes.mjs';
 import { shippingFor, initiateGateway, signCallback, verifySignature, PAYMENT_METHODS } from './gateways.mjs';
 import { createPostgresPaymentRepository, registerPostgresPaymentRoutes } from './postgres-payment-routes.mjs';
+import { registerPostgresSellerCourierRoutes } from './postgres-seller-courier-routes.mjs';
 import { registerPostgresAdminSellerRoutes } from './postgres-admin-seller-routes.mjs';
 import { registerPostgresSellerWorkspaceRoutes } from './postgres-seller-workspace-routes.mjs';
 import { registerPostgresSellerProductRoutes } from './postgres-seller-product-routes.mjs';
@@ -126,12 +127,16 @@ export function createPostgresApiServer({ database, catalogRepository, authRepos
     gatewayInitiate: initiateGateway,
     methods: PAYMENT_METHODS
   });
-  registerPostgresCommerceRoutes(registerDomainRoute, response, {
+  const commerce = registerPostgresCommerceRoutes(registerDomainRoute, response, {
     database,
     shippingFor,
     paymentMethods: PAYMENT_METHODS,
     paymentRepository,
     inventoryRepository: createPostgresInventoryRepository(database)
+  });
+  registerPostgresSellerCourierRoutes(registerDomainRoute, response, {
+    database,
+    orderLifecycle: commerce.lifecycle
   });
   registerPostgresPaymentRoutes(registerDomainRoute, response, {
     paymentRepository,
