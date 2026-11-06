@@ -36,10 +36,20 @@ test('product details are presented in a labelled modal with focus management', 
 
 test('adding from product details uses the existing persistent demo cart', () => {
   assert.match(html, /data-detail-add/);
-  assert.match(html, /cart\[b\.dataset\.detailAdd\]=\(cart\[b\.dataset\.detailAdd\]\|\|0\)\+1/);
+  assert.match(html, /addToCart\(b\.dataset\.detailAdd\)/);
   assert.match(html, /localStorage\.setItem\('haat_cart_demo'/);
   assert.match(html, /এটি বর্তমানে একটি প্রকাশ্য frontend preview/);
   assert.match(html, /এটি শুধু ডেমো—লাইভ অর্ডার এখনো চালু হয়নি/);
+});
+
+test('cart restoration rejects malformed data and clamps quantities to stock', () => {
+  assert.match(html, /function loadCart\\(\\)/);
+  assert.match(html, /Number\\.isSafeInteger\\(q\\)/);
+  assert.match(html, /Math\\.min\\(q,p\\.stock\\)/);
+  assert.match(html, /function addToCart\\(id\\)/);
+  assert.match(html, /current>=p\\.stock/);
+  assert.match(html, /p\\.stock>0\\?'':'disabled'/);
+  assert.match(html, /q>=p\\.stock\\?'disabled':''/);
 });
 
 test('product detail layout adapts to narrow screens', () => {
