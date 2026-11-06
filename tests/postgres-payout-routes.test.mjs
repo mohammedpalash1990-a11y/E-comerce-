@@ -10,8 +10,11 @@ function setup({ seller = { status: 'APPROVED', account_status: 'ACTIVE' }, earn
         async get(...args) {
           calls.push({ method: 'get', sql, args });
           if (sql.includes('FROM seller_profiles sp JOIN users')) return seller;
+          if (sql.includes('SELECT seller_id FROM payouts WHERE id=?')) return { seller_id: payout.seller_id };
+          if (sql.includes('FROM seller_profiles WHERE user_id=? FOR UPDATE')) return { user_id: payout.seller_id };
           if (sql.includes('FROM payouts WHERE id=? FOR UPDATE')) return payout;
           if (sql.includes('AS sales')) return { sales: 20000, commission: 1600, earned, pending: 10000, paid: 5000 };
+          if (sql.includes('AS reserved')) return { earned, reserved };
           if (sql.includes('AS earned')) return { earned, reserved };
           return undefined;
         },
@@ -93,4 +96,17 @@ test('admin payout decision is atomic, audited and not repeatable',async()=>{
   assert.ok(h.calls.some(x=>x.sql?.includes('INSERT INTO notifications')));
   const closed=setup({payout:{...{id:'pay-1',seller_id:'seller-1',amount_paisa:5000},status:'APPROVED'}});
   await assert.rejects(find(closed,'POST','/api/v1/admin/payouts/:id/decision').handler({user:adminUser,params:['pay-1'],body:{decision:'REJECT'}}),e=>e.status===409);
+});
+test('admin payout approval rechecks all reserved payouts against current seller earnings',async()=>{
+  const h=setup({earned:10000,reserved:12000});
+  await assert.rejects(
+    find(h,'POST','/api/v1/admin/payouts/:id/decision').handler({user:adminUser,params:['pay-1'],body:{decision:'APPROVE'}}),
+    error=>error.status===409
+  );
+  assert.ok(h.calls.some(x=>x.sql?.includes('FROM seller_profiles WHERE user_id=? FOR UPDATE')),
+    'admin approval must lock the same seller profile row as payout requests');
+  assert.ok(h.calls.some(x=>x.sql?.includes("status IN ('REQUESTED','APPROVED')")),
+    'approval must include every pending and approved reservation');
+  assert.ok(!h.calls.some(x=>x.sql?.includes('UPDATE payouts SET status=?')),
+    'an over-reserved seller payout must not be approved');
 });
