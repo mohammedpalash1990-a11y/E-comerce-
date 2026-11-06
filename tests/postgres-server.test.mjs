@@ -589,3 +589,28 @@ test('payment server routes stay in the isolated PostgreSQL import graph', async
   assert.ok([...files].some(file => file.endsWith('/postgres-checkout.mjs')));
   assert.ok([...files].some(file => file.endsWith('/postgres-commerce-routes.mjs')));
 });
+
+
+test('seller courier routes are mounted behind seller authentication', async () => {
+  await withServer({}, async base => {
+    const quote = await fetch(base + '/api/v1/seller/courier/quote?area=Dhaka');
+    assert.equal(quote.status, 401);
+    const booking = await fetch(base + '/api/v1/seller/orders/so-1/courier', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ provider: 'PATHAO' })
+    });
+    assert.equal(booking.status, 401);
+    const update = await fetch(base + '/api/v1/seller/shipments/sh-1/status', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'DELIVERED' })
+    });
+    assert.equal(update.status, 401);
+  });
+});
+
+test('seller courier API is included in the isolated PostgreSQL import graph', async () => {
+  const files = await importGraph(entry);
+  assert.ok([...files].some(file => file.endsWith('/postgres-seller-courier-routes.mjs')));
+});
