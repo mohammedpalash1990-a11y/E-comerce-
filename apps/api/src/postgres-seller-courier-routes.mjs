@@ -54,8 +54,8 @@ export function registerPostgresSellerCourierRoutes(route, ok, {
         FROM seller_orders so JOIN orders o ON o.id=so.order_id
         WHERE so.id=? AND so.seller_id=? FOR UPDATE OF so,o`).get(sellerOrderId, user.id);
       if (!order) throw new HttpError(404, 'আপনার বিক্রেতা অর্ডারটি পাওয়া যায়নি');
-      if (!['PROCESSING', 'SHIPPED'].includes(order.status)) {
-        throw new HttpError(409, 'কুরিয়ার বুক করার আগে অর্ডার PROCESSING অবস্থায় থাকতে হবে');
+      if (order.status !== 'SHIPPED') {
+        throw new HttpError(409, 'কুরিয়ার বুক করার আগে বিক্রেতার অর্ডার SHIPPED করতে হবে');
       }
 
       const active = await q(`SELECT id,provider,tracking_id,status
