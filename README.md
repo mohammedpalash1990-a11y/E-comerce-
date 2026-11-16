@@ -1,112 +1,68 @@
-# HAAT — Bangladesh Multi-Vendor Marketplace
+# Musafir Fast Food POS
 
-বাংলাদেশের জন্য বাংলা-প্রথম multi-vendor e-commerce platform-এর development repository। BDT pricing, customer storefront, seller/admin workspace এবং COD checkout লক্ষ্য করে তৈরি।
+A premium responsive restaurant operations demo built with React, TypeScript, Vite, Tailwind CSS and PostgreSQL API scaffolding.
 
-## Verified development update — 2026-11-04
+## Start the PostgreSQL database and API
 
-See [the current implementation report](docs/DEVELOPMENT_REPORT_2026-11-04.md) for the repository audit, team handoff, exact test evidence and remaining work. The explicit PostgreSQL development API now includes customer order detail/tracking, saved-cart routes and method-aware dispatch for seller product writes. See the [cart increment report](docs/POSTGRES_CART_INCREMENT_2026-11-04.md) for its contract and concurrency tests. The [coupon increment report](docs/POSTGRES_COUPON_INCREMENT_2026-11-04.md) covers server-cart-based coupon preview and transactional redemption. The [admin coupon increment](docs/POSTGRES_ADMIN_COUPON_INCREMENT_2026-11-04.md) adds validated creation, bounded listing and audited activation controls. The [customer account increment](docs/POSTGRES_CUSTOMER_ACCOUNT_INCREMENT_2026-11-04.md) exposes saved addresses, wishlist and verified-purchase reviews over HTTP. Both production startup guards remain enabled.
+Requirements: Node.js 20+, Docker Compose, and a private deployment environment.
 
-**Design baseline:** root `index.html` is the canonical static HAAT demo used by browser tests. The Node web server and Pages workflow currently serve the different `apps/web/public/index.html`. Reconcile these through frontend review; do not overwrite either blindly. Native apps and complete live browser checkout are not delivered.
-
-## Current GitHub branch status
-**Active MVP development — public storefront preview is deployed; the API is not yet publicly hosted and the live catalog/order flows are unavailable on GitHub Pages. Not production-ready.**
-
-### Implemented in this branch
-- Bengali-first customer storefront with product/category listing and client-side search
-- Development seed accounts and phone/password login
-- SQLite-backed category and product catalogue
-- COD checkout API with delivery address capture, stock validation, transactional deduction, persisted order line items and customer order-history API
-- Admin order queue with delivery details and controlled order-status transitions; eligible cancellations restore stock
-- Web server proxies `/api/*` requests to the API service
-- Storefront loads only API-backed products; if the API is offline it clearly reports preview/offline status instead of silently showing hard-coded sample products
-- Seller and admin pages show whether the API and database health endpoint is reachable
-- Seller product submission supports descriptions and HTTPS image URLs; seller and admin views can preview uploaded product images
-- Admin console includes live KPI cards and pending seller application approvals
-- Storefront has a manual API retry control; customer cart persists under a versioned local-storage key
-- Storefront automatically uses live catalogue and COD checkout when served alongside the API; GitHub Pages remains a static preview
-- Prisma PostgreSQL target schema, OpenAPI starter contract, Docker and CI scaffolding
-
-### Implemented in the modular development API
-- Seller product submission, product listing and seller-specific order fulfilment
-- Admin product moderation, seller/customer management, order status, refunds and payout workflow endpoints
-- Multi-vendor checkout with seller sub-orders and commission ledger entries
-- Customer order history, address and account endpoints, notifications
-- Sandbox payment and courier adapters only
-
-## Still required before production
-- Complete remaining route parity in the existing isolated PostgreSQL API; keep its SQLite-free composition and production gate
-- Live PostgreSQL migration and checkout/order/payment/inventory integration verification
-- Public Node.js API hosting, persistent production database, secrets and monitoring
-- Live payment/courier credentials and provider webhook verification
-- Full browser E2E, security, privacy and operational review
-- Native Android/iOS application
-
-## Requirements
-- Node.js 22.5+
-- npm
-
-## Run locally
-```bash
+```sh
 cp .env.example .env
-npm ci
-npm run dev
-```
-- Customer storefront: http://localhost:3000
-- Seller workspace: http://localhost:3000/seller.html
-- Admin workspace: http://localhost:3000/admin.html
-- API health: http://localhost:4000/health
-
-## PostgreSQL migration bootstrap (staging/development only)
-
-Set `DATABASE_URL` and the PostgreSQL TLS/pool variables from `.env.example`, then run:
-
-```bash
-npm run db:migrate:postgres
+# Change JWT_SECRET and SEED_ADMIN_PASSWORD before starting anything.
+# Set POSTGRES_PASSWORD to the same secure value as the password portion of DATABASE_URL.
+docker compose up -d db
+npm install
+npm run db:migrate
+npm run db:seed
+npm run api:dev
 ```
 
-This command verifies the PostgreSQL connection and applies ordered SQL files from `apps/api/migrations/postgres` under the database advisory lock. It does not start the API in PostgreSQL mode. Production API startup remains deliberately blocked until PostgreSQL-only route composition and end-to-end validation are complete. Do not point a live API at a PostgreSQL database yet.
+In another terminal run `npm run dev`. Vite proxies `/api` requests to `http://localhost:3001`. Health check: `http://localhost:3001/api/health`.
 
-## Development demo accounts
-| Role | Phone | Password |
-|---|---|---|
-| Customer | 01700000003 | Customer@12345 |
-| Seller | 01700000002 | Seller@12345 |
-| Admin | 01700000001 | Admin@12345 |
+Seed admin credentials come from `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD`. Never commit `.env`; disable/delete the seeded account and provision real users before exposing this service. JWT signing key must be at least 32 characters. Use HTTPS, a strong database password, backups, and a secret manager in deployment.
 
-These accounts are local development seed data only. Change all credentials and secrets before deployment.
+## Backend endpoints delivered
 
-## Checks
-```bash
-npm test
-npm run check
+- `POST /api/auth/login`, `GET /api/auth/me`: bcrypt password verification, short-lived JWT, active-user reload, login rate limiting.
+- `GET /api/inventory`, `POST/PATCH /api/inventory`: role-checked ingredient listing/editing.
+- `POST /api/purchases`: transactional supplier invoice, stock receiving, stock movement and initial payment.
+- `GET /api/suppliers`, `POST /api/suppliers/:id/payments`, `GET /api/payables`: supplier balances/payments.
+- `POST /api/orders`: transactional order insertion and recipe stock deduction with stock row locks and negative-stock rejection.
+- `GET /api/menu`, `GET /api/menu/qr`: public menu and generated PNG QR code (requires a public hosted menu URL and branch id).
+- `GET /api/health`: database connectivity.
+
+PostgreSQL schema supports organizations, branches, roles, users, products, categories, ingredient stock, recipes, customers, orders, payments, suppliers, purchases, stock movements and audit logs. The API scopes operational data by authenticated organization/branch and roles. Financial changes are transactionally recorded.
+
+## Frontend status and limitations
+
+The existing mobile-responsive admin UI and local demo workflows remain. The API is an initial backend foundation and is not yet fully connected to the React views: login UI/token lifecycle, inventory edit forms, purchase/payment UI, remote menu/order fetching, and database-to-dashboard reporting still need integration. The generated QR endpoint returns an actual PNG but needs deployment URL configuration; the customer ordering page itself is not yet built. No live payment gateway is configured. This is not yet production-ready: run typechecks, integration/security tests, create migrations/backups policy, and review the API before handling real financial data.
+
+## Useful commands
+
+```sh
+npm run build
+npm run typecheck:server
+npm run db:migrate
+npm run db:seed
+npm run api:dev
 ```
 
-## Bangladesh defaults
-- Currency display: BDT; persisted amounts use integer paisa
-- Primary language: Bengali
-- Checkout: COD development flow only
+## Employees, attendance and payroll
 
-## Repository map
-- `apps/web` — customer storefront and seller/admin placeholder pages
-- `apps/api` — Node.js API + local SQLite development adapter
-- `apps/api/migrations/postgres` — PostgreSQL target schema migrations
-- `prisma` — initial PostgreSQL target schema
-- `docs` — architecture, status and deployment notes
-- `infra/docker` — container scaffolding
-- `tests` — API and adapter tests
+Employees, daily attendance, salary advances, payroll (bonus and deductions) and salary payments are stored in PostgreSQL (`db/migrations/002_team_payroll.sql` and `003_payroll_hardening.sql`) and served by `server/hr.ts`. Everything is scoped to the signed-in user's organization and branch, amounts are SAR, and salary payments are Cash or Mada only.
 
-## Production warning
-Do not process real customer data or payments with this scaffold. See [docs/STATUS_BN.md](docs/STATUS_BN.md), [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) and [SECURITY.md](SECURITY.md).
+| Area | Owner / Manager | Accountant | Other roles |
+| --- | --- | --- | --- |
+| Employees: view | yes | yes | no |
+| Employees: add, edit, deactivate | yes | no | no |
+| Attendance: view and mark | yes | no | no |
+| Salary advance, create payroll | yes | no | no |
+| Payroll: view | yes | yes | no |
+| Salary payment (partial or full) | yes | yes | no |
 
-## Preview and demo access
+- One attendance record per employee per day (`Present`, `Absent`, `On Leave`); marking again updates it.
+- Net salary = base + bonus - advance deduction - other deduction. Status is calculated on the server: `Unpaid`, `Part-paid` or `Paid`. A payment can never exceed the remaining salary, even when two are sent at the same time.
+- Every salary payment is its own row (history is kept) and is written in the same database transaction as its audit log entry.
+- Deactivating an employee keeps their attendance and payroll history.
 
-- Storefront: https://mohammedpalash1990-a11y.github.io/E-comerce-/
-- Seller workspace: https://mohammedpalash1990-a11y.github.io/E-comerce-/seller.html
-- Admin workspace: https://mohammedpalash1990-a11y.github.io/E-comerce-/admin.html
-
-Demo credentials (development only):
-- Customer: `01700000003` / `Customer@12345`
-- Seller: `01700000002` / `Seller@12345`
-- Admin: `01700000001` / `Admin@12345`
-
-GitHub Pages is static hosting, so these portal pages cannot reach the API there yet. Never use demo credentials in a production deployment.
+Tests: `npm test` runs the unit and contract tests. `npm run test:integration` runs the end-to-end API tests and needs a running API plus a **throwaway** PostgreSQL database (`DATABASE_URL`); CI starts both automatically.
