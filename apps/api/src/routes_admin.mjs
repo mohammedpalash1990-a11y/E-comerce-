@@ -2,6 +2,12 @@ import { q, tx, id, now, audit, notify, text, bad, money, HttpError, bdt, orderN
 import { applyParentStatus, orderView, sellerBalance, conflict } from './orders.mjs';
 import { productFields, parseImages, saveImages, bookShipment, updateShipment } from './routes_seller.mjs';
 import { productView } from './routes_public.mjs';
+import {
+  pendingRequests,
+  decideRequest,
+  inventoryAlerts,
+  inventoryReport
+} from './sqlite-inventory.mjs';
 
 const A = ['ADMIN'];
 const lim = (url, d = 100) => Math.min(Math.max(parseInt(url.searchParams.get('limit')) || d, 1), 500);
@@ -76,7 +82,7 @@ export default function register(route, ok) {
   // ----- products -----
   route('GET', '/api/v1/admin/products', A, ({ url }) => {
     const st = url.searchParams.get('status'), t = '%' + (url.searchParams.get('q') || '') + '%';
-    return ok(q(`SELECT p.id,p.name_bn,p.name_en,p.price_paisa,p.discount_paisa,p.stock,p.status,c.slug category_slug,sp.shop_name seller_name FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN seller_profiles sp ON sp.user_id=p.seller_id
+    return ok(q(`SELECT p.id,p.name_bn,p.name_en,p.price_paisa,p.discount_paisa,p.stock,p.status,c.slug category_slug,sp.shop_name seller_name,(SELECT url FROM product_images i WHERE i.product_id=p.id ORDER BY position LIMIT 1) image FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN seller_profiles sp ON sp.user_id=p.seller_id
       WHERE p.status<>'ARCHIVED' AND (p.name_bn LIKE ? OR p.name_en LIKE ?)${st ? ' AND p.status=?' : ''} ORDER BY p.created_at DESC,p.id DESC LIMIT ?`).all(t, t, ...(st ? [st] : []), lim(url)).map(productView));
   });
   route('GET', '/api/v1/admin/products/pending', A, () => ok(q("SELECT p.id,p.name_bn,p.name_en,p.price_paisa,p.discount_paisa,p.stock,p.status,c.slug category_slug,COALESCE(sp.shop_name,u.name) seller_name,(SELECT url FROM product_images i WHERE i.product_id=p.id ORDER BY position LIMIT 1) image FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN users u ON u.id=p.seller_id LEFT JOIN seller_profiles sp ON sp.user_id=p.seller_id WHERE p.status='PENDING_REVIEW' ORDER BY p.created_at,p.id").all().map(productView)));
@@ -193,4 +199,10 @@ export default function register(route, ok) {
     audit(user.id, 'COUPON_CREATE', 'coupon', code); return ok({ code }, 201);
   });
   route('PATCH', '/api/v1/admin/coupons/:code', A, ({ user, params, body }) => { if (!q('UPDATE coupons SET active=? WHERE code=?').run(body.active ? 1 : 0, params[0].toUpperCase()).changes) throw new HttpError(404, 'Coupon not found'); audit(user.id, 'COUPON_TOGGLE', 'coupon', params[0]); return ok({ code: params[0], active: !!body.active }); });
+
+  // ----- inventory approval workspace -----
+  route('GET', '/api/v1/admin/inventory/adjustments', A, ({ url }) => ok(pendingRequests(url.searchParams.get('status') || 'PENDING')));
+  route('POST', '/api/v1/admin/inventory/adjustments/:id/decision', A, ({ user, params, body }) => ok(decideRequest(user, params[0], body)));
+  route('GET', '/api/v1/admin/inventory/alerts', A, ({ url }) => ok(inventoryAlerts({ threshold: url.searchParams.get('threshold') ?? 5 })));
+  route('GET', '/api/v1/admin/inventory/report', A, ({ url }) => ok(inventoryReport({ from: url.searchParams.get('from'), to: url.searchParams.get('to') })));
 }

@@ -2,6 +2,13 @@ import { q, tx, id, now, audit, notify, text, bad, money, HttpError, bdt, orderN
 import { applySellerStatus, sellerBalance, addEvent } from './orders.mjs';
 import { courierBook, courierQuote, COURIERS, SHIPMENT_STATUSES } from './gateways.mjs';
 import { productView } from './routes_public.mjs';
+import {
+  sellerInventory,
+  productMovements,
+  requestAdjustment,
+  inventoryAlerts,
+  inventoryReport
+} from './sqlite-inventory.mjs';
 
 const S = ['SELLER'];
 const profile = u => q('SELECT * FROM seller_profiles WHERE user_id=?').get(u.id) || (() => { throw new HttpError(403, 'বিক্রেতা প্রোফাইল পাওয়া যায়নি'); })();
@@ -69,8 +76,8 @@ export default function register(route, ok) {
   });
 
   // ----- products -----
-  route('GET', '/api/v1/seller/products', S, ({ user }) => ok(q(`SELECT p.id,p.name_bn,p.name_en,p.price_paisa,p.discount_paisa,p.stock,p.status,p.sku,c.slug category_slug,
-    (SELECT url FROM product_images i WHERE i.product_id=p.id ORDER BY position LIMIT 1) image FROM products p JOIN categories c ON c.id=p.category_id WHERE p.seller_id=? AND p.status<>'ARCHIVED' ORDER BY p.created_at DESC,p.id DESC`).all(user.id).map(productView)));
+  route('GET', '/api/v1/seller/products', S, ({ user }) => ok(q(`SELECT p.id,p.name_bn,p.name_en,p.price_paisa,p.discount_paisa,p.stock,p.status,p.sku,p.description,c.slug category_slug,b.slug brand_slug,b.name brand,
+    (SELECT url FROM product_images i WHERE i.product_id=p.id ORDER BY position LIMIT 1) image FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id WHERE p.seller_id=? AND p.status<>'ARCHIVED' ORDER BY p.created_at DESC,p.id DESC`).all(user.id).map(productView)));
   route('GET', '/api/v1/seller/products/:id', S, ({ user, params }) => {
     const p = sellerProductRow(params[0], user.id); if (!p) throw new HttpError(404, 'Product not found');
     return ok({ ...productView(p), variants: JSON.parse(p.variants || '[]'), images: q('SELECT url FROM product_images WHERE product_id=? ORDER BY position').all(p.id).map(i => i.url) });
@@ -172,4 +179,11 @@ export default function register(route, ok) {
     });
     return ok({ id: pid, status: 'REQUESTED' }, 201);
   });
+
+  // ----- inventory workspace -----
+  route('GET', '/api/v1/seller/inventory', S, ({ user }) => ok(sellerInventory(user.id)));
+  route('GET', '/api/v1/seller/inventory/alerts', S, ({ user, url }) => ok(inventoryAlerts({ sellerId: user.id, threshold: url.searchParams.get('threshold') ?? 5 })));
+  route('GET', '/api/v1/seller/inventory/report', S, ({ user, url }) => ok(inventoryReport({ sellerId: user.id, from: url.searchParams.get('from'), to: url.searchParams.get('to') })));
+  route('GET', '/api/v1/seller/inventory/:id/movements', S, ({ user, params }) => ok(productMovements(user.id, params[0])));
+  route('POST', '/api/v1/seller/inventory/:id/adjust-requests', S, ({ user, params, body }) => ok(requestAdjustment(user, params[0], body), 201));
 }

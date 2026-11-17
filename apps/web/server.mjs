@@ -7,7 +7,7 @@ const publicRoot = resolve(fileURLToPath(new URL('./public/', import.meta.url)))
 const port = Number(process.env.WEB_PORT || 3000);
 const apiPort = Number(process.env.PORT || 4000);
 const apiHost = process.env.API_HOST || '127.0.0.1';
-const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml' };
+const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.json': 'application/json; charset=utf-8' };
 const securityHeaders = {
   'x-content-type-options': 'nosniff',
   'x-frame-options': 'DENY',
@@ -23,7 +23,7 @@ const server = http.createServer((req, res) => {
   let url;
   try { url = new URL(req.url, 'http://localhost'); }
   catch { respond(res, 400, { 'content-type': 'text/plain; charset=utf-8' }, 'Bad request'); return; }
-  if (url.pathname.startsWith('/api/')) {
+  if (url.pathname === '/health' || url.pathname.startsWith('/api/')) {
     const upstream = http.request({ hostname: apiHost, port: apiPort, path: url.pathname + url.search, method: req.method, headers: { ...req.headers, host: apiHost + ':' + apiPort } }, response => {
       res.writeHead(response.statusCode || 502, { ...response.headers, ...securityHeaders });
       response.pipe(res);

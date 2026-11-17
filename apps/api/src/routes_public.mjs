@@ -63,9 +63,11 @@ export function createSqliteCatalogRepository() {
       const order = { price_asc: eff + ' ASC', price_desc: eff + ' DESC', newest: 'p.created_at DESC,p.id DESC' }[get('sort')] || 'p.name_bn';
       const limit = Math.min(Math.max(parseInt(get('limit'), 10) || 100, 1), 100);
       const offset = Math.max(parseInt(get('offset'), 10) || 0, 0);
-      const rows = q(`SELECT p.id,p.name_bn,p.name_en,p.price_paisa,p.discount_paisa,p.stock,c.slug category_slug,b.name brand,
+      const rows = q(`SELECT p.id,p.name_bn,p.name_en,p.price_paisa,p.discount_paisa,p.stock,c.slug category_slug,b.slug brand_slug,b.name brand,sp.shop_name seller_shop,
+        (SELECT ROUND(COALESCE(AVG(rating),0),1) FROM reviews r WHERE r.product_id=p.id) rating,
+        (SELECT COUNT(*) FROM reviews r WHERE r.product_id=p.id) review_count,
         (SELECT url FROM product_images i WHERE i.product_id=p.id ORDER BY position LIMIT 1) image
-        FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT ? OFFSET ?`).all(...args, limit, offset);
+        FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id LEFT JOIN seller_profiles sp ON sp.user_id=p.seller_id WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT ? OFFSET ?`).all(...args, limit, offset);
       return rows.map(productView);
     },
     async suggestProducts(params = new URLSearchParams()) {
