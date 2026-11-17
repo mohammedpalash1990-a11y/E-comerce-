@@ -1,4 +1,4 @@
-import { HttpError } from './postgres-shared.mjs';
+import { HttpError, text } from './postgres-shared.mjs';
 
 const bdt = value => Number(value || 0) / 100;
 const orderNumber = value => 'HAAT-' + String(value).replace(/-/g, '').slice(0, 10).toUpperCase();
@@ -15,6 +15,21 @@ export function registerPostgresSellerWorkspaceRoutes(route, ok, { database } = 
   };
 
   route('GET', '/api/v1/seller/profile', ['SELLER'], async ({ user }) => ok(await profile(user.id)));
+
+  route('PATCH', '/api/v1/seller/profile', ['SELLER'], async ({ user, body }) => {
+    const current = await profile(user.id);
+    const shopAddress = body.shop_address !== undefined ? text(body.shop_address, 300, 'দোকানের ঠিকানা') : current.shop_address;
+    const businessInfo = body.business_info !== undefined ? text(body.business_info, 1000, 'ব্যবসার বিবরণ', { required: false }) : current.business_info;
+    await q('UPDATE seller_profiles SET shop_address=?,business_info=? WHERE user_id=?').run(shopAddress, businessInfo, user.id);
+    return ok(await profile(user.id));
+  });
+
+  route('GET', '/api/v1/seller/reviews', ['SELLER'], async ({ user }) => {
+    const rows = await q(`SELECT r.id,r.product_id,r.rating,r.comment,r.created_at,p.name_bn AS product_name_bn,u.name AS customer_name
+      FROM reviews r JOIN products p ON p.id=r.product_id JOIN users u ON u.id=r.user_id
+      WHERE p.seller_id=? ORDER BY r.created_at DESC,r.id DESC LIMIT 100`).all(user.id);
+    return ok(rows.map(row => ({ ...row, rating: Number(row.rating) })));
+  });
 
   route('GET', '/api/v1/seller/dashboard', ['SELLER'], async ({ user }) => {
     const p = await profile(user.id);

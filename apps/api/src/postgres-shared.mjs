@@ -9,8 +9,8 @@ if (production && !webhookSecret) throw new Error('PAYMENT_WEBHOOK_SECRET is req
 export const config = Object.freeze({
   sessionDays: Number(env.SESSION_DAYS || 7),
   exposeDevCodes: !production,
-  paymentMode: env.PAYMENT_MODE || 'sandbox',
-  courierMode: env.COURIER_MODE || 'sandbox',
+  paymentMode: String(env.PAYMENT_MODE || 'sandbox').split('#')[0].trim().toLowerCase() || 'sandbox',
+  courierMode: String(env.COURIER_MODE || 'sandbox').split('#')[0].trim().toLowerCase() || 'sandbox',
   webhookSecret,
   freeShippingPaisa: Number(env.FREE_SHIPPING_OVER_BDT || 0) * 100
 });

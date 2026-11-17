@@ -45,6 +45,12 @@ export function registerPostgresCommerceRoutes(route, ok, options = {}) {
     audit: (actor, action, entity, entityId, detail) => writeAudit(database, actor, action, entity, entityId, detail)
   });
 
+  route('GET', '/api/v1/shipping/quote', null, async ({ url }) => {
+    const sub = Math.round(Number(url.searchParams.get('subtotal_bdt') || 0) * 100);
+    const fee = typeof options.shippingFor === 'function' ? options.shippingFor(url.searchParams.get('area') || '', sub) : 0;
+    return ok({ shipping_bdt: money(fee) });
+  });
+
   route('POST', '/api/v1/checkout', ['CUSTOMER'], async ({ user, body }) => {
     const result = await checkout.checkout(user, body);
     return ok({ ...result, orderNumber: result.orderNumber || orderNumber(result.id) }, 201);
@@ -121,9 +127,36 @@ export function registerPostgresCommerceRoutes(route, ok, options = {}) {
 
   route('GET', '/api/v1/admin/orders', ['ADMIN'], async ({ url }) => {
     const status = url.searchParams.get('status');
-    const rows = await database.q(`SELECT id,user_id,total_paisa,status,payment_method,payment_status,created_at
-      FROM orders${status ? ' WHERE status=?' : ''} ORDER BY created_at DESC,id DESC LIMIT 300`).all(...(status ? [status] : []));
-    return ok(rows.map(row => ({ id: row.id, orderNumber: orderNumber(row.id), customer_id: row.user_id, total_bdt: money(row.total_paisa), status: row.status, payment: { method: row.payment_method, status: row.payment_status }, created_at: row.created_at })));
+    const qTerm = String(url.searchParams.get('q') || '').trim().slice(0, 80);
+    const clauses = [], params = [];
+    if (status) { clauses.push('o.status=?'); params.push(status); }
+    if (qTerm) {
+      const like = '%' + qTerm + '%';
+      clauses.push('(o.id ILIKE ? OR COALESCE(u.name,\'\') ILIKE ? OR COALESCE(u.phone,\'\') ILIKE ?)');
+      params.push('%' + qTerm.replace(/^HAAT-/i, '') + '%', like, like);
+    }
+    const where = clauses.length ? ' WHERE ' + clauses.join(' AND ') : '';
+    const rows = await database.q(`SELECT o.id,o.user_id,o.total_paisa,o.status,o.payment_method,o.payment_status,o.created_at,
+      o.delivery_name,o.delivery_phone,o.delivery_address,o.delivery_area,o.customer_note,
+      u.name AS customer_name,u.phone AS customer_phone,u.email AS customer_email,
+      COALESCE((
+        SELECT json_agg(json_build_object('name_bn',oi.product_name_bn,'quantity',oi.quantity,'unit_price_bdt',oi.unit_price_paisa::numeric/100) ORDER BY oi.id)
+        FROM order_items oi WHERE oi.order_id=o.id
+      ),'[]'::json) AS items
+      FROM orders o LEFT JOIN users u ON u.id=o.user_id${where}
+      ORDER BY o.created_at DESC,o.id DESC LIMIT 300`).all(...params);
+    return ok(rows.map(row => ({
+      id: row.id,
+      orderNumber: orderNumber(row.id),
+      customer_id: row.user_id,
+      total_bdt: money(row.total_paisa),
+      status: row.status,
+      payment: { method: row.payment_method, status: row.payment_status },
+      created_at: row.created_at,
+      customer: { name: row.customer_name || '', phone: row.customer_phone || '', email: row.customer_email || null },
+      delivery: { name: row.delivery_name || '', phone: row.delivery_phone || '', address: row.delivery_address || '', area: row.delivery_area || '', note: row.customer_note || '' },
+      items: Array.isArray(row.items) ? row.items : []
+    })));
   });
 
   route('POST', '/api/v1/admin/orders/:id/status', ['ADMIN'], async ({ user, params, body }) => {

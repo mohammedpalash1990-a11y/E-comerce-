@@ -86,7 +86,8 @@ export function createPostgresCustomerRepository(database) {
   }
 
   async function listWishlist(userId) {
-    const rows = await query(`SELECT p.id,p.name_bn,p.name_en,p.price_paisa,p.discount_paisa,p.stock
+    const rows = await query(`SELECT p.id,p.name_bn,p.name_en,p.price_paisa,p.discount_paisa,p.stock,
+      (SELECT url FROM product_images i WHERE i.product_id=p.id ORDER BY position LIMIT 1) image
       FROM wishlists w JOIN products p ON p.id=w.product_id
       WHERE w.user_id=? AND ${LIVE} ORDER BY w.created_at DESC`).all(userId);
     return rows.map(productView);

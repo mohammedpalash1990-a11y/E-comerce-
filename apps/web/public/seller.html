@@ -134,6 +134,7 @@ th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05
       <button type="button" class="tab" data-stab="products">পণ্য ও ক্যাটালগ</button>
       <button type="button" class="tab" data-stab="inventory">স্টক ও ইনভেন্টরি</button>
       <button type="button" class="tab" data-stab="finance">আয় ও পেআউট</button>
+      <button type="button" class="tab" data-stab="store">স্টোর, রিভিউ ও বার্তা</button>
     </div>
 
     <section class="panel sview" id="sview-orders">
@@ -263,7 +264,43 @@ th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05
           <tbody id="payoutRows"><tr><td colspan="5">লোড হচ্ছে…</td></tr></tbody>
         </table>
       </div>
+      <h3 style="margin-top:20px">সেটেলমেন্ট ও লেজার (Settlements Ledger)</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>সময়</th><th>ধরন</th><th>সাব-অর্ডার / রেফ</th><th>পরিমাণ</th></tr></thead>
+          <tbody id="settlementRows"><tr><td colspan="4">লোড হচ্ছে…</td></tr></tbody>
+        </table>
+      </div>
     </section>
+
+    <div class="sview hidden" id="sview-store">
+      <section class="panel">
+        <h2>স্টোর প্রোফাইল ও ব্যবসার তথ্য</h2>
+        <p class="muted">আপনার দোকানের ঠিকানা ও বিবরণ আপডেট রাখুন।</p>
+        <form id="sellerProfileForm" class="formgrid">
+          <label class="field wide">দোকানের ঠিকানা<input name="shop_address" maxlength="300" required></label>
+          <label class="field wide">ব্যবসার বিবরণ<textarea name="business_info" rows="3" maxlength="1000"></textarea></label>
+          <button type="submit" class="btn wide">প্রোফাইল সংরক্ষণ</button>
+        </form>
+        <div id="sellerProfileMsg" class="notice hidden"></div>
+      </section>
+
+      <section class="panel">
+        <div class="toolbar">
+          <h2>পণ্যের ক্রেতা রিভিউ</h2>
+          <button type="button" id="refreshReviewsBtn" class="soft">রিফ্রেশ</button>
+        </div>
+        <div id="sellerReviewList" style="margin-top:10px"><p class="muted">লোড হচ্ছে…</p></div>
+      </section>
+
+      <section class="panel">
+        <div class="toolbar">
+          <h2>নোটিফিকেশন</h2>
+          <button type="button" id="sellerMarkReadBtn" class="soft">সব পঠিত চিহ্নিত করুন</button>
+        </div>
+        <div id="sellerNotifList" style="margin-top:10px"><p class="muted">লোড হচ্ছে…</p></div>
+      </section>
+    </div>
   </section>
 </main>
 
@@ -311,6 +348,7 @@ $('#sellerTabs').onclick=e=>{
   document.querySelectorAll('.sview').forEach(v=>v.classList.toggle('hidden',v.id!=='sview-'+tab));
   if(tab==='finance')loadFinance();
   if(tab==='inventory')loadInventory();
+  if(tab==='store')loadStoreTab().catch(fail);
 };
 
 function show(){
@@ -332,6 +370,11 @@ async function boot(){
   $('#shopTitle').textContent=prof.data.shop_name||'Seller Workspace';
   $('#shopSubtitle').textContent=(prof.data.shop_address||'')+' · কমিশন '+(Number(prof.data.commission_bps||800)/100)+'%';
   $('#shopStatusBadge').textContent=prof.data.status;
+  const pf=$('#sellerProfileForm');
+  if(pf){
+    pf.elements.namedItem('shop_address').value=prof.data.shop_address||'';
+    pf.elements.namedItem('business_info').value=prof.data.business_info||'';
+  }
   const d=dash.data;
   const kpiVals=[
     money(d.total_sales_bdt),
@@ -555,6 +598,7 @@ async function loadFinance(){
   const r=await call('/seller/finance');const d=r.data;
   $('#financeSummary').innerHTML='মোট ডেলিভারি বিক্রি: <b class="num">'+money(d.total_sales_bdt)+'</b> · প্ল্যাটফর্ম কমিশন: <b class="num">'+money(d.commission_bdt)+'</b> · নেট আয়: <b class="num">'+money(d.net_earnings_bdt)+'</b> · পেন্ডিং: <b class="num">'+money(d.pending_balance_bdt)+'</b> · <b>Available Balance: <span class="num">'+money(d.available_balance_bdt)+'</span></b>';
   $('#payoutRows').innerHTML=(d.payouts||[]).map(p=>'<tr><td class="num">'+esc((p.created_at||'').slice(0,10))+'</td><td>'+esc(p.method)+'</td><td>'+esc(p.account)+'</td><td class="num">'+money(p.amount_bdt)+'</td><td><span class="status">'+esc(p.status)+'</span></td></tr>').join('')||'<tr><td colspan="5">এখনো কোনো পেআউট অনুরোধ নেই।</td></tr>';
+  $('#settlementRows').innerHTML=(d.settlements||[]).map(s=>'<tr><td class="num">'+esc((s.created_at||'').slice(0,16).replace('T',' '))+'</td><td><span class="status">'+esc(s.kind)+'</span></td><td><small class="muted">'+esc(s.seller_order_id||s.ref||'—')+'</small></td><td class="num">'+money(s.amount_bdt)+'</td></tr>').join('')||'<tr><td colspan="4">এখনো কোনো সেটেলমেন্ট লেজার এন্ট্রি নেই।</td></tr>';
 }
 $('#payoutForm').onsubmit=async e=>{
   e.preventDefault();
@@ -564,6 +608,22 @@ $('#payoutForm').onsubmit=async e=>{
     showMsg($('#payoutMsg'),'পেআউট অনুরোধ জমা হয়েছে ✓','ok');e.target.reset();await loadFinance();
   }catch(err){showMsg($('#payoutMsg'),err.message,'err')}
 };
+
+async function loadStoreTab(){
+  const [revs,notifs]=await Promise.all([call('/seller/reviews'),call('/notifications')]);
+  $('#sellerReviewList').innerHTML=(revs.data||[]).map(r=>'<article class="ordercard"><div class="toolbar"><b>'+esc(r.product_name_bn)+'</b><span class="num">'+'★'.repeat(Number(r.rating||5))+'</span></div><div class="muted">'+esc(r.customer_name)+' · '+esc((r.created_at||'').slice(0,10))+'</div><p style="margin:6px 0 0">'+esc(r.comment||'মন্তব্য নেই')+'</p></article>').join('')||'<p class="muted">আপনার পণ্যে এখনো কোনো রিভিউ আসেনি।</p>';
+  $('#sellerNotifList').innerHTML=(notifs.data||[]).map(n=>'<article class="ordercard" style="'+(n.read?'opacity:.75':'border-color:var(--accent)')+'"><div class="toolbar"><b>'+esc(n.title)+'</b><small class="muted">'+esc((n.created_at||'').slice(0,16).replace('T',' '))+'</small></div><p style="margin:4px 0 0">'+esc(n.body||'')+'</p></article>').join('')||'<p class="muted">কোনো নোটিফিকেশন নেই।</p>';
+}
+$('#sellerProfileForm').onsubmit=async e=>{
+  e.preventDefault();
+  const f=Object.fromEntries(new FormData(e.target));
+  try{
+    await call('/seller/profile',{method:'PATCH',body:JSON.stringify(f)});
+    showMsg($('#sellerProfileMsg'),'স্টোর প্রোফাইল আপডেট হয়েছে ✓','ok');await boot();
+  }catch(err){showMsg($('#sellerProfileMsg'),err.message,'err')}
+};
+$('#refreshReviewsBtn').onclick=()=>loadStoreTab().catch(fail);
+$('#sellerMarkReadBtn').onclick=async()=>{await call('/notifications/read',{method:'POST'});await loadStoreTab()};
 
 $('#refreshInventory').onclick=()=>loadInventory().catch(fail);
 $('#refreshFinance').onclick=()=>loadFinance().catch(fail);

@@ -65,6 +65,17 @@ export function updateShipment(sh, status, actor) {
 
 export default function register(route, ok) {
   route('GET', '/api/v1/seller/profile', S, ({ user }) => ok(profile(user)));
+  route('PATCH', '/api/v1/seller/profile', S, ({ user, body }) => {
+    const current = profile(user);
+    const shopAddress = body.shop_address !== undefined ? text(body.shop_address, 300, 'দোকানের ঠিকানা') : current.shop_address;
+    const businessInfo = body.business_info !== undefined ? text(body.business_info, 1000, 'ব্যবসার বিবরণ', { required: false }) : current.business_info;
+    q('UPDATE seller_profiles SET shop_address=?,business_info=? WHERE user_id=?').run(shopAddress, businessInfo, user.id);
+    audit(user.id, 'SELLER_PROFILE_UPDATE', 'seller', user.id);
+    return ok(profile(user));
+  });
+  route('GET', '/api/v1/seller/reviews', S, ({ user }) => ok(q(`SELECT r.id,r.product_id,r.rating,r.comment,r.created_at,p.name_bn AS product_name_bn,u.name AS customer_name
+    FROM reviews r JOIN products p ON p.id=r.product_id JOIN users u ON u.id=r.user_id
+    WHERE p.seller_id=? ORDER BY r.created_at DESC,r.id DESC LIMIT 100`).all(user.id)));
   route('GET', '/api/v1/seller/dashboard', S, ({ user }) => {
     const p = profile(user), n = (sql, ...a) => q(sql).get(...a).n;
     const so = st => n('SELECT COUNT(*) n FROM seller_orders WHERE seller_id=? AND status=?', user.id, st);

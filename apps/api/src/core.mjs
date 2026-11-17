@@ -13,7 +13,8 @@ export const config = {
   corsOrigins: (env.CORS_ORIGINS || 'http://localhost:3000,http://localhost:4000').split(',').map(s => s.trim()).filter(Boolean),
   sessionDays: Number(env.SESSION_DAYS || 7),
   authMax: Number(env.RATE_LIMIT_AUTH_MAX || 20), generalMax: Number(env.RATE_LIMIT_MAX || 600),
-  paymentMode: env.PAYMENT_MODE || 'sandbox', courierMode: env.COURIER_MODE || 'sandbox',
+  paymentMode: String(env.PAYMENT_MODE || 'sandbox').split('#')[0].trim().toLowerCase() || 'sandbox',
+  courierMode: String(env.COURIER_MODE || 'sandbox').split('#')[0].trim().toLowerCase() || 'sandbox',
   webhookSecret: env.PAYMENT_WEBHOOK_SECRET || (prod ? '' : 'dev-sandbox-secret'),
   freeShippingPaisa: Number(env.FREE_SHIPPING_OVER_BDT || 0) * 100,
   exposeDevCodes: !prod

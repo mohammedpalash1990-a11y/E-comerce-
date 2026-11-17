@@ -25,6 +25,7 @@ import { registerPostgresCouponRoutes } from './postgres-coupon-routes.mjs';
 import { registerPostgresAdminCouponRoutes } from './postgres-admin-coupon-routes.mjs';
 import { registerPostgresCustomerAccountRoutes } from './postgres-customer-account-routes.mjs';
 import { createPostgresInventoryRepository } from './postgres-inventory.mjs';
+import { registerPostgresOperationsRoutes } from './postgres-operations-routes.mjs';
 import { runPostgresMigrations } from './postgres-migrations.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -58,15 +59,15 @@ function routeError(error, res, headers) {
   if (status === 500) console.error('[postgres api error]', error);
   json(res, status, { error: message, ...(status !== 500 && error?.extra ? error.extra : {}) }, headers);
 }
-async function readJsonBody(req) {
+async function readJsonBody(req, maxBytes = MAX_BODY_BYTES) {
   const declared = Number(req.headers['content-length'] || 0);
   const chunks = []; let size = 0;
-  let tooLarge = Number.isFinite(declared) && declared > MAX_BODY_BYTES;
+  let tooLarge = Number.isFinite(declared) && declared > maxBytes;
   // Drain the request even after the limit is exceeded so the server can return
   // a deterministic 413 instead of resetting the client connection.
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > MAX_BODY_BYTES) tooLarge = true;
+    if (size > maxBytes) tooLarge = true;
     if (!tooLarge) chunks.push(chunk);
   }
   if (tooLarge) throw Object.assign(new Error('Payload too large'), { status: 413 });
@@ -122,7 +123,7 @@ export function createPostgresApiServer({ database, catalogRepository, authRepos
     domainRoutes.push({ method: routeMethod, re: new RegExp('^' + routePattern + '$'), roles, handler, limit: opts.limit || MAX_BODY_BYTES });
   };
   const response = (data, status = 200) => ({ status, body: { data } });
-  const paymentMode = String(env.PAYMENT_MODE || 'sandbox').toLowerCase();
+  const paymentMode = String(env.PAYMENT_MODE || 'sandbox').split('#')[0].trim().toLowerCase() || 'sandbox';
   const paymentRepository = createPostgresPaymentRepository(database, {
     gatewayInitiate: initiateGateway,
     methods: PAYMENT_METHODS
@@ -157,6 +158,7 @@ export function createPostgresApiServer({ database, catalogRepository, authRepos
   registerPostgresAdminCouponRoutes(registerDomainRoute, response, { database });
   registerPostgresCustomerAccountRoutes(registerDomainRoute, response, { database, customerRepository });
   registerPostgresCatalogRoutes(registerDomainRoute, response, { catalogRepository });
+  registerPostgresOperationsRoutes(registerDomainRoute, response, { database, orderLifecycle: commerce.lifecycle });
 
   return http.createServer(async (req, res) => {
     const headers = safeHeaders(req.headers.origin, env);
@@ -267,7 +269,7 @@ export function createPostgresApiServer({ database, catalogRepository, authRepos
           if (!user) return json(res, 401, { error: 'Authentication required' }, headers);
           if (!route.roles.includes(user.role)) return json(res, 403, { error: 'You do not have permission for this action' }, headers);
         }
-        const body = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) ? await readJsonBody(req) : {};
+        const body = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) ? await readJsonBody(req, route.limit) : {};
         const params = match.slice(1).map(decodePathPart);
         const result = await route.handler({ req, res, url, params, body, user, ip });
         return json(res, result.status || 200, result.body || result, headers);

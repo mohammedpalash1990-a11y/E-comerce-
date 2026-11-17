@@ -114,6 +114,7 @@ th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05
 
     <div class="tabs" id="adminTabs">
       <button type="button" class="tab active" data-atab="operations">সেলার, পণ্য ও অর্ডার</button>
+      <button type="button" class="tab" data-atab="customers">কাস্টমার</button>
       <button type="button" class="tab" data-atab="inventory">ইনভেন্টরি অনুমোদন</button>
       <button type="button" class="tab" data-atab="finance">অর্থ, পেআউট ও রিফান্ড</button>
       <button type="button" class="tab" data-atab="catalog">কুপন, ক্যাটাগরি ও অডিট</button>
@@ -133,6 +134,7 @@ th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05
           </div>
         </div>
         <div id="sellerMsg" class="notice hidden"></div>
+        <div id="sellerDetailBox" class="notice hidden"></div>
         <div class="tablewrap">
           <table>
             <thead><tr><th>দোকান</th><th>মালিক</th><th>ফোন</th><th>কমিশন</th><th>অবস্থা</th><th>অ্যাকশন</th></tr></thead>
@@ -154,17 +156,74 @@ th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05
 
       <section class="panel">
         <div class="toolbar">
+          <h2>সব পণ্যের তালিকা ও মডারেশন</h2>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <select id="adminProdStatus" style="width:auto">
+              <option value="">সব অবস্থা</option>
+              <option value="ACTIVE">সক্রিয় (ACTIVE)</option>
+              <option value="PENDING_REVIEW">অপেক্ষমাণ (PENDING_REVIEW)</option>
+              <option value="SUSPENDED">স্থগিত (SUSPENDED)</option>
+              <option value="REJECTED">প্রত্যাখ্যাত (REJECTED)</option>
+            </select>
+            <input id="adminProdSearch" placeholder="পণ্যের নাম খুঁজুন…" style="width:190px">
+            <button id="refreshAdminProds" type="button" class="soft">রিফ্রেশ</button>
+          </div>
+        </div>
+        <div id="allProdMsg" class="notice hidden"></div>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>ছবি</th><th>পণ্য</th><th>বিক্রেতা</th><th>দাম</th><th>স্টক আপডেট</th><th>অবস্থা</th><th>অ্যাকশন</th></tr></thead>
+            <tbody id="allProductRows"><tr><td colspan="7">লোড হচ্ছে...</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="toolbar">
           <h2>সাম্প্রতিক অর্ডারসমূহ</h2>
-          <div style="display:flex;gap:8px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <select id="orderStatusFilter" style="width:auto">
+              <option value="">সব অবস্থা</option>
+              <option value="CONFIRMED">CONFIRMED</option>
+              <option value="PROCESSING">PROCESSING</option>
+              <option value="SHIPPED">SHIPPED</option>
+              <option value="DELIVERED">DELIVERED</option>
+              <option value="CANCELLED">CANCELLED</option>
+              <option value="AWAITING_PAYMENT">AWAITING_PAYMENT</option>
+            </select>
             <input id="orderSearchInput" placeholder="অর্ডার বা ফোন খুঁজুন…" style="width:210px">
             <button id="refreshOrders" type="button" class="btn">অর্ডার রিফ্রেশ</button>
           </div>
         </div>
         <div id="orderMsg" class="notice hidden"></div>
+        <div id="orderDetailBox" class="notice hidden"></div>
         <div class="tablewrap">
           <table style="min-width:880px">
             <thead><tr><th>অর্ডার / গ্রাহক</th><th>ডেলিভারি</th><th>পণ্য</th><th>মোট</th><th>অবস্থা</th><th>আপডেট</th></tr></thead>
             <tbody id="orderRows"><tr><td colspan="6">লোড হচ্ছে...</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div class="aview hidden" id="aview-customers">
+      <section class="panel">
+        <div class="toolbar">
+          <div>
+            <h2>কাস্টমার ম্যানেজমেন্ট</h2>
+            <p class="muted" style="margin:0">গ্রাহকদের প্রোফাইল, অর্ডার ইতিহাস এবং অ্যাকাউন্ট স্ট্যাটাস পরিচালনা করুন।</p>
+          </div>
+          <div style="display:flex;gap:8px">
+            <input id="custSearchInput" placeholder="নাম, মোবাইল বা ইমেইল…" style="width:220px">
+            <button id="refreshCustomers" type="button" class="btn">খুঁজুন</button>
+          </div>
+        </div>
+        <div id="custMsg" class="notice hidden"></div>
+        <div id="custDetailBox" class="notice hidden"></div>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>নাম</th><th>মোবাইল</th><th>ইমেইল</th><th>অর্ডার</th><th>অবস্থা</th><th>অ্যাকশন</th></tr></thead>
+            <tbody id="customerRows"><tr><td colspan="6">লোড হচ্ছে...</td></tr></tbody>
           </table>
         </div>
       </section>
@@ -244,6 +303,16 @@ th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05
           </table>
         </div>
       </section>
+
+      <section class="panel">
+        <h2>সাম্প্রতিক আর্থিক লেনদেন (Transactions Ledger)</h2>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>সময়</th><th>ধরন</th><th>অর্ডার / রেফ</th><th>পরিমাণ</th></tr></thead>
+            <tbody id="adminTxRows"><tr><td colspan="4">লোড হচ্ছে...</td></tr></tbody>
+          </table>
+        </div>
+      </section>
     </div>
 
     <div class="aview hidden" id="aview-catalog">
@@ -283,6 +352,16 @@ th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05
           </form>
         </div>
         <div id="catBrandMsg" class="notice hidden"></div>
+        <div class="formgrid" style="margin-top:14px">
+          <div>
+            <h3>বিদ্যমান ক্যাটাগরি</h3>
+            <div class="tablewrap"><table style="min-width:300px"><thead><tr><th>নাম</th><th>Slug</th><th></th></tr></thead><tbody id="adminCatRows"><tr><td colspan="3">লোড হচ্ছে…</td></tr></tbody></table></div>
+          </div>
+          <div>
+            <h3>বিদ্যমান ব্র্যান্ড</h3>
+            <div class="tablewrap"><table style="min-width:300px"><thead><tr><th>নাম</th><th>Slug</th><th></th></tr></thead><tbody id="adminBrandRows"><tr><td colspan="3">লোড হচ্ছে…</td></tr></tbody></table></div>
+          </div>
+        </div>
       </section>
 
       <section class="panel">
@@ -333,6 +412,7 @@ $('#adminTabs').onclick=e=>{
   const tab=b.dataset.atab;
   document.querySelectorAll('[data-atab]').forEach(x=>x.classList.toggle('active',x.dataset.atab===tab));
   document.querySelectorAll('.aview').forEach(v=>v.classList.toggle('hidden',v.id!=='aview-'+tab));
+  if(tab==='customers')loadCustomers().catch(notify);
   if(tab==='inventory')loadInventoryAdmin().catch(notify);
   if(tab==='finance')loadFinanceAdmin().catch(notify);
   if(tab==='catalog')loadCatalogAdmin().catch(notify);
@@ -346,8 +426,13 @@ function show(){
 
 async function loadOrders(){
   const qTerm=$('#orderSearchInput').value.trim();
-  const result=await call('/admin/orders'+(qTerm?'?q='+encodeURIComponent(qTerm):''));
-  $('#orderRows').innerHTML=result.data.map(o=>'<tr><td><b class="num">'+esc(o.orderNumber)+'</b><br>'+esc(o.customer.name)+'<br><small class="muted">'+esc(o.customer.phone)+'</small></td><td>'+esc(o.delivery.name)+' · '+esc(o.delivery.phone)+'<br>'+esc(o.delivery.address)+'<br>'+esc(o.delivery.area)+(o.delivery.note?'<br><small>নোট: '+esc(o.delivery.note)+'</small>':'')+'</td><td>'+o.items.map(i=>esc(i.name_bn)+' × '+i.quantity).join('<br>')+'</td><td class="num">'+money(o.total_bdt)+'</td><td><span class="status">'+esc(o.status)+'</span></td><td><select data-order-status="'+esc(o.id)+'"><option value="">পরিবর্তন</option>'+({CONFIRMED:'<option value="PROCESSING">প্রসেসিং</option><option value="CANCELLED">বাতিল</option>',PROCESSING:'<option value="SHIPPED">শিপড</option><option value="CANCELLED">বাতিল</option>',SHIPPED:'<option value="DELIVERED">ডেলিভার্ড</option>'}[o.status]||'')+'</select></td></tr>').join('')||'<tr><td colspan="6">এখনো কোনো অর্ডার নেই।</td></tr>';
+  const st=$('#orderStatusFilter')?.value||'';
+  const params=new URLSearchParams();
+  if(qTerm)params.set('q',qTerm);
+  if(st)params.set('status',st);
+  const qs=params.toString();
+  const result=await call('/admin/orders'+(qs?'?'+qs:''));
+  $('#orderRows').innerHTML=result.data.map(o=>'<tr><td><b class="num">'+esc(o.orderNumber)+'</b><br>'+esc(o.customer?.name||'')+'<br><small class="muted">'+esc(o.customer?.phone||'')+'</small></td><td>'+esc(o.delivery?.name||'')+' · '+esc(o.delivery?.phone||'')+'<br>'+esc(o.delivery?.address||'')+'<br>'+esc(o.delivery?.area||'')+(o.delivery?.note?'<br><small>নোট: '+esc(o.delivery.note)+'</small>':'')+'</td><td>'+(o.items||[]).map(i=>esc(i.name_bn)+' × '+i.quantity).join('<br>')+'</td><td class="num">'+money(o.total_bdt)+'</td><td><span class="status">'+esc(o.status)+'</span><br><small class="muted">'+esc(o.payment?.method||'')+' · '+esc(o.payment?.status||'')+'</small></td><td><div style="display:grid;gap:6px"><select data-order-status="'+esc(o.id)+'"><option value="">পরিবর্তন</option>'+({CONFIRMED:'<option value="PROCESSING">প্রসেসিং</option><option value="CANCELLED">বাতিল</option>',PROCESSING:'<option value="SHIPPED">শিপড</option><option value="CANCELLED">বাতিল</option>',SHIPPED:'<option value="DELIVERED">ডেলিভার্ড</option>'}[o.status]||'')+'</select><button type="button" class="soft" data-order-inspect="'+esc(o.id)+'">বিস্তারিত / নোট / রিফান্ড</button></div></td></tr>').join('')||'<tr><td colspan="6">এখনো কোনো অর্ডার নেই।</td></tr>';
 }
 
 async function loadDashboard(){
@@ -369,18 +454,36 @@ async function loadSellers(){
   const st=$('#sellerStatusFilter').value||'PENDING';
   const r=await call(st==='PENDING'?'/admin/sellers?status=PENDING':'/admin/sellers?status='+encodeURIComponent(st));
   $('#sellerRows').innerHTML=r.data.map(s=>{
+    const sid=s.id||s.user_id;
     const btns=s.status==='PENDING'
-      ?'<button type="button" class="approve" data-seller="'+esc(s.id)+'" data-action="approve">অনুমোদন</button> <button type="button" class="reject" data-seller="'+esc(s.id)+'" data-action="reject">বাতিল</button>'
+      ?'<button type="button" class="approve" data-seller="'+esc(sid)+'" data-action="approve">অনুমোদন</button> <button type="button" class="reject" data-seller="'+esc(sid)+'" data-action="reject">বাতিল</button>'
       :(s.status==='APPROVED'
-        ?'<button type="button" class="reject" data-seller="'+esc(s.id)+'" data-action="suspend">স্থগিত</button>'
-        :'<button type="button" class="approve" data-seller="'+esc(s.id)+'" data-action="activate">সক্রিয়</button>');
-    return '<tr><td><b>'+esc(s.shop_name)+'</b><br><small class="muted">'+esc(s.shop_address||'')+'</small></td><td>'+esc(s.name)+'</td><td class="num">'+esc(s.phone)+'</td><td class="num">'+(Number(s.commission_bps||800)/100)+'%</td><td><span class="status">'+esc(s.status)+'</span></td><td>'+btns+'</td></tr>';
+        ?'<button type="button" class="reject" data-seller="'+esc(sid)+'" data-action="suspend">স্থগিত</button>'
+        :'<button type="button" class="approve" data-seller="'+esc(sid)+'" data-action="activate">সক্রিয়</button>');
+    const commPct=(Number(s.commission_bps||800)/100);
+    return '<tr><td><b>'+esc(s.shop_name)+'</b><br><small class="muted">'+esc(s.shop_address||'')+'</small></td><td>'+esc(s.name)+'</td><td class="num">'+esc(s.phone)+'</td><td><div style="display:flex;gap:4px;align-items:center"><input type="number" min="0" max="50" step="0.5" value="'+commPct+'" data-comm-input="'+esc(sid)+'" style="width:74px;padding:5px 7px">% <button type="button" class="soft" data-comm-save="'+esc(sid)+'" style="padding:5px 8px;font-size:12px">সেট</button></div></td><td><span class="status">'+esc(s.status)+'</span></td><td><div style="display:flex;gap:6px;flex-wrap:wrap">'+btns+' <button type="button" class="soft" data-seller-info="'+esc(sid)+'">বিস্তারিত</button></div></td></tr>';
   }).join('')||'<tr><td colspan="6">এই অবস্থায় কোনো বিক্রেতা নেই।</td></tr>';
 }
 $('#sellerStatusFilter').onchange=()=>loadSellers().catch(notify);
 
+async function loadAllProducts(){
+  const st=$('#adminProdStatus')?.value||'';
+  const qTerm=$('#adminProdSearch')?.value.trim()||'';
+  const params=new URLSearchParams();
+  if(st)params.set('status',st);
+  if(qTerm)params.set('q',qTerm);
+  const qs=params.toString();
+  const r=await call('/admin/products'+(qs?'?'+qs:''));
+  $('#allProductRows').innerHTML=(r.data||[]).map(p=>{
+    const modBtn=p.status==='ACTIVE'
+      ?'<button type="button" class="reject" data-prod-act="suspend" data-pid="'+esc(p.id)+'">স্থগিত</button>'
+      :(p.status==='SUSPENDED'?'<button type="button" class="approve" data-prod-act="unsuspend" data-pid="'+esc(p.id)+'">পুনরায় চালু</button>':'');
+    return '<tr><td>'+(p.image?'<img src="'+esc(p.image)+'" alt="" loading="lazy" style="width:42px;height:42px;object-fit:cover;border-radius:4px">':'—')+'</td><td><b>'+esc(p.name_bn)+'</b><br><small class="muted">'+esc(p.name_en)+'</small></td><td>'+esc(p.seller_name||'—')+'</td><td class="num">'+money(p.sale_price_bdt??p.price_bdt)+'</td><td><div style="display:flex;gap:4px;align-items:center"><input type="number" min="0" max="1000000" value="'+Number(p.stock||0)+'" data-stock-input="'+esc(p.id)+'" style="width:76px;padding:5px 7px"><button type="button" class="soft" data-stock-save="'+esc(p.id)+'" style="padding:5px 8px;font-size:12px">সেট</button></div></td><td><span class="status">'+esc(p.status)+'</span></td><td><div style="display:flex;gap:6px;flex-wrap:wrap">'+modBtn+' <button type="button" class="reject" data-prod-del="'+esc(p.id)+'">আর্কাইভ</button></div></td></tr>';
+  }).join('')||'<tr><td colspan="7">কোনো পণ্য পাওয়া যায়নি।</td></tr>';
+}
+
 async function load(){
-  await Promise.all([loadOrders(),loadDashboard(),loadSellers()]);
+  await Promise.all([loadOrders(),loadDashboard(),loadSellers(),loadAllProducts()]);
   try{await loadInventoryAdmin()}catch(error){$('#adminInventorySummary').textContent='Inventory service এখনো সংযুক্ত নয়: '+error.message;$('#inventoryApprovalRows').innerHTML='<tr><td colspan="6">Inventory API unavailable.</td></tr>'}
   const result=await call('/admin/products/pending');
   $('#pendingRows').innerHTML=result.data.map(p=>'<tr><td>'+(p.image?'<img src="'+esc(p.image)+'" alt="" loading="lazy" style="width:48px;height:48px;object-fit:cover;border-radius:4px">':'—')+'</td><td><b>'+esc(p.name_bn)+'</b><br><small class="muted">'+esc(p.name_en)+'</small></td><td>'+esc(p.seller_name||'—')+'</td><td>'+esc(p.category_slug)+'</td><td class="num">'+money(p.price_bdt)+'</td><td class="num">'+p.stock+'</td><td><button type="button" class="approve" data-id="'+esc(p.id)+'" data-action="approve">অনুমোদন</button> <button type="button" class="reject" data-id="'+esc(p.id)+'" data-action="reject">বাতিল</button></td></tr>').join('')||'<tr><td colspan="7">কোনো পণ্য অনুমোদনের অপেক্ষায় নেই।</td></tr>';
@@ -398,12 +501,35 @@ $('#loginForm').onsubmit=async e=>{
 };
 
 $('#sellerRows').onclick=async e=>{
-  const b=e.target.closest('button[data-seller]');if(!b)return;
-  const action=b.dataset.action;
+  const b=e.target.closest('button[data-seller]');
+  const commBtn=e.target.closest('button[data-comm-save]');
+  const infoBtn=e.target.closest('button[data-seller-info]');
   try{
-    await call('/admin/sellers/'+encodeURIComponent(b.dataset.seller)+'/'+action,{method:'POST',body:JSON.stringify({reason:action==='reject'||action==='suspend'?'Admin review':'Approved'})});
-    showNotice($('#sellerMsg'),'বিক্রেতার অবস্থা আপডেট হয়েছে ('+action+') ✓','ok');
-    await loadSellers();await loadDashboard();
+    if(b){
+      const action=b.dataset.action;
+      await call('/admin/sellers/'+encodeURIComponent(b.dataset.seller)+'/'+action,{method:'POST',body:JSON.stringify({reason:action==='reject'||action==='suspend'?'Admin review':'Approved'})});
+      showNotice($('#sellerMsg'),'বিক্রেতার অবস্থা আপডেট হয়েছে ('+action+') ✓','ok');
+      await loadSellers();await loadDashboard();
+    }else if(commBtn){
+      const sid=commBtn.dataset.commSave;
+      const inp=document.querySelector('[data-comm-input="'+CSS.escape(sid)+'"]');
+      const bps=Math.round(Number(inp.value)*100);
+      await call('/admin/sellers/'+encodeURIComponent(sid)+'/commission',{method:'PATCH',body:JSON.stringify({commission_bps:bps})});
+      showNotice($('#sellerMsg'),'কমিশন আপডেট হয়েছে ('+(bps/100)+'%) ✓','ok');
+      await loadSellers();
+    }else if(infoBtn){
+      const sid=infoBtn.dataset.sellerInfo;
+      const [det,ords]=await Promise.all([call('/admin/sellers/'+encodeURIComponent(sid)),call('/admin/sellers/'+encodeURIComponent(sid)+'/orders')]);
+      const d=det.data;
+      const box=$('#sellerDetailBox');
+      box.className='notice';
+      box.innerHTML='<div class="toolbar"><b>'+esc(d.shop_name)+' ('+esc(d.name)+')</b><button type="button" class="soft" id="closeSellerDetBtn" style="padding:4px 10px">বন্ধ</button></div>'+
+        '<div style="margin-top:6px">NID: <span class="num">'+esc(d.kyc_nid||'—')+'</span> · Trade License: '+esc(d.kyc_trade_license||'—')+' · পণ্য: <b class="num">'+Number(d.product_count||0)+'</b> · সাব-অর্ডার: <b class="num">'+(ords.data||[]).length+'</b></div>'+
+        '<div>ব্যবসার বিবরণ: '+esc(d.business_info||'—')+'</div>'+
+        '<div>উপলব্ধ ব্যালেন্স: <b class="num">'+money(d.balance?.available_bdt||0)+'</b> · পেন্ডিং: <b class="num">'+money(d.balance?.pending_bdt||0)+'</b></div>';
+      box.classList.remove('hidden');
+      $('#closeSellerDetBtn').onclick=()=>box.classList.add('hidden');
+    }
   }catch(err){showNotice($('#sellerMsg'),err.message,'err')}
 };
 
@@ -416,12 +542,95 @@ $('#pendingRows').onclick=async e=>{
   }catch(err){notify(err)}
 };
 
+$('#allProductRows').onclick=async e=>{
+  const stBtn=e.target.closest('[data-stock-save]');
+  const modBtn=e.target.closest('[data-prod-act]');
+  const delBtn=e.target.closest('[data-prod-del]');
+  try{
+    if(stBtn){
+      const pid=stBtn.dataset.stockSave;
+      const inp=document.querySelector('[data-stock-input="'+CSS.escape(pid)+'"]');
+      await call('/admin/products/'+encodeURIComponent(pid)+'/stock',{method:'PATCH',body:JSON.stringify({stock:Number(inp.value)})});
+      showNotice($('#allProdMsg'),'স্টক আপডেট হয়েছে ✓','ok');
+      await loadAllProducts();
+    }else if(modBtn){
+      await call('/admin/products/'+encodeURIComponent(modBtn.dataset.pid)+'/'+modBtn.dataset.prodAct,{method:'POST',body:JSON.stringify({reason:'Admin moderation'})});
+      showNotice($('#allProdMsg'),'পণ্যের অবস্থা আপডেট হয়েছে ✓','ok');
+      await loadAllProducts();await loadDashboard();
+    }else if(delBtn){
+      await call('/admin/products/'+encodeURIComponent(delBtn.dataset.prodDel),{method:'DELETE'});
+      showNotice($('#allProdMsg'),'পণ্য আর্কাইভ করা হয়েছে।','ok');
+      await loadAllProducts();await loadDashboard();
+    }
+  }catch(err){showNotice($('#allProdMsg'),err.message,'err')}
+};
+$('#adminProdStatus').onchange=()=>loadAllProducts().catch(e=>showNotice($('#allProdMsg'),e.message,'err'));
+$('#refreshAdminProds').onclick=()=>loadAllProducts().catch(e=>showNotice($('#allProdMsg'),e.message,'err'));
+
 $('#orderRows').onchange=async e=>{
   const s=e.target.closest('[data-order-status]');if(!s||!s.value)return;
   try{
     await call('/admin/orders/'+encodeURIComponent(s.dataset.orderStatus)+'/status',{method:'POST',body:JSON.stringify({status:s.value})});
     showNotice($('#orderMsg'),'অর্ডারের অবস্থা আপডেট হয়েছে ✓','ok');await loadOrders();await loadDashboard();
   }catch(err){showNotice($('#orderMsg'),err.message,'err')}
+};
+$('#orderRows').onclick=async e=>{
+  const b=e.target.closest('[data-order-inspect]');if(!b)return;
+  try{
+    const r=await call('/admin/orders/'+encodeURIComponent(b.dataset.orderInspect));
+    const o=r.data,box=$('#orderDetailBox');
+    box.className='notice';
+    box.innerHTML='<div class="toolbar"><b>অর্ডার বিস্তারিত: '+esc(o.orderNumber)+' ('+esc(o.status)+')</b><button type="button" class="soft" id="closeOrdDetBtn" style="padding:4px 10px">বন্ধ</button></div>'+
+      '<div style="margin-top:6px">সাবটোটাল: <span class="num">'+money(o.subtotal_bdt)+'</span> · ডেলিভারি: <span class="num">'+money(o.shipping_bdt)+'</span> · ছাড়: <span class="num">'+money(o.discount_bdt)+'</span> · মোট: <b class="num">'+money(o.total_bdt)+'</b></div>'+
+      '<div>সেলার বিভাজন: '+(o.sellers||[]).map(s=>esc(s.shop||'বিক্রেতা')+' ('+esc(s.status)+', '+money(s.subtotal_bdt)+(s.shipment?' · ট্র্যাকিং: '+esc(s.shipment.tracking_id):'')+')').join(' | ')+'</div>'+
+      '<form id="adminOrdNoteForm" class="formgrid" style="margin-top:10px">'+
+        '<label class="field">অ্যাডমিন নোট<input name="note" value="'+esc(o.admin_note||'')+'" placeholder="অর্ডার সম্পর্কিত নোট"></label>'+
+        '<div style="display:flex;align-items:flex-end"><button type="submit" class="btn">নোট সংরক্ষণ</button></div>'+
+      '</form>'+
+      (['PAID','PARTIALLY_REFUNDED'].includes(o.payment?.status)?'<form id="adminRefundForm" class="formgrid" style="margin-top:10px"><label class="field">রিফান্ড পরিমাণ (৳)<input name="amount_bdt" type="number" min="1" step="0.01" max="'+Number(o.total_bdt)+'" value="'+Number(o.total_bdt)+'" required></label><label class="field">কারণ<input name="reason" required placeholder="রিফান্ডের কারণ"></label><div style="grid-column:1/-1"><button type="submit" class="reject">রিফান্ড ইস্যু করুন</button></div></form>':'');
+    box.classList.remove('hidden');
+    $('#closeOrdDetBtn').onclick=()=>box.classList.add('hidden');
+    $('#adminOrdNoteForm').onsubmit=async ev=>{
+      ev.preventDefault();
+      await call('/admin/orders/'+encodeURIComponent(o.id)+'/note',{method:'POST',body:JSON.stringify({note:ev.target.elements.namedItem('note').value})});
+      showNotice($('#orderMsg'),'অর্ডার নোট সংরক্ষিত হয়েছে ✓','ok');
+    };
+    const rf=$('#adminRefundForm');
+    if(rf)rf.onsubmit=async ev=>{
+      ev.preventDefault();
+      const fd=Object.fromEntries(new FormData(ev.target));
+      await call('/admin/orders/'+encodeURIComponent(o.id)+'/refund',{method:'POST',body:JSON.stringify({amount_bdt:Number(fd.amount_bdt),reason:fd.reason})});
+      showNotice($('#orderMsg'),'রিফান্ড অনুমোদিত ও প্রক্রিয়া হয়েছে ✓','ok');
+      box.classList.add('hidden');await loadOrders();await loadDashboard();
+    };
+  }catch(err){showNotice($('#orderMsg'),err.message,'err')}
+};
+$('#orderStatusFilter').onchange=()=>loadOrders().catch(e=>showNotice($('#orderMsg'),e.message,'err'));
+
+async function loadCustomers(){
+  const qTerm=$('#custSearchInput').value.trim();
+  const r=await call('/admin/customers'+(qTerm?'?q='+encodeURIComponent(qTerm):''));
+  $('#customerRows').innerHTML=(r.data||[]).map(c=>'<tr><td><b>'+esc(c.name)+'</b></td><td class="num">'+esc(c.phone)+'</td><td>'+esc(c.email||'—')+'</td><td class="num">'+Number(c.orders||0)+'</td><td><span class="status">'+esc(c.status)+'</span></td><td><div style="display:flex;gap:6px"><button type="button" class="soft" data-cust-info="'+esc(c.id)+'">বিস্তারিত</button>'+(c.status==='SUSPENDED'?'<button type="button" class="approve" data-cust-act="activate" data-cid="'+esc(c.id)+'">সক্রিয়</button>':'<button type="button" class="reject" data-cust-act="suspend" data-cid="'+esc(c.id)+'">স্থগিত</button>')+'</div></td></tr>').join('')||'<tr><td colspan="6">কোনো কাস্টমার পাওয়া যায়নি।</td></tr>';
+}
+$('#refreshCustomers').onclick=()=>loadCustomers().catch(e=>showNotice($('#custMsg'),e.message,'err'));
+$('#customerRows').onclick=async e=>{
+  const info=e.target.closest('[data-cust-info]'),act=e.target.closest('[data-cust-act]');
+  try{
+    if(info){
+      const [det,ords]=await Promise.all([call('/admin/customers/'+encodeURIComponent(info.dataset.custInfo)),call('/admin/customers/'+encodeURIComponent(info.dataset.custInfo)+'/orders')]);
+      const c=det.data,box=$('#custDetailBox');
+      box.className='notice';
+      box.innerHTML='<div class="toolbar"><b>'+esc(c.name)+' · '+esc(c.phone)+'</b><button type="button" class="soft" id="closeCustDetBtn" style="padding:4px 10px">বন্ধ</button></div>'+
+        '<div style="margin-top:6px">ফোন ভেরিফায়েড: '+(c.phone_verified?'হ্যাঁ':'না')+' · মোট অর্ডার: <b class="num">'+(ords.data||[]).length+'</b></div>'+
+        '<div>ঠিকানা: '+(c.addresses||[]).map(a=>esc(a.label||'ঠিকানা')+': '+esc(a.area)+' — '+esc(a.address)).join(' | ')+'</div>';
+      box.classList.remove('hidden');
+      $('#closeCustDetBtn').onclick=()=>box.classList.add('hidden');
+    }else if(act){
+      await call('/admin/customers/'+encodeURIComponent(act.dataset.cid)+'/'+act.dataset.custAct,{method:'POST'});
+      showNotice($('#custMsg'),'কাস্টমার অবস্থা আপডেট হয়েছে ✓','ok');
+      await loadCustomers();
+    }
+  }catch(err){showNotice($('#custMsg'),err.message,'err')}
 };
 
 async function loadInventoryAdmin(){
@@ -451,11 +660,12 @@ let lastReportRows=[];
 async function loadFinanceAdmin(){
   const from=$('#repFrom').value,to=$('#repTo').value;
   const qs=(from||to)?('?'+[from?'from='+from:'',to?'to='+to:''].filter(Boolean).join('&')):'';
-  const [sum,rep,pay,ref]=await Promise.all([
+  const [sum,rep,pay,ref,txs]=await Promise.all([
     call('/admin/finance/summary'),
     call('/admin/finance/report'+qs),
     call('/admin/payouts'),
-    call('/admin/refunds')
+    call('/admin/refunds'),
+    call('/admin/finance/transactions?limit=50')
   ]);
   const s=sum.data;
   $('#financeSummaryBox').innerHTML='মোট বিক্রি: <b class="num">'+money(s.gross_sales_bdt)+'</b> · রিফান্ড: <b class="num">'+money(s.refunds_bdt)+'</b> · নেট বিক্রি: <b class="num">'+money(s.net_sales_bdt)+'</b> · প্ল্যাটফর্ম কমিশন: <b class="num">'+money(s.platform_commission_bdt)+'</b> · বিক্রেতা ব্যালেন্স: <b class="num">'+money(s.seller_available_balance_bdt)+'</b> · পরিশোধিত পেআউট: <b class="num">'+money(s.paid_out_bdt)+'</b>';
@@ -463,6 +673,7 @@ async function loadFinanceAdmin(){
   $('#financeReportRows').innerHTML=lastReportRows.map(r=>'<tr><td class="num">'+esc(r.day)+'</td><td class="num">'+r.orders+'</td><td class="num">'+money(r.gross_bdt)+'</td></tr>').join('')||'<tr><td colspan="3">এই সময়ে কোনো অর্ডার নেই।</td></tr>';
   $('#adminPayoutRows').innerHTML=(pay.data||[]).map(p=>'<tr><td>'+esc(p.shop||'—')+'</td><td>'+esc(p.method)+' · '+esc(p.account)+'</td><td class="num">'+money(p.amount_bdt)+'</td><td><span class="status">'+esc(p.status)+'</span></td><td>'+(p.status==='REQUESTED'?'<button type="button" class="approve" data-pay-act="approve" data-pid="'+esc(p.id)+'">অনুমোদন</button> <button type="button" class="reject" data-pay-act="reject" data-pid="'+esc(p.id)+'">বাতিল</button>':'—')+'</td></tr>').join('')||'<tr><td colspan="5">কোনো পেআউট অনুরোধ নেই।</td></tr>';
   $('#adminRefundRows').innerHTML=(ref.data||[]).map(r=>'<tr><td class="num">'+esc(r.orderNumber)+'</td><td class="num">'+money(r.amount_bdt)+'</td><td>'+esc(r.reason)+'</td><td><span class="status">'+esc(r.status)+'</span></td><td>'+(r.status==='REQUESTED'?'<button type="button" class="approve" data-ref-act="approve" data-rid="'+esc(r.id)+'">অনুমোদন</button> <button type="button" class="reject" data-ref-act="reject" data-rid="'+esc(r.id)+'">প্রত্যাখ্যান</button>':'—')+'</td></tr>').join('')||'<tr><td colspan="5">কোনো রিফান্ড অনুরোধ নেই।</td></tr>';
+  $('#adminTxRows').innerHTML=(txs.data||[]).map(t=>'<tr><td class="num">'+esc((t.created_at||'').slice(0,16).replace('T',' '))+'</td><td><span class="status">'+esc(t.kind)+'</span></td><td><small class="muted">'+esc(t.ref||t.order_id||'—')+'</small></td><td class="num">'+money(t.amount_bdt)+'</td></tr>').join('')||'<tr><td colspan="4">কোনো লেনদেন নেই।</td></tr>';
 }
 $('#loadFinanceBtn').onclick=()=>loadFinanceAdmin().catch(notify);
 $('#exportCsvBtn').onclick=()=>{
@@ -487,10 +698,20 @@ $('#adminRefundRows').onclick=async e=>{
 };
 
 async function loadCatalogAdmin(){
-  const [cpn,logs]=await Promise.all([call('/admin/coupons'),call('/admin/audit-logs?limit=40')]);
+  const [cpn,logs,cats,brands]=await Promise.all([call('/admin/coupons'),call('/admin/audit-logs?limit=40'),call('/categories'),call('/brands')]);
   $('#couponRows').innerHTML=(cpn.data||[]).map(c=>'<tr><td><b>'+esc(c.code)+'</b></td><td>'+esc(c.type)+'</td><td class="num">'+(c.type==='FIXED'?money(c.value/100):c.value+'%')+'</td><td class="num">'+c.used_count+(c.max_uses?' / '+c.max_uses:'')+'</td><td><span class="status">'+(c.active?'ACTIVE':'INACTIVE')+'</span></td><td><button type="button" class="soft" data-cpn-code="'+esc(c.code)+'" data-cpn-next="'+(c.active?0:1)+'">'+(c.active?'বন্ধ করুন':'চালু করুন')+'</button></td></tr>').join('')||'<tr><td colspan="6">কোনো কুপন নেই।</td></tr>';
   $('#auditRows').innerHTML=(logs.data||[]).map(l=>'<tr><td class="num">'+esc((l.created_at||'').slice(0,16).replace('T',' '))+'</td><td><b>'+esc(l.action)+'</b></td><td>'+esc(l.entity)+'</td><td><small class="muted">'+esc(l.detail||'')+'</small></td></tr>').join('')||'<tr><td colspan="4">কোনো লগ নেই।</td></tr>';
+  $('#adminCatRows').innerHTML=(cats.data||[]).map(c=>'<tr><td>'+esc(c.name_bn)+' ('+esc(c.name_en||'')+')</td><td>'+esc(c.slug)+'</td><td><button type="button" class="reject" data-del-cat="'+esc(c.slug)+'" style="padding:4px 8px;font-size:12px">মুছুন</button></td></tr>').join('')||'<tr><td colspan="3">নেই</td></tr>';
+  $('#adminBrandRows').innerHTML=(brands.data||[]).map(b=>'<tr><td>'+esc(b.name)+'</td><td>'+esc(b.slug)+'</td><td><button type="button" class="reject" data-del-brand="'+esc(b.slug)+'" style="padding:4px 8px;font-size:12px">মুছুন</button></td></tr>').join('')||'<tr><td colspan="3">নেই</td></tr>';
 }
+$('#adminCatRows').onclick=async e=>{
+  const b=e.target.closest('[data-del-cat]');if(!b)return;
+  try{await call('/admin/categories/'+encodeURIComponent(b.dataset.delCat),{method:'DELETE'});showNotice($('#catBrandMsg'),'ক্যাটাগরি মুছে ফেলা হয়েছে।','ok');await loadCatalogAdmin()}catch(err){showNotice($('#catBrandMsg'),err.message,'err')}
+};
+$('#adminBrandRows').onclick=async e=>{
+  const b=e.target.closest('[data-del-brand]');if(!b)return;
+  try{await call('/admin/brands/'+encodeURIComponent(b.dataset.delBrand),{method:'DELETE'});showNotice($('#catBrandMsg'),'ব্র্যান্ড মুছে ফেলা হয়েছে।','ok');await loadCatalogAdmin()}catch(err){showNotice($('#catBrandMsg'),err.message,'err')}
+};
 $('#couponForm').onsubmit=async e=>{
   e.preventDefault();
   const f=Object.fromEntries(new FormData(e.target));
@@ -510,14 +731,14 @@ $('#categoryForm').onsubmit=async e=>{
   e.preventDefault();
   try{
     await call('/admin/categories',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});
-    showNotice($('#catBrandMsg'),'ক্যাটাগরি যোগ হয়েছে ✓','ok');e.target.reset();
+    showNotice($('#catBrandMsg'),'ক্যাটাগরি যোগ হয়েছে ✓','ok');e.target.reset();await loadCatalogAdmin();
   }catch(err){showNotice($('#catBrandMsg'),err.message,'err')}
 };
 $('#brandForm').onsubmit=async e=>{
   e.preventDefault();
   try{
     await call('/admin/brands',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});
-    showNotice($('#catBrandMsg'),'ব্র্যান্ড যোগ হয়েছে ✓','ok');e.target.reset();
+    showNotice($('#catBrandMsg'),'ব্র্যান্ড যোগ হয়েছে ✓','ok');e.target.reset();await loadCatalogAdmin();
   }catch(err){showNotice($('#catBrandMsg'),err.message,'err')}
 };
 

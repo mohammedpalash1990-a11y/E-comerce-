@@ -12,7 +12,7 @@ function productView(row) {
   const discount = row.discount_paisa == null ? null : safeInteger(row.discount_paisa, 'discount_paisa');
   const stock = safeInteger(row.stock, 'stock');
   const sale = discount !== null && discount > 0 && discount < price ? discount : price;
-  return {
+  const out = {
     ...row,
     price_paisa: price,
     discount_paisa: discount,
@@ -22,6 +22,9 @@ function productView(row) {
     discount_price_bdt: discount === null ? null : discount / 100,
     in_stock: stock > 0
   };
+  if (row.rating !== undefined) out.rating = Number(row.rating || 0);
+  if (row.review_count !== undefined) out.review_count = Number(row.review_count || 0);
+  return out;
 }
 
 function readParam(params, key) {
@@ -86,9 +89,13 @@ export function createPostgresCatalogRepository(database) {
     // Deep OFFSET scans become increasingly expensive; keep public catalog pagination bounded.
     const offset = Number.isSafeInteger(rawOffset) ? Math.min(Math.max(rawOffset, 0), 10000) : 0;
 
-    const rows = await query(`SELECT p.id,p.name_bn,p.name_en,p.price_paisa,p.discount_paisa,p.stock,c.slug category_slug,b.name brand,
+    const rows = await query(`SELECT p.id,p.name_bn,p.name_en,p.price_paisa,p.discount_paisa,p.stock,c.slug category_slug,
+      b.slug brand_slug,b.name brand,sp.shop_name seller_shop,
+      (SELECT ROUND(COALESCE(AVG(rating),0),1) FROM reviews r WHERE r.product_id=p.id) rating,
+      (SELECT COUNT(*) FROM reviews r WHERE r.product_id=p.id) review_count,
       (SELECT url FROM product_images i WHERE i.product_id=p.id ORDER BY position LIMIT 1) image
       FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id
+      LEFT JOIN seller_profiles sp ON sp.user_id=p.seller_id
       WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT ? OFFSET ?`).all(...values, limit, offset);
 
     return rows.map(productView);
@@ -103,7 +110,7 @@ export function createPostgresCatalogRepository(database) {
   }
 
   async function getProduct(productId) {
-    const product = await query(`SELECT p.*,c.slug category_slug,b.name brand,sp.shop_name seller_shop
+    const product = await query(`SELECT p.*,c.slug category_slug,b.slug brand_slug,b.name brand,sp.shop_name seller_shop
       FROM products p JOIN categories c ON c.id=p.category_id
       LEFT JOIN brands b ON b.id=p.brand_id
       LEFT JOIN seller_profiles sp ON sp.user_id=p.seller_id

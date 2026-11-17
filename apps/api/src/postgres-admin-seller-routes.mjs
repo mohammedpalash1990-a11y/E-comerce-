@@ -22,7 +22,7 @@ export function registerPostgresAdminSellerRoutes(route, ok, { database } = {}) 
     const allowed = new Set(['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED']);
     if (requested && !allowed.has(requested)) throw new HttpError(400, 'Invalid seller status filter');
 
-    const rows = await database.q(`SELECT sp.user_id,sp.shop_name,sp.shop_address,sp.business_info,
+    const rows = await database.q(`SELECT sp.user_id,sp.user_id AS id,sp.shop_name,sp.shop_address,sp.business_info,
       sp.status,sp.commission_bps,sp.created_at,u.name,u.phone,u.email,
       (sp.kyc_nid <> '') AS has_nid,(sp.kyc_trade_license <> '') AS has_trade_license
       FROM seller_profiles sp JOIN users u ON u.id=sp.user_id
