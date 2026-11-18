@@ -1,7 +1,8 @@
 import { q, tx, id, now, audit, notify, text, bad, HttpError, normPhone, validPhone, bdt, orderNo } from './core.mjs';
-import { PAYMENT_METHODS, shippingFor, initiateGateway } from './gateways.mjs';
+import { PAYMENT_METHODS, initiateGateway } from './gateways.mjs';
 import { applyParentStatus, orderView, addEvent } from './orders.mjs';
-import { productView, LIVE } from './routes_public.mjs';
+import { productView, LIVE, loadStorefrontConfig } from './routes_public.mjs';
+import { computeDynamicShippingPaisa } from './storefront-config.mjs';
 
 const effPrice = p => (p.discount_paisa && p.discount_paisa < p.price_paisa ? p.discount_paisa : p.price_paisa);
 const C = ['CUSTOMER'];
@@ -100,8 +101,9 @@ export default function register(route, ok) {
         const unit = effPrice(p); subtotal += unit * qty;
         lines.push({ pid, qty, name: p.name_bn, unit, seller_id: p.seller_id, variant: variants.get(pid) });
       }
+      const cfg = loadStorefrontConfig();
       const cpn = couponFor(body.coupon_code, subtotal);
-      const shipping = shippingFor(delivery.area, subtotal), discount = cpn ? cpn.discount : 0;
+      const shipping = computeDynamicShippingPaisa(delivery.area, subtotal, cfg), discount = cpn ? cpn.discount : 0;
       const total = subtotal + shipping - discount;
       if (!Number.isSafeInteger(total) || total < 0) throw bad('Order total is too large');
       for (const l of lines) if (q("UPDATE products SET stock=stock-? WHERE id=? AND stock>=? AND active=1 AND status='ACTIVE'").run(l.qty, l.pid, l.qty).changes !== 1) throw new HttpError(409, 'Stock changed; please refresh your cart');
@@ -111,7 +113,7 @@ export default function register(route, ok) {
       if (cpn) { if (q('UPDATE coupons SET used_count=used_count+1 WHERE code=? AND (max_uses IS NULL OR used_count<max_uses)').run(cpn.code).changes !== 1) throw bad('কুপনের ব্যবহারসীমা শেষ'); }
       const groups = new Map(); for (const l of lines) (groups.get(l.seller_id) || groups.set(l.seller_id, []).get(l.seller_id)).push(l);
       for (const [sid, ls] of groups) {
-        const sub = ls.reduce((s, l) => s + l.unit * l.qty, 0), bps = q('SELECT commission_bps b FROM seller_profiles WHERE user_id=?').get(sid)?.b ?? 800;
+        const sub = ls.reduce((s, l) => s + l.unit * l.qty, 0), bps = q('SELECT commission_bps b FROM seller_profiles WHERE user_id=?').get(sid)?.b ?? cfg.default_commission_bps ?? 800;
         const commission = Math.floor(sub * bps / 10000), soId = id();
         q('INSERT INTO seller_orders(id,order_id,seller_id,status,subtotal_paisa,created_at,commission_paisa,net_paisa) VALUES(?,?,?,?,?,?,?,?)').run(soId, orderId, sid, initial, sub, ts, commission, sub - commission);
         for (const l of ls) q('INSERT INTO order_items(id,order_id,product_id,product_name_bn,quantity,unit_price_paisa,seller_id,seller_order_id,variant) VALUES(?,?,?,?,?,?,?,?,?)').run(id(), orderId, l.pid, l.name, l.qty, l.unit, sid, soId, l.variant);

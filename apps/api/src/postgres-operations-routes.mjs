@@ -15,6 +15,7 @@ import {
   productFields
 } from './postgres-domain-helpers.mjs';
 import { courierBook, COURIERS, SHIPMENT_STATUSES } from './gateways.mjs';
+import { loadPgStorefrontConfig, validateStorefrontConfig } from './storefront-config.mjs';
 
 const bdt = value => Number(value || 0) / 100;
 const orderNo = value => 'HAAT-' + String(value).replace(/-/g, '').slice(0, 10).toUpperCase();
@@ -504,5 +505,23 @@ export function registerPostgresOperationsRoutes(route, ok, { database, orderLif
       await orderLifecycle.applySellerStatus(info.seller_order_id, 'DELIVERED', user.id, 'কুরিয়ার ডেলিভারি নিশ্চিত');
     }
     return ok({ id: info.id, status });
+  });
+
+  // ---------- Storefront Banner, Delivery & Platform Settings ----------
+  route('GET', '/api/v1/admin/storefront/config', ['ADMIN'], async () => ok(await loadPgStorefrontConfig(database)));
+
+  route('PUT', '/api/v1/admin/storefront/config', ['ADMIN'], async ({ user, body }) => {
+    const current = await loadPgStorefrontConfig(database);
+    const validated = validateStorefrontConfig(body, current);
+    const { _changed, ...nextConfig } = validated;
+    const stamp = now();
+    await database.tx(async () => {
+      for (const [k, v] of Object.entries(_changed)) {
+        await q('INSERT INTO platform_settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=EXCLUDED.updated_at')
+          .run(k, String(v), stamp);
+      }
+      await audit(user.id, 'STOREFRONT_CONFIG_UPDATE', 'platform_settings', 'storefront', _changed);
+    });
+    return ok(nextConfig);
   });
 }

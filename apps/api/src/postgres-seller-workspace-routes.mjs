@@ -92,4 +92,41 @@ export function registerPostgresSellerWorkspaceRoutes(route, ok, { database } = 
       created_at: order.created_at
     });
   });
+
+  route('GET', '/api/v1/seller/analytics', ['SELLER'], async ({ user }) => {
+    await profile(user.id);
+    const [agg, unitRow, revRow, topRows, dayRows] = await Promise.all([
+      q(`SELECT
+        SUM(CASE WHEN status<>'AWAITING_PAYMENT' THEN 1 ELSE 0 END)::int AS total_non_await,
+        SUM(CASE WHEN status NOT IN ('AWAITING_PAYMENT','CANCELLED') THEN 1 ELSE 0 END)::int AS active_orders,
+        SUM(CASE WHEN status='DELIVERED' THEN 1 ELSE 0 END)::int AS delivered_orders,
+        COALESCE(SUM(CASE WHEN status NOT IN ('AWAITING_PAYMENT','CANCELLED') THEN subtotal_paisa ELSE 0 END), 0) AS active_paisa
+        FROM seller_orders WHERE seller_id=?`).get(user.id),
+      q(`SELECT COALESCE(SUM(oi.quantity), 0)::int AS units
+        FROM order_items oi JOIN seller_orders so ON so.id=oi.seller_order_id
+        WHERE so.seller_id=? AND so.status NOT IN ('AWAITING_PAYMENT','CANCELLED')`).get(user.id),
+      q(`SELECT COALESCE(AVG(r.rating), 0) AS avg_rating, COUNT(*)::int AS review_count
+        FROM reviews r JOIN products p ON p.id=r.product_id WHERE p.seller_id=?`).get(user.id),
+      q(`SELECT oi.product_id, MAX(oi.product_name_bn) AS name_bn,
+        SUM(oi.quantity)::int AS units, SUM(oi.quantity * oi.unit_price_paisa) AS revenue_paisa
+        FROM order_items oi JOIN seller_orders so ON so.id=oi.seller_order_id
+        WHERE so.seller_id=? AND so.status NOT IN ('AWAITING_PAYMENT','CANCELLED')
+        GROUP BY oi.product_id ORDER BY units DESC, revenue_paisa DESC LIMIT 5`).all(user.id),
+      q(`SELECT substr(created_at, 1, 10) AS day, COUNT(*)::int AS orders, SUM(subtotal_paisa) AS gross_paisa
+        FROM seller_orders WHERE seller_id=? AND status NOT IN ('AWAITING_PAYMENT','CANCELLED')
+        GROUP BY day ORDER BY day DESC LIMIT 14`).all(user.id)
+    ]);
+    const activeOrders = Number(agg?.active_orders || 0);
+    const deliveredOrders = Number(agg?.delivered_orders || 0);
+    const totalNonAwait = Number(agg?.total_non_await || 0);
+    return ok({
+      avg_order_value_bdt: activeOrders > 0 ? Math.round((bdt(agg?.active_paisa) / activeOrders) * 100) / 100 : 0,
+      delivery_rate_pct: totalNonAwait > 0 ? Math.round((deliveredOrders / totalNonAwait) * 1000) / 10 : 0,
+      total_units_sold: Number(unitRow?.units || 0),
+      average_rating: Math.round(Number(revRow?.avg_rating || 0) * 10) / 10,
+      review_count: Number(revRow?.review_count || 0),
+      top_products: (topRows || []).map(r => ({ product_id: r.product_id, name_bn: r.name_bn, units: Number(r.units || 0), revenue_bdt: bdt(r.revenue_paisa) })),
+      revenue_by_day: (dayRows || []).map(r => ({ day: r.day, orders: Number(r.orders || 0), revenue_bdt: bdt(r.gross_paisa) }))
+    });
+  });
 }

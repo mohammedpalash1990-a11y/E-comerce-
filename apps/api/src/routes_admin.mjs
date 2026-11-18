@@ -1,7 +1,8 @@
 import { q, tx, id, now, audit, notify, text, bad, money, HttpError, bdt, orderNo, normPhone, validPhone, validEmail, slugify } from './core.mjs';
 import { applyParentStatus, orderView, sellerBalance, conflict } from './orders.mjs';
 import { productFields, parseImages, saveImages, bookShipment, updateShipment } from './routes_seller.mjs';
-import { productView } from './routes_public.mjs';
+import { productView, loadStorefrontConfig } from './routes_public.mjs';
+import { validateStorefrontConfig } from './storefront-config.mjs';
 import {
   pendingRequests,
   decideRequest,
@@ -187,6 +188,105 @@ export default function register(route, ok) {
     const from = (url.searchParams.get('from') || '0000').slice(0, 10), to = (url.searchParams.get('to') || '9999').slice(0, 10) + 'T99';
     return ok(q("SELECT substr(created_at,1,10) day,COUNT(*) orders,SUM(total_paisa) gross FROM orders WHERE status NOT IN('CANCELLED','AWAITING_PAYMENT') AND created_at>=? AND created_at<=? GROUP BY day ORDER BY day").all(from, to).map(r => ({ day: r.day, orders: r.orders, gross_bdt: bdt(r.gross) })));
   });
+  route('GET', '/api/v1/admin/reports/summary', A, ({ url }) => {
+    const from = url.searchParams.get('from') || '';
+    const to = url.searchParams.get('to') || '';
+    const rawSellerId = url.searchParams.get('seller_id');
+    const sellerId = rawSellerId === null || rawSellerId === undefined || rawSellerId === '' ? null : rawSellerId;
+    const validDate = v => /^\d{4}-\d{2}-\d{2}$/.test(v) && Number.isFinite(Date.parse(v + 'T00:00:00.000Z')) && new Date(Date.parse(v + 'T00:00:00.000Z')).toISOString().slice(0, 10) === v;
+    if (!validDate(from) || !validDate(to)) throw bad('রিপোর্টের from ও to তারিখ YYYY-MM-DD ফরম্যাটে দিতে হবে');
+    const days = (Date.parse(to + 'T00:00:00.000Z') - Date.parse(from + 'T00:00:00.000Z')) / 86400000 + 1;
+    if (days < 1 || days > 366) throw bad('রিপোর্টের তারিখসীমা সর্বোচ্চ ৩৬৬ দিন হতে পারে');
+    if (sellerId !== null && !/^[A-Za-z0-9_-]{1,160}$/.test(sellerId)) throw bad('বিক্রেতার আইডি সঠিক নয়');
+    const startIso = new Date(Date.parse(from + 'T00:00:00+06:00')).toISOString();
+    const endIso = new Date(Date.parse(to + 'T00:00:00+06:00') + 86400000).toISOString();
+
+    const om = sellerId === null
+      ? q(`SELECT COUNT(*) AS orders_count,
+          SUM(CASE WHEN payment_status='PAID' AND status<>'CANCELLED' THEN 1 ELSE 0 END) AS paid_orders_count,
+          SUM(CASE WHEN status='CANCELLED' THEN 1 ELSE 0 END) AS cancelled_orders_count,
+          SUM(CASE WHEN payment_method='COD' AND payment_status<>'PAID' AND status<>'CANCELLED' THEN 1 ELSE 0 END) AS unpaid_cod_orders_count,
+          COALESCE(SUM(CASE WHEN payment_status='PAID' AND status<>'CANCELLED' THEN subtotal_paisa ELSE 0 END),0) AS gross_merchandise_paisa,
+          COALESCE(SUM(CASE WHEN payment_status='PAID' AND status<>'CANCELLED' THEN discount_paisa ELSE 0 END),0) AS discounts_paisa,
+          COALESCE(SUM(CASE WHEN payment_status='PAID' AND status<>'CANCELLED' THEN shipping_paisa ELSE 0 END),0) AS shipping_paisa
+          FROM orders WHERE created_at>=? AND created_at<?`).get(startIso, endIso)
+      : q(`SELECT COUNT(*) AS orders_count,
+          SUM(CASE WHEN o.payment_status='PAID' AND o.status<>'CANCELLED' THEN 1 ELSE 0 END) AS paid_orders_count,
+          SUM(CASE WHEN o.status='CANCELLED' THEN 1 ELSE 0 END) AS cancelled_orders_count,
+          SUM(CASE WHEN o.payment_method='COD' AND o.payment_status<>'PAID' AND o.status<>'CANCELLED' THEN 1 ELSE 0 END) AS unpaid_cod_orders_count,
+          COALESCE(SUM(CASE WHEN o.payment_status='PAID' AND o.status<>'CANCELLED' THEN so.subtotal_paisa ELSE 0 END),0) AS gross_merchandise_paisa,
+          0 AS discounts_paisa,
+          0 AS shipping_paisa
+          FROM orders o JOIN seller_orders so ON so.order_id=o.id AND so.seller_id=?
+          WHERE o.created_at>=? AND o.created_at<?`).get(sellerId, startIso, endIso);
+
+    const lm = q(`SELECT
+        COALESCE(SUM(CASE WHEN kind='COMMISSION' THEN amount_paisa ELSE 0 END),0) AS platform_commission_paisa,
+        COALESCE(SUM(CASE WHEN kind='SELLER_EARNING' THEN amount_paisa ELSE 0 END),0) AS seller_earnings_paisa,
+        COALESCE(SUM(CASE WHEN kind='SELLER_REVERSAL' THEN amount_paisa ELSE 0 END),0) AS seller_reversals_paisa
+      FROM transactions WHERE created_at>=? AND created_at<?${sellerId !== null ? ' AND seller_id=?' : ''}`)
+      .get(...(sellerId !== null ? [startIso, endIso, sellerId] : [startIso, endIso]));
+
+    const rm = sellerId === null
+      ? q(`SELECT
+          SUM(CASE WHEN status='REQUESTED' THEN 1 ELSE 0 END) AS requested_refund_count,
+          COALESCE(SUM(CASE WHEN status='REQUESTED' THEN amount_paisa ELSE 0 END),0) AS requested_refund_paisa
+          FROM refunds WHERE created_at>=? AND created_at<?`).get(startIso, endIso)
+      : null;
+
+    const pm = q(`SELECT
+        SUM(CASE WHEN status='REQUESTED' THEN 1 ELSE 0 END) AS requested_payout_count,
+        COALESCE(SUM(CASE WHEN status='REQUESTED' THEN amount_paisa ELSE 0 END),0) AS requested_payout_paisa,
+        SUM(CASE WHEN status='APPROVED' THEN 1 ELSE 0 END) AS approved_payout_count,
+        COALESCE(SUM(CASE WHEN status='APPROVED' THEN amount_paisa ELSE 0 END),0) AS approved_payout_paisa,
+        SUM(CASE WHEN status='REJECTED' THEN 1 ELSE 0 END) AS rejected_payout_count,
+        COALESCE(SUM(CASE WHEN status='REJECTED' THEN amount_paisa ELSE 0 END),0) AS rejected_payout_paisa
+      FROM payouts WHERE created_at>=? AND created_at<?${sellerId !== null ? ' AND seller_id=?' : ''}`)
+      .get(...(sellerId !== null ? [startIso, endIso, sellerId] : [startIso, endIso]));
+
+    const gross = Number(om?.gross_merchandise_paisa || 0);
+    const discounts = Number(om?.discounts_paisa || 0);
+    const net = Math.max(0, gross - discounts);
+    const moneyObj = v => ({ paisa: Number(v || 0), bdt: bdt(Number(v || 0)) });
+    return ok({
+      period: { from, to, time_zone: 'Asia/Dhaka', seller_id: sellerId },
+      date_basis: {
+        orders: 'orders.created_at',
+        financial_ledger: 'transactions.created_at',
+        refunds: 'refunds.created_at',
+        payouts: 'payouts.created_at'
+      },
+      orders: {
+        total: Number(om?.orders_count || 0),
+        paid: Number(om?.paid_orders_count || 0),
+        cancelled: Number(om?.cancelled_orders_count || 0),
+        unpaid_cod: Number(om?.unpaid_cod_orders_count || 0)
+      },
+      sales: {
+        gross_merchandise: moneyObj(gross),
+        discounts: moneyObj(discounts),
+        net_merchandise: moneyObj(net),
+        shipping: sellerId === null ? moneyObj(om?.shipping_paisa) : null
+      },
+      finance: {
+        platform_commission: moneyObj(lm?.platform_commission_paisa),
+        seller_earnings: moneyObj(lm?.seller_earnings_paisa),
+        seller_reversals: moneyObj(lm?.seller_reversals_paisa)
+      },
+      refunds: sellerId === null ? {
+        requested_count: Number(rm?.requested_refund_count || 0),
+        requested_amount: moneyObj(rm?.requested_refund_paisa)
+      } : null,
+      payouts: {
+        requested_count: Number(pm?.requested_payout_count || 0),
+        requested_amount: moneyObj(pm?.requested_payout_paisa),
+        approved_count: Number(pm?.approved_payout_count || 0),
+        approved_amount: moneyObj(pm?.approved_payout_paisa),
+        rejected_count: Number(pm?.rejected_payout_count || 0),
+        rejected_amount: moneyObj(pm?.rejected_payout_paisa)
+      }
+    });
+  });
   route('GET', '/api/v1/admin/audit-logs', A, ({ url }) => ok(q('SELECT id,actor_id,action,entity,entity_id,detail,created_at FROM audit_logs ORDER BY created_at DESC,id DESC LIMIT ?').all(lim(url, 200))));
 
   // ----- coupons -----
@@ -205,4 +305,21 @@ export default function register(route, ok) {
   route('POST', '/api/v1/admin/inventory/adjustments/:id/decision', A, ({ user, params, body }) => ok(decideRequest(user, params[0], body)));
   route('GET', '/api/v1/admin/inventory/alerts', A, ({ url }) => ok(inventoryAlerts({ threshold: url.searchParams.get('threshold') ?? 5 })));
   route('GET', '/api/v1/admin/inventory/report', A, ({ url }) => ok(inventoryReport({ from: url.searchParams.get('from'), to: url.searchParams.get('to') })));
+
+  // ----- storefront banner, delivery & platform settings -----
+  route('GET', '/api/v1/admin/storefront/config', A, () => ok(loadStorefrontConfig()));
+  route('PUT', '/api/v1/admin/storefront/config', A, ({ user, body }) => {
+    const current = loadStorefrontConfig();
+    const validated = validateStorefrontConfig(body, current);
+    const { _changed, ...nextConfig } = validated;
+    const ts = now();
+    tx(() => {
+      for (const [k, v] of Object.entries(_changed)) {
+        q('INSERT INTO platform_settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at')
+          .run(k, String(v), ts);
+      }
+      audit(user.id, 'STOREFRONT_CONFIG_UPDATE', 'platform_settings', 'storefront', _changed);
+    });
+    return ok(nextConfig);
+  });
 }

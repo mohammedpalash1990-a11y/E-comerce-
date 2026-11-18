@@ -68,3 +68,13 @@ test('seller cannot read another seller order',async()=>{
   const h=setup({ownedOrder:false});
   await assert.rejects(find(h,'GET','/api/v1/seller/orders/:id').handler({user,params:['foreign-order']}),e=>e.status===404);
 });
+
+test('seller analytics returns KPI metrics and top products cleanly',async()=>{
+  const h=setup();
+  assert.deepEqual(find(h,'GET','/api/v1/seller/analytics').roles,['SELLER']);
+  const result=await find(h,'GET','/api/v1/seller/analytics').handler({user});
+  assert.equal(typeof result.body.data.avg_order_value_bdt,'number');
+  assert.equal(typeof result.body.data.delivery_rate_pct,'number');
+  assert.ok(Array.isArray(result.body.data.top_products));
+  assert.ok(Array.isArray(result.body.data.revenue_by_day));
+});

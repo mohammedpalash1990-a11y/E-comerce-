@@ -1,6 +1,14 @@
 import { randomBytes, randomInt } from 'node:crypto';
 import { config, q, db, tx, id, now, sha256, hashPassword, verifyPassword, safeEq, normPhone, validPhone, validEmail, checkPassword, text, bad, HttpError, audit, notify, bdt } from './core.mjs';
-import { shippingFor } from './gateways.mjs';
+import { DEFAULT_STOREFRONT_CONFIG, mergeStorefrontConfig, computeDynamicShippingPaisa } from './storefront-config.mjs';
+
+export function loadStorefrontConfig() {
+  try {
+    return mergeStorefrontConfig(q('SELECT key,value FROM platform_settings').all());
+  } catch {
+    return { ...DEFAULT_STOREFRONT_CONFIG };
+  }
+}
 
 export const productView = r => ({ ...r, price_bdt: r.price_paisa / 100, sale_price_bdt: (r.discount_paisa && r.discount_paisa < r.price_paisa ? r.discount_paisa : r.price_paisa) / 100, discount_price_bdt: r.discount_paisa ? r.discount_paisa / 100 : null, in_stock: r.stock > 0 });
 export const LIVE = "p.active=1 AND p.status='ACTIVE' AND EXISTS(SELECT 1 FROM seller_profiles sp WHERE sp.user_id=p.seller_id AND sp.status='APPROVED')";
@@ -247,9 +255,10 @@ export default function register(route, ok, { catalogRepository, authRepository 
   });
   route('GET', '/api/v1/products/:id/reviews', null, async ({ params }) =>
     ok(await catalog.listReviews(params[0])));
+  route('GET', '/api/v1/storefront/config', null, () => ok(loadStorefrontConfig()));
   route('GET', '/api/v1/shipping/quote', null, ({ url }) => {
     const sub = Math.round(Number(url.searchParams.get('subtotal_bdt') || 0) * 100);
-    return ok({ shipping_bdt: bdt(shippingFor(url.searchParams.get('area') || '', sub)) });
+    return ok({ shipping_bdt: bdt(computeDynamicShippingPaisa(url.searchParams.get('area') || '', sub, loadStorefrontConfig())) });
   });
 
   // ---------- auth ----------

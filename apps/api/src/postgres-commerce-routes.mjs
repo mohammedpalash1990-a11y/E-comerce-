@@ -2,6 +2,7 @@ import { id, now, HttpError, text } from './postgres-shared.mjs';
 import { createPostgresCheckoutRepository } from './postgres-checkout.mjs';
 import { createPostgresOrderLifecycleRepository } from './postgres-orders.mjs';
 import { registerPostgresInventoryRoutes } from './postgres-inventory-routes.mjs';
+import { DEFAULT_STOREFRONT_CONFIG, mergeStorefrontConfig, computeDynamicShippingPaisa, loadPgStorefrontConfig } from './storefront-config.mjs';
 
 const money = value => Number(value || 0) / 100;
 const orderNumber = id => 'HAAT-' + String(id).replace(/-/g, '').slice(0, 10).toUpperCase();
@@ -45,9 +46,22 @@ export function registerPostgresCommerceRoutes(route, ok, options = {}) {
     audit: (actor, action, entity, entityId, detail) => writeAudit(database, actor, action, entity, entityId, detail)
   });
 
+  route('GET', '/api/v1/storefront/config', null, async () => ok(await loadPgStorefrontConfig(database)));
+
   route('GET', '/api/v1/shipping/quote', null, async ({ url }) => {
     const sub = Math.round(Number(url.searchParams.get('subtotal_bdt') || 0) * 100);
-    const fee = typeof options.shippingFor === 'function' ? options.shippingFor(url.searchParams.get('area') || '', sub) : 0;
+    let fee = null;
+    try {
+      const rows = await database.q('SELECT key,value FROM platform_settings').all();
+      if (Array.isArray(rows) && rows.length > 0) {
+        fee = computeDynamicShippingPaisa(url.searchParams.get('area') || '', sub, mergeStorefrontConfig(rows));
+      }
+    } catch {}
+    if (fee === null) {
+      fee = typeof options.shippingFor === 'function'
+        ? await options.shippingFor(url.searchParams.get('area') || '', sub)
+        : computeDynamicShippingPaisa(url.searchParams.get('area') || '', sub, DEFAULT_STOREFRONT_CONFIG);
+    }
     return ok({ shipping_bdt: money(fee) });
   });
 

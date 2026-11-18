@@ -85,37 +85,37 @@ button{cursor:pointer;background:var(--surface);font-weight:600}
     <h1 class="gold" data-i18n="authTitle">আপনার HAAT অ্যাকাউন্ট</h1>
     <p class="muted" data-i18n="authSub">কেনাকাটা, কার্ট সিঙ্ক, অর্ডার ট্র্যাকিং ও রিভিউয়ের জন্য লগইন বা নিবন্ধন করুন।</p>
     <div class="tabs">
-      <button type="button" class="tab active" data-auth-tab="login">লগইন</button>
-      <button type="button" class="tab" data-auth-tab="register">নতুন অ্যাকাউন্ট</button>
-      <button type="button" class="tab" data-auth-tab="forgot">পাসওয়ার্ড ভুলে গেছেন?</button>
+      <button type="button" class="tab active" data-auth-tab="login" data-i18n="tabLogin">লগইন</button>
+      <button type="button" class="tab" data-auth-tab="register" data-i18n="tabReg">নতুন অ্যাকাউন্ট</button>
+      <button type="button" class="tab" data-auth-tab="forgot" data-i18n="tabForgot">পাসওয়ার্ড ভুলে গেছেন?</button>
     </div>
 
     <form id="loginForm" class="grid">
-      <label class="field wide">মোবাইল / ইমেইল<input name="identifier" autocomplete="username" placeholder="01700000003" required></label>
-      <label class="field wide">পাসওয়ার্ড<input name="password" type="password" autocomplete="current-password" required></label>
-      <button class="primary wide">লগইন করুন</button>
+      <label class="field wide"><span data-i18n="lblIdent">মোবাইল / ইমেইল</span><input name="identifier" autocomplete="username" placeholder="01700000003" required></label>
+      <label class="field wide"><span data-i18n="lblPass">পাসওয়ার্ড</span><input name="password" type="password" autocomplete="current-password" required></label>
+      <button class="primary wide" data-i18n="btnLogin">লগইন করুন</button>
     </form>
 
     <form id="registerForm" class="grid hidden">
-      <label class="field">পূর্ণ নাম<input name="name" maxlength="100" required></label>
-      <label class="field">মোবাইল নম্বর<input name="phone" inputmode="numeric" placeholder="01XXXXXXXXX" required></label>
-      <label class="field wide">ইমেইল (ঐচ্ছিক)<input name="email" type="email"></label>
-      <label class="field">পাসওয়ার্ড<input name="password" type="password" minlength="8" required></label>
-      <label class="field">এলাকা / জেলা<input name="area" maxlength="100" placeholder="Dhaka"></label>
-      <label class="field wide">প্রাথমিক ঠিকানা<input name="address" maxlength="500"></label>
-      <button class="primary wide">অ্যাকাউন্ট তৈরি করুন</button>
+      <label class="field"><span data-i18n="lblName">পূর্ণ নাম</span><input name="name" maxlength="100" required></label>
+      <label class="field"><span data-i18n="lblPhone">মোবাইল নম্বর</span><input name="phone" inputmode="numeric" placeholder="01XXXXXXXXX" required></label>
+      <label class="field wide"><span data-i18n="lblEmailOpt">ইমেইল (ঐচ্ছিক)</span><input name="email" type="email"></label>
+      <label class="field"><span data-i18n="lblPass">পাসওয়ার্ড</span><input name="password" type="password" minlength="8" required></label>
+      <label class="field"><span data-i18n="lblArea">এলাকা / জেলা</span><input name="area" maxlength="100" placeholder="Dhaka"></label>
+      <label class="field wide"><span data-i18n="lblAddr">প্রাথমিক ঠিকানা</span><input name="address" maxlength="500"></label>
+      <button class="primary wide" data-i18n="btnCreateAcc">অ্যাকাউন্ট তৈরি করুন</button>
     </form>
 
     <form id="forgotForm" class="grid hidden">
-      <label class="field wide">অ্যাকাউন্টের মোবাইল / ইমেইল<input name="identifier" required></label>
-      <button class="primary wide">রিসেট কোড নিন</button>
+      <label class="field wide"><span data-i18n="lblIdent">মোবাইল / ইমেইল</span><input name="identifier" required></label>
+      <button class="primary wide" data-i18n="btnGetReset">রিসেট কোড নিন</button>
     </form>
 
     <form id="resetForm" class="grid hidden">
-      <label class="field">মোবাইল / ইমেইল<input name="identifier" required></label>
-      <label class="field">রিসেট কোড<input name="code" inputmode="numeric" required></label>
-      <label class="field wide">নতুন পাসওয়ার্ড<input name="new_password" type="password" minlength="8" required></label>
-      <button class="primary wide">পাসওয়ার্ড পরিবর্তন করুন</button>
+      <label class="field"><span data-i18n="lblIdent">মোবাইল / ইমেইল</span><input name="identifier" required></label>
+      <label class="field"><span data-i18n="lblResetCode">রিসেট কোড</span><input name="code" inputmode="numeric" required></label>
+      <label class="field wide"><span data-i18n="lblNewPass">নতুন পাসওয়ার্ড</span><input name="new_password" type="password" minlength="8" required></label>
+      <button class="primary wide" data-i18n="btnResetPass">পাসওয়ার্ড পরিবর্তন করুন</button>
     </form>
 
     <div id="authMsg" class="notice hidden" role="status" aria-live="polite"></div>
@@ -124,26 +124,26 @@ button{cursor:pointer;background:var(--surface);font-weight:600}
   <section id="account" class="hidden">
     <div class="panel toolbar">
       <div>
-        <h1 class="gold" style="margin-bottom:4px">আমার অ্যাকাউন্ট</h1>
+        <h1 class="gold" style="margin-bottom:4px" data-i18n="myAcc">আমার অ্যাকাউন্ট</h1>
         <div id="welcome" class="muted"></div>
       </div>
       <div class="actions" style="margin:0">
-        <a href="./" class="soft" style="padding:9px 14px;border-radius:4px;font-size:13px">শপিং চালিয়ে যান</a>
-        <button id="logout" type="button" class="danger">লগআউট</button>
+        <a href="./" class="soft" style="padding:9px 14px;border-radius:4px;font-size:13px" data-i18n="contShop">শপিং চালিয়ে যান</a>
+        <button id="logout" type="button" class="danger" data-i18n="btnLogout">লগআউট</button>
       </div>
     </div>
 
     <div class="tabs" id="accountTabs">
-      <button type="button" class="tab active" data-view="profile">প্রোফাইল ও নিরাপত্তা</button>
-      <button type="button" class="tab" data-view="addresses">সংরক্ষিত ঠিকানা</button>
-      <button type="button" class="tab" data-view="cart">কার্ট ও চেকআউট</button>
-      <button type="button" class="tab" data-view="wishlist">পছন্দের পণ্য</button>
-      <button type="button" class="tab" data-view="orders">আমার অর্ডার</button>
-      <button type="button" class="tab" data-view="notifications">নোটিফিকেশন</button>
+      <button type="button" class="tab active" data-view="profile" data-i18n="vProfile">প্রোফাইল ও নিরাপত্তা</button>
+      <button type="button" class="tab" data-view="addresses" data-i18n="vAddresses">সংরক্ষিত ঠিকানা</button>
+      <button type="button" class="tab" data-view="cart" data-i18n="vCart">কার্ট ও চেকআউট</button>
+      <button type="button" class="tab" data-view="wishlist" data-i18n="vWish">পছন্দের পণ্য</button>
+      <button type="button" class="tab" data-view="orders" data-i18n="vOrders">আমার অর্ডার</button>
+      <button type="button" class="tab" data-view="notifications" data-i18n="vNotifs">নোটিফিকেশন</button>
     </div>
 
     <section class="panel view" id="view-profile">
-      <h2>ব্যক্তিগত তথ্য ও ভেরিফিকেশন</h2>
+      <h2 data-i18n="secProfile">ব্যক্তিগত তথ্য ও ভেরিফিকেশন</h2>
       <div class="verifybar">
         <span id="verifyStatusText">ভেরিফিকেশন অবস্থা লোড হচ্ছে…</span>
         <button type="button" id="sendPhoneOtpBtn" class="soft">ফোন OTP পাঠান</button>
@@ -170,8 +170,8 @@ button{cursor:pointer;background:var(--surface);font-weight:600}
 
     <section class="panel view hidden" id="view-addresses">
       <div class="toolbar">
-        <h2>সংরক্ষিত ঠিকানা</h2>
-        <button id="newAddress" type="button" class="primary">+ নতুন ঠিকানা</button>
+        <h2 data-i18n="secAddresses">সংরক্ষিত ঠিকানা</h2>
+        <button id="newAddress" type="button" class="primary" data-i18n="btnNewAddr">+ নতুন ঠিকানা</button>
       </div>
       <form id="addressForm" class="grid hidden" style="margin:14px 0;padding:16px;background:var(--canvas);border:1px solid var(--line);border-radius:4px">
         <input type="hidden" name="id">
@@ -193,7 +193,7 @@ button{cursor:pointer;background:var(--surface);font-weight:600}
     </section>
 
     <section class="panel view hidden" id="view-cart">
-      <h2>আমার কার্ট ও ইনলাইন চেকআউট</h2>
+      <h2 data-i18n="secCart">আমার কার্ট ও ইনলাইন চেকআউট</h2>
       <div id="cartList" class="cards"></div>
 
       <div class="checkoutbox">
@@ -236,26 +236,26 @@ button{cursor:pointer;background:var(--surface);font-weight:600}
         <div style="border-top:1px solid var(--line);padding-top:10px">
           <div class="summaryline"><span id="cartSubtotal" class="num">মোট: ৳0</span><span class="num" id="cartShippingText">ডেলিভারি: ৳60</span></div>
           <div class="summaryline hidden" id="cartDiscountLine"><span>কুপন ছাড়</span><span class="num" id="cartDiscountVal">-৳0</span></div>
-          <div class="summaryline" style="font-size:17px;font-weight:700;margin-top:4px"><span>সর্বমোট প্রদেয়</span><span class="num" id="cartGrandTotal">৳0</span></div>
+          <div class="summaryline" style="font-size:17px;font-weight:700;margin-top:4px"><span data-i18n="grandTot">সর্বমোট প্রদেয়</span><span class="num" id="cartGrandTotal">৳0</span></div>
         </div>
         <div id="cartMsg" class="notice hidden"></div>
         <div class="toolbar">
-          <span class="muted">অর্ডারের আগে ঠিকানা ও লাইভ স্টক যাচাই করা হবে।</span>
-          <button id="checkout" type="button" class="primary">অর্ডার সম্পন্ন করুন</button>
+          <span class="muted" data-i18n="checkoutHint">অর্ডারের আগে ঠিকানা ও লাইভ স্টক যাচাই করা হবে।</span>
+          <button id="checkout" type="button" class="primary" data-i18n="btnCheckout">অর্ডার সম্পন্ন করুন</button>
         </div>
       </div>
     </section>
 
     <section class="panel view hidden" id="view-wishlist">
-      <h2>পছন্দের পণ্য</h2>
+      <h2 data-i18n="secWish">পছন্দের পণ্য</h2>
       <div id="wishlistMsg" class="notice hidden"></div>
       <div id="wishlistList" class="cards"></div>
     </section>
 
     <section class="panel view hidden" id="view-orders">
       <div class="toolbar">
-        <h2>আমার অর্ডার ও ট্র্যাকিং</h2>
-        <button type="button" id="refreshOrdersBtn" class="soft">রিফ্রেশ</button>
+        <h2 data-i18n="secOrders">আমার অর্ডার ও ট্র্যাকিং</h2>
+        <button type="button" id="refreshOrdersBtn" class="soft" data-i18n="btnRefresh">রিফ্রেশ</button>
       </div>
       <div id="orderDetail" class="notice hidden"></div>
       <div id="paymentActions" class="notice hidden" role="status" aria-live="polite">
@@ -284,8 +284,8 @@ button{cursor:pointer;background:var(--surface);font-weight:600}
 
     <section class="panel view hidden" id="view-notifications">
       <div class="toolbar">
-        <h2>নোটিফিকেশন</h2>
-        <button type="button" id="markReadBtn" class="soft">সব পঠিত হিসেবে চিহ্নিত</button>
+        <h2 data-i18n="secNotifs">নোটিফিকেশন</h2>
+        <button type="button" id="markReadBtn" class="soft" data-i18n="btnMarkRead">সব পঠিত হিসেবে চিহ্নিত</button>
       </div>
       <div id="notifList" style="margin-top:12px"></div>
     </section>
@@ -492,7 +492,7 @@ async function loadCart(){
   const r=await request('/customer/cart');
   cart=r.data;
   await populateCheckoutAddresses();
-  $('#cartList').innerHTML=cart.items.map(i=>'<article class="item"><div class="cartrow">'+(i.image?'<img class="thumb" src="'+esc(i.image)+'" alt="">':'')+'<div><b>'+esc(i.name_bn)+'</b><p class="num" style="margin:4px 0 0">'+money(i.unit_price_bdt)+' × '+i.quantity+' = '+money(i.line_total_bdt)+'</p>'+(!i.available?'<small style="color:var(--danger)">স্টক পর্যাপ্ত নয়</small>':'')+'</div></div><div class="actions"><button type="button" data-cart-qty="'+esc(i.product_id)+'" data-qty="'+(i.quantity-1)+'">−</button><button type="button" data-cart-qty="'+esc(i.product_id)+'" data-qty="'+(i.quantity+1)+'">+</button><button type="button" class="danger" data-cart-qty="'+esc(i.product_id)+'" data-qty="0">মুছুন</button></div></article>').join('')||'<p class="empty wide">কার্ট খালি।</p>';
+  $('#cartList').innerHTML=cart.items.map(i=>'<article class="item"><div class="cartrow">'+(i.image?'<img class="thumb" src="'+esc(i.image)+'" alt="'+esc(i.name_bn)+'">':'')+'<div><b>'+esc(i.name_bn)+'</b><p class="num" style="margin:4px 0 0">'+money(i.unit_price_bdt)+' × '+i.quantity+' = '+money(i.line_total_bdt)+'</p>'+(!i.available?'<small style="color:var(--danger)">স্টক পর্যাপ্ত নয়</small>':'')+'</div></div><div class="actions"><button type="button" aria-label="পরিমাণ কমান — '+esc(i.name_bn)+'" data-cart-qty="'+esc(i.product_id)+'" data-qty="'+(i.quantity-1)+'">−</button><button type="button" aria-label="পরিমাণ বাড়ান — '+esc(i.name_bn)+'" data-cart-qty="'+esc(i.product_id)+'" data-qty="'+(i.quantity+1)+'">+</button><button type="button" class="danger" aria-label="কার্ট থেকে মুছুন — '+esc(i.name_bn)+'" data-cart-qty="'+esc(i.product_id)+'" data-qty="0">মুছুন</button></div></article>').join('')||'<p class="empty wide">কার্ট খালি।</p>';
   await updateCartTotals();
   $('#checkout').disabled=!cart.items.length||cart.items.some(i=>!i.available);
 }
@@ -652,12 +652,21 @@ async function loadNotifications(){
 }
 $('#markReadBtn').onclick=async()=>{await request('/notifications/read',{method:'POST'});await loadNotifications()};
 
+const ACC_I18N={
+  bn:{authTitle:'আপনার HAAT অ্যাকাউন্ট',authSub:'কেনাকাটা, কার্ট সিঙ্ক, অর্ডার ট্র্যাকিং ও রিভিউয়ের জন্য লগইন বা নিবন্ধন করুন।',tabLogin:'লগইন',tabReg:'নতুন অ্যাকাউন্ট',tabForgot:'পাসওয়ার্ড ভুলে গেছেন?',lblIdent:'মোবাইল / ইমেইল',lblPass:'পাসওয়ার্ড',btnLogin:'লগইন করুন',lblName:'পূর্ণ নাম',lblPhone:'মোবাইল নম্বর',lblEmailOpt:'ইমেইল (ঐচ্ছিক)',lblArea:'এলাকা / জেলা',lblAddr:'প্রাথমিক ঠিকানা',btnCreateAcc:'অ্যাকাউন্ট তৈরি করুন',btnGetReset:'রিসেট কোড নিন',lblResetCode:'রিসেট কোড',lblNewPass:'নতুন পাসওয়ার্ড',btnResetPass:'পাসওয়ার্ড পরিবর্তন করুন',myAcc:'আমার অ্যাকাউন্ট',contShop:'শপিং চালিয়ে যান',btnLogout:'লগআউট',vProfile:'প্রোফাইল ও নিরাপত্তা',vAddresses:'সংরক্ষিত ঠিকানা',vCart:'কার্ট ও চেকআউট',vWish:'পছন্দের পণ্য',vOrders:'আমার অর্ডার',vNotifs:'নোটিফিকেশন',secProfile:'ব্যক্তিগত তথ্য ও ভেরিফিকেশন',secAddresses:'সংরক্ষিত ঠিকানা',btnNewAddr:'+ নতুন ঠিকানা',secCart:'আমার কার্ট ও ইনলাইন চেকআউট',grandTot:'সর্বমোট প্রদেয়',checkoutHint:'অর্ডারের আগে ঠিকানা ও লাইভ স্টক যাচাই করা হবে।',btnCheckout:'অর্ডার সম্পন্ন করুন',secWish:'পছন্দের পণ্য',secOrders:'আমার অর্ডার ও ট্র্যাকিং',btnRefresh:'রিফ্রেশ',secNotifs:'নোটিফিকেশন',btnMarkRead:'সব পঠিত হিসেবে চিহ্নিত'},
+  en:{authTitle:'Your HAAT Account',authSub:'Sign in or register to sync your cart, track deliveries, manage addresses, and leave reviews.',tabLogin:'Sign In',tabReg:'Create Account',tabForgot:'Forgot Password?',lblIdent:'Phone / Email',lblPass:'Password',btnLogin:'Sign In',lblName:'Full Name',lblPhone:'Mobile Number',lblEmailOpt:'Email (Optional)',lblArea:'Area / District',lblAddr:'Primary Address',btnCreateAcc:'Create Account',btnGetReset:'Send Reset Code',lblResetCode:'Reset Code',lblNewPass:'New Password',btnResetPass:'Reset Password',myAcc:'My Account',contShop:'Continue Shopping',btnLogout:'Logout',vProfile:'Profile & Security',vAddresses:'Saved Addresses',vCart:'Cart & Checkout',vWish:'Wishlist',vOrders:'My Orders',vNotifs:'Notifications',secProfile:'Personal Info & Verification',secAddresses:'Saved Addresses',btnNewAddr:'+ Add Address',secCart:'My Cart & Inline Checkout',grandTot:'Grand Total',checkoutHint:'Address and live stock are verified at checkout.',btnCheckout:'Place Order',secWish:'Saved Wishlist',secOrders:'My Orders & Tracking',btnRefresh:'Refresh',secNotifs:'Notifications',btnMarkRead:'Mark All Read'}
+};
+function applyAccLang(){
+  const d=ACC_I18N[lang]||ACC_I18N.bn;
+  document.documentElement.lang=lang;
+  $('#langToggle').textContent=lang==='bn'?'EN':'বাংলা';
+  document.querySelectorAll('[data-i18n]').forEach(el=>{const k=el.dataset.i18n;if(d[k])el.textContent=d[k]});
+}
 $('#langToggle').onclick=()=>{
   lang=lang==='bn'?'en':'bn';localStorage.setItem('haat_lang',lang);
-  $('#langToggle').textContent=lang==='bn'?'EN':'বাংলা';
-  document.documentElement.lang=lang;
+  applyAccLang();
 };
-$('#langToggle').textContent=lang==='bn'?'EN':'বাংলা';
+applyAccLang();
 
 async function boot(){await checkApi();if(token){try{await enter()}catch{showAuth()}}}
 boot();

@@ -186,11 +186,19 @@ th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05
           <button id="refresh" type="button" class="btn">রিফ্রেশ</button>
         </div>
         <div id="editProductBox" class="notice hidden">
-          <b>পণ্য সম্পাদনা (পুনরায় অ্যাডমিন রিভিউয়ের জন্য জমা হবে)</b>
+          <b>পণ্য সম্পূর্ণ সম্পাদনা (পুনরায় অ্যাডমিন রিভিউয়ের জন্য জমা হবে)</b>
           <form id="editProductForm" class="formgrid" style="margin-top:10px">
             <input type="hidden" name="id">
+            <label class="field">বাংলা নাম<input name="name_bn" maxlength="160" required></label>
+            <label class="field">English Name<input name="name_en" maxlength="160" required></label>
+            <label class="field">ক্যাটাগরি<select name="category_slug" id="editCategory" required></select></label>
+            <label class="field">ব্র্যান্ড<select name="brand_slug" id="editBrandSelect"><option value="">কোনোটি নয়</option></select></label>
             <label class="field">দাম (৳)<input name="price_bdt" type="number" min="0.01" step="0.01" required></label>
+            <label class="field">ডিসকাউন্ট দাম (৳, ঐচ্ছিক)<input name="discount_price_bdt" type="number" min="0.01" step="0.01"></label>
             <label class="field">স্টক<input name="stock" type="number" min="0" max="1000000" step="1" required></label>
+            <label class="field">SKU<input name="sku" maxlength="40"></label>
+            <label class="field wide">ছবির URL (HTTPS বা বর্তমান পাথ)<input name="image_url" type="text" maxlength="500" placeholder="https://example.com/product.jpg"></label>
+            <label class="field wide">ভ্যারিয়েন্ট (কমা দিয়ে আলাদা)<input name="variants_text" placeholder="Size M, Size L"></label>
             <label class="field wide">বিবরণ<textarea name="description" rows="2" maxlength="5000"></textarea></label>
             <div style="display:flex;gap:8px" class="wide">
               <button type="submit" class="btn">আপডেট জমা দিন</button>
@@ -274,6 +282,32 @@ th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05
     </section>
 
     <div class="sview hidden" id="sview-store">
+      <section class="panel">
+        <div class="toolbar">
+          <div>
+            <h2>স্টোর পারফরম্যান্স ও অ্যানালিটিক্স</h2>
+            <p class="muted" style="margin:0">গড় অর্ডার মূল্য, ডেলিভারি হার, সেরা বিক্রীত পণ্য ও দৈনিক বিক্রি।</p>
+          </div>
+          <button type="button" id="refreshAnalyticsBtn" class="soft">রিফ্রেশ</button>
+        </div>
+        <div class="kpis" id="sellerAnalyticsKpis" style="margin-top:12px">
+          <article class="kpi"><span>গড় অর্ডার মূল্য</span><b>৳0</b></article>
+          <article class="kpi"><span>ডেলিভারি সফলতার হার</span><b>0%</b></article>
+          <article class="kpi"><span>মোট বিক্রীত ইউনিট</span><b>0</b></article>
+          <article class="kpi"><span>গড় ক্রেতা রেটিং</span><b>—</b></article>
+        </div>
+        <div class="formgrid">
+          <div>
+            <h3>শীর্ষ বিক্রীত পণ্য</h3>
+            <div class="tablewrap"><table style="min-width:280px"><thead><tr><th>পণ্য</th><th>ইউনিট</th><th>বিক্রি</th></tr></thead><tbody id="sellerTopProductsRows"><tr><td colspan="3">লোড হচ্ছে…</td></tr></tbody></table></div>
+          </div>
+          <div>
+            <h3>দৈনিক বিক্রির ধারা</h3>
+            <div class="tablewrap"><table style="min-width:280px"><thead><tr><th>তারিখ</th><th>অর্ডার</th><th>বিক্রি</th></tr></thead><tbody id="sellerDailySalesRows"><tr><td colspan="3">লোড হচ্ছে…</td></tr></tbody></table></div>
+          </div>
+        </div>
+      </section>
+
       <section class="panel">
         <h2>স্টোর প্রোফাইল ও ব্যবসার তথ্য</h2>
         <p class="muted">আপনার দোকানের ঠিকানা ও বিবরণ আপডেট রাখুন।</p>
@@ -365,8 +399,10 @@ async function boot(){
     call('/seller/profile'),
     call('/seller/dashboard')
   ]);
-  $('#category').innerHTML=cats.data.map(c=>'<option value="'+esc(c.slug)+'">'+esc(c.name_bn)+'</option>').join('');
-  $('#brandSelect').innerHTML='<option value="">কোনোটি নয়</option>'+(brands.data||[]).map(b=>'<option value="'+esc(b.slug)+'">'+esc(b.name)+'</option>').join('');
+  const catHtml=cats.data.map(c=>'<option value="'+esc(c.slug)+'">'+esc(c.name_bn)+'</option>').join('');
+  const brandHtml='<option value="">কোনোটি নয়</option>'+(brands.data||[]).map(b=>'<option value="'+esc(b.slug)+'">'+esc(b.name)+'</option>').join('');
+  $('#category').innerHTML=catHtml;$('#editCategory').innerHTML=catHtml;
+  $('#brandSelect').innerHTML=brandHtml;$('#editBrandSelect').innerHTML=brandHtml;
   $('#shopTitle').textContent=prof.data.shop_name||'Seller Workspace';
   $('#shopSubtitle').textContent=(prof.data.shop_address||'')+' · কমিশন '+(Number(prof.data.commission_bps||800)/100)+'%';
   $('#shopStatusBadge').textContent=prof.data.status;
@@ -399,13 +435,27 @@ async function loadProducts(){
 $('#productRows').onclick=async e=>{
   const ed=e.target.closest('[data-edit-prod]'),del=e.target.closest('[data-del-prod]');
   if(ed){
-    const p=sellerProductsCache.find(x=>x.id===ed.dataset.editProd);if(!p)return;
-    const f=$('#editProductForm');
-    f.elements.namedItem('id').value=p.id;
-    f.elements.namedItem('price_bdt').value=p.price_bdt;
-    f.elements.namedItem('stock').value=p.stock;
-    f.elements.namedItem('description').value=p.description||'';
-    $('#editProductBox').classList.remove('hidden');
+    try{
+      const r=await call('/seller/products/'+encodeURIComponent(ed.dataset.editProd));
+      const p=r.data;
+      const f=$('#editProductForm');
+      f.elements.namedItem('id').value=p.id;
+      f.elements.namedItem('name_bn').value=p.name_bn||'';
+      f.elements.namedItem('name_en').value=p.name_en||'';
+      f.elements.namedItem('category_slug').value=p.category_slug||'';
+      f.elements.namedItem('brand_slug').value=p.brand_slug||'';
+      f.elements.namedItem('price_bdt').value=p.price_bdt;
+      f.elements.namedItem('discount_price_bdt').value=p.discount_price_bdt??'';
+      f.elements.namedItem('stock').value=p.stock;
+      f.elements.namedItem('sku').value=p.sku||'';
+      const origImg=(p.images&&p.images[0])||p.image||'';
+      f.dataset.origImage=origImg;
+      f.elements.namedItem('image_url').value=origImg;
+      f.elements.namedItem('variants_text').value=Array.isArray(p.variants)?p.variants.map(v=>v.label).filter(Boolean).join(', '):'';
+      f.elements.namedItem('description').value=p.description||'';
+      $('#editProductBox').classList.remove('hidden');
+      $('#editProductBox').scrollIntoView({behavior:'smooth',block:'nearest'});
+    }catch(err){showMsg($('#formMsg'),err.message,'err')}
   }
   if(del){
     try{await call('/seller/products/'+encodeURIComponent(del.dataset.delProd),{method:'DELETE'});await loadProducts()}
@@ -416,8 +466,24 @@ $('#cancelEditBtn').onclick=()=>$('#editProductBox').classList.add('hidden');
 $('#editProductForm').onsubmit=async e=>{
   e.preventDefault();
   const f=Object.fromEntries(new FormData(e.target));
+  const imgUrl=String(f.image_url||'').trim();
+  const origImg=String(e.target.dataset.origImage||'').trim();
+  const vars=String(f.variants_text||'').trim();
+  const payload={
+    name_bn:f.name_bn,
+    name_en:f.name_en,
+    category_slug:f.category_slug,
+    brand_slug:f.brand_slug||'',
+    price_bdt:Number(f.price_bdt),
+    discount_price_bdt:f.discount_price_bdt?Number(f.discount_price_bdt):null,
+    stock:Number(f.stock),
+    sku:f.sku||'',
+    description:f.description||'',
+    variants:vars?vars.split(',').map(s=>s.trim()).filter(Boolean).map(label=>({label})):[],
+    ...(imgUrl!==origImg?{images:imgUrl?[imgUrl]:[]}:{})
+  };
   try{
-    const r=await call('/seller/products/'+encodeURIComponent(f.id),{method:'PUT',body:JSON.stringify({price_bdt:Number(f.price_bdt),stock:Number(f.stock),description:f.description})});
+    const r=await call('/seller/products/'+encodeURIComponent(f.id),{method:'PUT',body:JSON.stringify(payload)});
     $('#editProductBox').classList.add('hidden');
     showMsg($('#formMsg'),r.data.message||'পণ্য আপডেট জমা হয়েছে','ok');
     await loadProducts();
@@ -610,7 +676,19 @@ $('#payoutForm').onsubmit=async e=>{
 };
 
 async function loadStoreTab(){
-  const [revs,notifs]=await Promise.all([call('/seller/reviews'),call('/notifications')]);
+  const [revs,notifs,ana]=await Promise.all([call('/seller/reviews'),call('/notifications'),call('/seller/analytics').catch(()=>({data:null}))]);
+  if(ana&&ana.data){
+    const a=ana.data;
+    const vals=[
+      money(a.avg_order_value_bdt),
+      Number(a.delivery_rate_pct||0)+'%',
+      Number(a.total_units_sold||0),
+      a.review_count>0?('★ '+Number(a.average_rating).toFixed(1)+' ('+a.review_count+')'):'—'
+    ];
+    $('#sellerAnalyticsKpis').querySelectorAll('.kpi b').forEach((el,i)=>el.textContent=vals[i]);
+    $('#sellerTopProductsRows').innerHTML=(a.top_products||[]).map(p=>'<tr><td>'+esc(p.name_bn)+'</td><td class="num">'+Number(p.units)+'</td><td class="num">'+money(p.revenue_bdt)+'</td></tr>').join('')||'<tr><td colspan="3">কোনো বিক্রয় তথ্য নেই।</td></tr>';
+    $('#sellerDailySalesRows').innerHTML=(a.revenue_by_day||[]).map(d=>'<tr><td class="num">'+esc(d.day)+'</td><td class="num">'+Number(d.orders)+'</td><td class="num">'+money(d.revenue_bdt)+'</td></tr>').join('')||'<tr><td colspan="3">কোনো দৈনিক বিক্রয় নেই।</td></tr>';
+  }
   $('#sellerReviewList').innerHTML=(revs.data||[]).map(r=>'<article class="ordercard"><div class="toolbar"><b>'+esc(r.product_name_bn)+'</b><span class="num">'+'★'.repeat(Number(r.rating||5))+'</span></div><div class="muted">'+esc(r.customer_name)+' · '+esc((r.created_at||'').slice(0,10))+'</div><p style="margin:6px 0 0">'+esc(r.comment||'মন্তব্য নেই')+'</p></article>').join('')||'<p class="muted">আপনার পণ্যে এখনো কোনো রিভিউ আসেনি।</p>';
   $('#sellerNotifList').innerHTML=(notifs.data||[]).map(n=>'<article class="ordercard" style="'+(n.read?'opacity:.75':'border-color:var(--accent)')+'"><div class="toolbar"><b>'+esc(n.title)+'</b><small class="muted">'+esc((n.created_at||'').slice(0,16).replace('T',' '))+'</small></div><p style="margin:4px 0 0">'+esc(n.body||'')+'</p></article>').join('')||'<p class="muted">কোনো নোটিফিকেশন নেই।</p>';
 }
@@ -622,6 +700,7 @@ $('#sellerProfileForm').onsubmit=async e=>{
     showMsg($('#sellerProfileMsg'),'স্টোর প্রোফাইল আপডেট হয়েছে ✓','ok');await boot();
   }catch(err){showMsg($('#sellerProfileMsg'),err.message,'err')}
 };
+$('#refreshAnalyticsBtn').onclick=()=>loadStoreTab().catch(fail);
 $('#refreshReviewsBtn').onclick=()=>loadStoreTab().catch(fail);
 $('#sellerMarkReadBtn').onclick=async()=>{await call('/notifications/read',{method:'POST'});await loadStoreTab()};
 

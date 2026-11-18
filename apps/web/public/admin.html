@@ -118,6 +118,7 @@ th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05
       <button type="button" class="tab" data-atab="inventory">ইনভেন্টরি অনুমোদন</button>
       <button type="button" class="tab" data-atab="finance">অর্থ, পেআউট ও রিফান্ড</button>
       <button type="button" class="tab" data-atab="catalog">কুপন, ক্যাটাগরি ও অডিট</button>
+      <button type="button" class="tab" data-atab="settings">ব্যানার, ডেলিভারি ও সেটিংস</button>
     </div>
 
     <div class="aview" id="aview-operations">
@@ -274,6 +275,7 @@ th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05
           </div>
         </div>
         <div id="financeSummaryBox" class="notice">আর্থিক তথ্য লোড হচ্ছে…</div>
+        <div id="periodReportBox" class="notice" style="margin-top:8px">সময়সীমা ভিত্তিক রিপোর্ট লোড হচ্ছে…</div>
         <div class="tablewrap">
           <table>
             <thead><tr><th>তারিখ</th><th>অর্ডার সংখ্যা</th><th>গ্রস বিক্রি</th></tr></thead>
@@ -374,6 +376,34 @@ th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05
         </div>
       </section>
     </div>
+
+    <div class="aview hidden" id="aview-settings">
+      <section class="panel">
+        <div class="toolbar">
+          <div>
+            <h2>স্টোরফ্রন্ট ব্যানার, ডেলিভারি ও প্ল্যাটফর্ম সেটিংস</h2>
+            <p class="muted" style="margin:0">হোমপেজ ব্যানার, ডেলিভারি চার্জ ও ডিফল্ট কমিশন সরাসরি ডেটাবেস থেকে নিয়ন্ত্রণ করুন।</p>
+          </div>
+          <button type="button" id="refreshSettingsBtn" class="soft">রিফ্রেশ</button>
+        </div>
+        <div id="settingsMsg" class="notice hidden"></div>
+        <form id="storefrontSettingsForm" class="formgrid" style="margin-top:12px">
+          <label class="field wide">শীর্ষ প্রোমো ব্যানার (বাংলা)<input name="promo_banner_bn" maxlength="240" required></label>
+          <label class="field wide">Top Promo Banner (English)<input name="promo_banner_en" maxlength="240" required></label>
+          <label class="field wide">Hero Eyebrow Tag<input name="hero_eyebrow" maxlength="80" required></label>
+          <label class="field">হিরো শিরোনাম (বাংলা)<textarea name="hero_title_bn" rows="2" maxlength="160" required></textarea></label>
+          <label class="field">Hero Title (English)<textarea name="hero_title_en" rows="2" maxlength="160" required></textarea></label>
+          <label class="field">হিরো বিবরণ (বাংলা)<textarea name="hero_subtitle_bn" rows="3" maxlength="400" required></textarea></label>
+          <label class="field">Hero Subtitle (English)<textarea name="hero_subtitle_en" rows="3" maxlength="400" required></textarea></label>
+          <label class="field wide">হিরো ব্যানার ছবি (HTTPS বা /assets/... পাথ)<input name="hero_image_url" maxlength="500" required></label>
+          <label class="field">ঢাকা ডেলিভারি চার্জ (৳)<input name="dhaka_shipping_bdt" type="number" min="0" max="5000" required></label>
+          <label class="field">ঢাকার বাইরে ডেলিভারি চার্জ (৳)<input name="outside_shipping_bdt" type="number" min="0" max="10000" required></label>
+          <label class="field">ফ্রি ডেলিভারি সীমা (৳, ০ = বন্ধ)<input name="free_shipping_over_bdt" type="number" min="0" max="500000" required></label>
+          <label class="field">ডিফল্ট প্ল্যাটফর্ম কমিশন (%)<input name="default_commission_pct" type="number" min="0" max="50" step="0.5" required></label>
+          <button type="submit" class="btn wide">সেটিংস সংরক্ষণ করুন</button>
+        </form>
+      </section>
+    </div>
   </section>
 </main>
 
@@ -416,6 +446,7 @@ $('#adminTabs').onclick=e=>{
   if(tab==='inventory')loadInventoryAdmin().catch(notify);
   if(tab==='finance')loadFinanceAdmin().catch(notify);
   if(tab==='catalog')loadCatalogAdmin().catch(notify);
+  if(tab==='settings')loadSettingsAdmin().catch(e=>showNotice($('#settingsMsg'),e.message,'err'));
 };
 
 function show(){
@@ -657,18 +688,34 @@ $('#inventoryApprovalRows').onclick=async e=>{
 };
 
 let lastReportRows=[];
+function csvCell(v){
+  const s=String(v??'');
+  const safe=/^[=+\-@\t\r]/.test(s)?"'"+s:s;
+  return '"'+safe.replace(/"/g,'""')+'"';
+}
 async function loadFinanceAdmin(){
+  const today=new Date(Date.now()+6*3600000).toISOString().slice(0,10);
+  const thirtyAgo=new Date(Date.now()+6*3600000-29*86400000).toISOString().slice(0,10);
+  if(!$('#repFrom').value)$('#repFrom').value=thirtyAgo;
+  if(!$('#repTo').value)$('#repTo').value=today;
   const from=$('#repFrom').value,to=$('#repTo').value;
-  const qs=(from||to)?('?'+[from?'from='+from:'',to?'to='+to:''].filter(Boolean).join('&')):'';
-  const [sum,rep,pay,ref,txs]=await Promise.all([
+  const qs=(from||to)?('?'+[from?'from='+encodeURIComponent(from):'',to?'to='+encodeURIComponent(to):''].filter(Boolean).join('&')):'';
+  const [sum,rep,per,pay,ref,txs]=await Promise.all([
     call('/admin/finance/summary'),
     call('/admin/finance/report'+qs),
+    call('/admin/reports/summary?from='+encodeURIComponent(from)+'&to='+encodeURIComponent(to)).catch(()=>({data:null})),
     call('/admin/payouts'),
     call('/admin/refunds'),
     call('/admin/finance/transactions?limit=50')
   ]);
   const s=sum.data;
   $('#financeSummaryBox').innerHTML='মোট বিক্রি: <b class="num">'+money(s.gross_sales_bdt)+'</b> · রিফান্ড: <b class="num">'+money(s.refunds_bdt)+'</b> · নেট বিক্রি: <b class="num">'+money(s.net_sales_bdt)+'</b> · প্ল্যাটফর্ম কমিশন: <b class="num">'+money(s.platform_commission_bdt)+'</b> · বিক্রেতা ব্যালেন্স: <b class="num">'+money(s.seller_available_balance_bdt)+'</b> · পরিশোধিত পেআউট: <b class="num">'+money(s.paid_out_bdt)+'</b>';
+  const pr=per?.data;
+  if(pr){
+    $('#periodReportBox').innerHTML='<b>সময়সীমা ('+esc(pr.period.from)+' → '+esc(pr.period.to)+', Asia/Dhaka):</b> মোট অর্ডার <b class="num">'+pr.orders.total+'</b> (পেইড '+pr.orders.paid+', বাতিল '+pr.orders.cancelled+', বকেয়া COD '+pr.orders.unpaid_cod+') · নেট মার্চেন্ডাইজ <b class="num">'+money(pr.sales.net_merchandise.bdt)+'</b> · ডেলিভারি <b class="num">'+money(pr.sales.shipping?.bdt||0)+'</b> · কমিশন <b class="num">'+money(pr.finance.platform_commission.bdt)+'</b>';
+  }else{
+    $('#periodReportBox').textContent='নির্বাচিত সময়সীমার রিপোর্ট পাওয়া যায়নি।';
+  }
   lastReportRows=rep.data||[];
   $('#financeReportRows').innerHTML=lastReportRows.map(r=>'<tr><td class="num">'+esc(r.day)+'</td><td class="num">'+r.orders+'</td><td class="num">'+money(r.gross_bdt)+'</td></tr>').join('')||'<tr><td colspan="3">এই সময়ে কোনো অর্ডার নেই।</td></tr>';
   $('#adminPayoutRows').innerHTML=(pay.data||[]).map(p=>'<tr><td>'+esc(p.shop||'—')+'</td><td>'+esc(p.method)+' · '+esc(p.account)+'</td><td class="num">'+money(p.amount_bdt)+'</td><td><span class="status">'+esc(p.status)+'</span></td><td>'+(p.status==='REQUESTED'?'<button type="button" class="approve" data-pay-act="approve" data-pid="'+esc(p.id)+'">অনুমোদন</button> <button type="button" class="reject" data-pay-act="reject" data-pid="'+esc(p.id)+'">বাতিল</button>':'—')+'</td></tr>').join('')||'<tr><td colspan="5">কোনো পেআউট অনুরোধ নেই।</td></tr>';
@@ -678,7 +725,7 @@ async function loadFinanceAdmin(){
 $('#loadFinanceBtn').onclick=()=>loadFinanceAdmin().catch(notify);
 $('#exportCsvBtn').onclick=()=>{
   const rows=[['day','orders','gross_bdt'],...lastReportRows.map(r=>[r.day,r.orders,r.gross_bdt])];
-  const csv=rows.map(r=>r.join(',')).join('\n');
+  const csv=rows.map(r=>r.map(csvCell).join(',')).join('\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='haat-finance-report.csv';a.click();
 };
@@ -740,6 +787,42 @@ $('#brandForm').onsubmit=async e=>{
     await call('/admin/brands',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});
     showNotice($('#catBrandMsg'),'ব্র্যান্ড যোগ হয়েছে ✓','ok');e.target.reset();await loadCatalogAdmin();
   }catch(err){showNotice($('#catBrandMsg'),err.message,'err')}
+};
+
+async function loadSettingsAdmin(){
+  const r=await call('/admin/storefront/config');
+  const c=r.data||{};
+  const f=$('#storefrontSettingsForm');
+  for(const k of ['promo_banner_bn','promo_banner_en','hero_eyebrow','hero_title_bn','hero_title_en','hero_subtitle_bn','hero_subtitle_en','hero_image_url','dhaka_shipping_bdt','outside_shipping_bdt','free_shipping_over_bdt']){
+    if(f.elements.namedItem(k))f.elements.namedItem(k).value=c[k]??'';
+  }
+  f.elements.namedItem('default_commission_pct').value=Number(c.default_commission_bps||800)/100;
+}
+$('#refreshSettingsBtn').onclick=()=>loadSettingsAdmin().catch(e=>showNotice($('#settingsMsg'),e.message,'err'));
+$('#storefrontSettingsForm').onsubmit=async e=>{
+  e.preventDefault();
+  const f=Object.fromEntries(new FormData(e.target));
+  try{
+    await call('/admin/storefront/config',{
+      method:'PUT',
+      body:JSON.stringify({
+        promo_banner_bn:f.promo_banner_bn,
+        promo_banner_en:f.promo_banner_en,
+        hero_eyebrow:f.hero_eyebrow,
+        hero_title_bn:f.hero_title_bn,
+        hero_title_en:f.hero_title_en,
+        hero_subtitle_bn:f.hero_subtitle_bn,
+        hero_subtitle_en:f.hero_subtitle_en,
+        hero_image_url:f.hero_image_url,
+        dhaka_shipping_bdt:Number(f.dhaka_shipping_bdt),
+        outside_shipping_bdt:Number(f.outside_shipping_bdt),
+        free_shipping_over_bdt:Number(f.free_shipping_over_bdt),
+        default_commission_bps:Math.round(Number(f.default_commission_pct)*100)
+      })
+    });
+    showNotice($('#settingsMsg'),'স্টোরফ্রন্ট, ডেলিভারি ও কমিশন সেটিংস সংরক্ষিত হয়েছে ✓','ok');
+    await loadSettingsAdmin();
+  }catch(err){showNotice($('#settingsMsg'),err.message,'err')}
 };
 
 $('#refreshInventoryAdmin').onclick=()=>loadInventoryAdmin().catch(notify);

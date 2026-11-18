@@ -99,6 +99,7 @@ export function registerPostgresSellerProductRoutes(route, ok, { database, id = 
     price_bdt: Number(row.price_paisa) / 100, discount_paisa: row.discount_paisa == null ? null : Number(row.discount_paisa),
     discount_price_bdt: row.discount_paisa == null ? null : Number(row.discount_paisa) / 100,
     stock: Number(row.stock), status: row.status, sku: row.sku, category_slug: row.category_slug,
+    brand_slug: row.brand_slug || null,
     description: row.description, active: Boolean(row.active), image: row.image || null, updated_at: row.updated_at
   });
 
@@ -108,22 +109,23 @@ export function registerPostgresSellerProductRoutes(route, ok, { database, id = 
     const filter = allowed.includes(status) ? ' AND p.status=?' : '';
     const limit = Math.min(Math.max(Number.parseInt(url.searchParams.get('limit') || '50', 10) || 50, 1), 100);
     const offset = Math.max(Number.parseInt(url.searchParams.get('offset') || '0', 10) || 0, 0);
-    const rows = await q(`SELECT p.*,c.slug AS category_slug,
+    const rows = await q(`SELECT p.*,c.slug AS category_slug,b.slug AS brand_slug,
       (SELECT i.url FROM product_images i WHERE i.product_id=p.id ORDER BY i.position LIMIT 1) AS image
-      FROM products p LEFT JOIN categories c ON c.id=p.category_id
+      FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id
       WHERE p.seller_id=? AND p.status<>'ARCHIVED'${filter}
       ORDER BY p.updated_at DESC,p.id DESC LIMIT ? OFFSET ?`).all(...(filter ? [user.id, status, limit, offset] : [user.id, limit, offset]));
     return ok(rows.map(view));
   });
   route('GET', '/api/v1/seller/products/:id', ['SELLER'], async ({ user, params }) => {
     const product = await productOwned(params[0], user.id);
-    const [category, images] = await Promise.all([
+    const [category, brand, images] = await Promise.all([
       q('SELECT slug FROM categories WHERE id=?').get(product.category_id),
+      product.brand_id ? q('SELECT slug FROM brands WHERE id=?').get(product.brand_id) : Promise.resolve(null),
       q('SELECT url FROM product_images WHERE product_id=? ORDER BY position').all(product.id)
     ]);
     let variants = [];
     try { const parsed = JSON.parse(product.variants || '[]'); if (Array.isArray(parsed)) variants = parsed; } catch {}
-    return ok({ ...view({ ...product, category_slug: category?.slug }), variants, images: images.map(item => item.url) });
+    return ok({ ...view({ ...product, category_slug: category?.slug, brand_slug: brand?.slug }), variants, images: images.map(item => item.url) });
   });
   route('POST', '/api/v1/seller/products', ['SELLER'], async ({ user, body }) => {
     await sellerProfile(user.id);

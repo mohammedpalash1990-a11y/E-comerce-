@@ -141,3 +141,24 @@ test('postgres-server mounts shipping quote and honors custom route body limits'
     await new Promise((resolveClose, reject) => server.close(err => err ? reject(err) : resolveClose()));
   }
 });
+
+test('admin storefront config validates and persists banner, shipping fees, and commission settings', async () => {
+  const h = setupOperations();
+  const getRes = await find(h, 'GET', '/api/v1/admin/storefront/config').handler({});
+  assert.equal(getRes.body.data.dhaka_shipping_bdt, 60);
+
+  await assert.rejects(
+    find(h, 'PUT', '/api/v1/admin/storefront/config').handler({ user: admin, body: { hero_image_url: 'http://insecure.example/a.jpg' } }),
+    err => err.status === 400
+  );
+
+  const putRes = await find(h, 'PUT', '/api/v1/admin/storefront/config').handler({
+    user: admin,
+    body: { dhaka_shipping_bdt: 80, outside_shipping_bdt: 150, free_shipping_over_bdt: 2500, default_commission_bps: 900 }
+  });
+  assert.equal(putRes.body.data.dhaka_shipping_bdt, 80);
+  assert.equal(putRes.body.data.outside_shipping_bdt, 150);
+  assert.equal(putRes.body.data.free_shipping_over_bdt, 2500);
+  assert.ok(h.calls.some(c => c.sql?.includes('INSERT INTO platform_settings')));
+  assert.ok(h.calls.some(c => c.sql?.includes('INSERT INTO audit_logs')));
+});

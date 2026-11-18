@@ -204,6 +204,8 @@ a{color:inherit;text-decoration:none}
   .modalcard{grid-template-columns:1fr}
 }
 @media(max-width:640px){
+  .topstrip{flex-direction:column;align-items:stretch;gap:6px;padding:8px 14px;font-size:11.5px;line-height:1.4}
+  .topstrip-actions{justify-content:space-between;width:100%}
   .header{flex-wrap:wrap;gap:10px}
   .searchbox{order:3;flex-basis:100%;max-width:none}
   .navlink{display:none}
@@ -221,6 +223,19 @@ a{color:inherit;text-decoration:none}
 <div class="topstrip" id="topStrip">
   <span data-i18n="topNotice">বাংলাদেশজুড়ে কিউরেটেড মাল্টি-ভেন্ডর মার্কেটপ্লেস · প্রথম অর্ডারে ১০% ছাড় কোড: HAAT10</span>
   <div class="topstrip-actions">
+    <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#D6CFC1">
+      <span data-i18n="delivTo">ডেলিভারি:</span>
+      <select id="topDeliveryArea" class="langbtn" style="background:#141517">
+        <option value="Dhaka">ঢাকা</option>
+        <option value="Chattogram">চট্টগ্রাম</option>
+        <option value="Sylhet">সিলেট</option>
+        <option value="Rajshahi">রাজশাহী</option>
+        <option value="Khulna">খুলনা</option>
+        <option value="Barishal">বরিশাল</option>
+        <option value="Rangpur">রংপুর</option>
+        <option value="Mymensingh">ময়মনসিংহ</option>
+      </select>
+    </label>
     <button type="button" class="langbtn" id="langToggle">EN</button>
     <button type="button" class="topclose" id="closeTopStrip" aria-label="Close banner">✕</button>
   </div>
@@ -244,7 +259,7 @@ a{color:inherit;text-decoration:none}
 <main class="wrap">
   <section class="hero">
     <div class="hero-copy">
-      <div class="eyebrow">BANGLADESH MULTI-VENDOR MARKETPLACE</div>
+      <div class="eyebrow" id="heroEyebrow">BANGLADESH MULTI-VENDOR MARKETPLACE</div>
       <h1 data-i18n="heroTitle">বাছাইকৃত কারিগরি,<br>এক মার্কেটপ্লেসে।</h1>
       <p data-i18n="heroSub">যাচাইকৃত বাংলাদেশি বিক্রেতা ও আধুনিক ব্র্যান্ডের সেরা পণ্য—এক কার্টে মাল্টি-ভেন্ডর অর্ডার, স্বচ্ছ ডেলিভারি চার্জ ও রিয়েল-টাইম অর্ডার ট্র্যাকিং।</p>
       <div class="hero-cta">
@@ -253,7 +268,7 @@ a{color:inherit;text-decoration:none}
       </div>
     </div>
     <div class="hero-media">
-      <img src="/assets/images/haat_hero_marketplace_1794891418879.jpg" alt="HAAT curated essentials collection">
+      <img id="heroImg" src="/assets/images/haat_hero_marketplace_1794891418879.jpg" alt="HAAT curated essentials collection">
       <div class="hero-caption">
         <span data-i18n="heroCap">কিউরেটেড এসেনশিয়ালস · ঢাকা ও সারাদেশে</span>
         <span class="num">৳ · BDT</span>
@@ -268,7 +283,7 @@ a{color:inherit;text-decoration:none}
     <div class="trustitem"><b data-i18n="tr4t">ক্যাশ অন ডেলিভারি ও গেটওয়ে</b><span data-i18n="tr4s">COD, bKash, Nagad, Rocket ও SSLCOMMERZ</span></div>
   </section>
 
-  <section class="notice" id="connectionNotice" role="status" aria-live="polite">
+  <section class="notice hidden" id="connectionNotice" role="status" aria-live="polite">
     <span id="connectionText">সার্ভারের সঙ্গে সংযোগ পরীক্ষা করা হচ্ছে…</span>
     <button id="retryConnection" type="button" class="chip">আবার চেষ্টা করুন</button>
   </section>
@@ -279,6 +294,14 @@ a{color:inherit;text-decoration:none}
       <span class="muted" data-i18n="dealsSub">সীমিত সময়ের বিশেষ মূল্যছাড়</span>
     </div>
     <div class="dealstrip" id="dealStrip"></div>
+  </div>
+
+  <div id="trendingSection" class="hidden">
+    <div class="sectionhead">
+      <div><div class="eyebrow">TRENDING NOW</div><h2 data-i18n="trendHead">ট্রেন্ডিং ও সেরা বাছাই</h2></div>
+      <span class="muted" data-i18n="trendSub">উচ্চ রেটিং ও স্টকে থাকা জনপ্রিয় পণ্য</span>
+    </div>
+    <div class="dealstrip" id="trendingStrip"></div>
   </div>
 
   <div class="sectionhead">
@@ -365,7 +388,7 @@ a{color:inherit;text-decoration:none}
     </div>
     <div>
       <h4>Bangladesh Delivery</h4>
-      <span class="note" style="color:#B4AEA2">Dhaka Metro: ৳60<br>Outside Dhaka: ৳120<br>Pathao · RedX · Steadfast (Sandbox)</span>
+      <span class="note" id="footDeliveryRates" style="color:#B4AEA2">Dhaka Metro: ৳60<br>Outside Dhaka: ৳120<br>Pathao · RedX · Steadfast (Sandbox)</span>
     </div>
   </div>
   <div class="footbottom">
@@ -375,9 +398,9 @@ a{color:inherit;text-decoration:none}
 </footer>
 
 <!-- Product Detail Modal -->
-<div class="modal" id="productModal" aria-hidden="true">
+<div class="modal" id="productModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-hidden="true">
   <div class="modalcard">
-    <button type="button" class="modalclose" id="closeModal" aria-label="Close">✕</button>
+    <button type="button" class="modalclose" id="closeModal" aria-label="Close product details">✕</button>
     <div class="modalgallery">
       <div class="modalmain" id="modalMainImg"></div>
       <div class="modalthumbs" id="modalThumbs"></div>
@@ -400,7 +423,7 @@ a{color:inherit;text-decoration:none}
       <div style="display:flex;gap:10px;align-items:center;margin-top:6px">
         <button type="button" class="checkout" id="modalAddBtn" style="flex:1">কার্টে যোগ করুন</button>
         <button type="button" class="goldbtn" id="modalBuyBtn">এখনই কিনুন</button>
-        <button type="button" class="viewbtn" id="modalWishBtn" title="Wishlist">♡</button>
+        <button type="button" class="viewbtn" id="modalWishBtn" title="Wishlist" aria-label="Toggle wishlist">♡</button>
       </div>
       <div class="reviews">
         <div style="display:flex;justify-content:space-between;align-items:center">
@@ -428,11 +451,11 @@ a{color:inherit;text-decoration:none}
 </div>
 
 <!-- Slide-over Cart & Checkout Drawer -->
-<div class="drawer" id="drawer">
+<div class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="cartDrawerTitle" aria-hidden="true">
   <aside class="cart">
     <div class="carthead">
-      <h2 data-i18n="cartTitle">আপনার কার্ট ও চেকআউট</h2>
-      <button id="closeCart" type="button">✕</button>
+      <h2 id="cartDrawerTitle" data-i18n="cartTitle">আপনার কার্ট ও চেকআউট</h2>
+      <button id="closeCart" type="button" aria-label="Close cart">✕</button>
     </div>
 
     <div id="cartLines"></div>
@@ -535,21 +558,57 @@ let shippingBdt=60;
 let currentModalProduct=null,selectedVariant='';
 let pendingDrawerPaymentId=null;
 
+let storeConfig={dhaka_shipping_bdt:60,outside_shipping_bdt:120,free_shipping_over_bdt:0};
+let selectedDeliveryArea=localStorage.getItem('haat_delivery_area')||'Dhaka';
+
 const $=s=>document.querySelector(s),escHtml=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),money=n=>'৳'+Number(n||0).toLocaleString('en-BD',{maximumFractionDigits:2});
 
 const I18N={
-  bn:{topNotice:'বাংলাদেশজুড়ে কিউরেটেড মাল্টি-ভেন্ডর মার্কেটপ্লেস · প্রথম অর্ডারে ১০% ছাড় কোড: HAAT10',searchBtn:'খুঁজুন',navCatalog:'ক্যাটালগ',navSeller:'সেলার সেন্টার',navAccount:'আমার অ্যাকাউন্ট',cartLabel:'কার্ট',heroTitle:'বাছাইকৃত কারিগরি,<br>এক মার্কেটপ্লেসে।',heroSub:'যাচাইকৃত বাংলাদেশি বিক্রেতা ও আধুনিক ব্র্যান্ডের সেরা পণ্য—এক কার্টে মাল্টি-ভেন্ডর অর্ডার, স্বচ্ছ ডেলিভারি চার্জ ও রিয়েল-টাইম অর্ডার ট্র্যাকিং।',shopNow:'কালেকশন দেখুন →',sellOnHaat:'বিক্রেতা হিসেবে যোগ দিন',heroCap:'কিউরেটেড এসেনশিয়ালস · ঢাকা ও সারাদেশে',tr1t:'যাচাইকৃত বিক্রেতা',tr1s:'প্রতিটি স্টোর ও পণ্য অ্যাডমিন রিভিউ-যুক্ত',tr2t:'স্বচ্ছ ডেলিভারি চার্জ',tr2s:'ঢাকা ৳৬০ · ঢাকার বাইরে ৳১২০',tr3t:'মাল্টি-ভেন্ডর কার্ট',tr3s:'এক অর্ডারে একাধিক বিক্রেতার পণ্য',tr4t:'ক্যাশ অন ডেলিভারি ও গেটওয়ে',tr4s:'COD, bKash, Nagad, Rocket ও SSLCOMMERZ',dealsHead:'ফ্ল্যাশ ডিলস',dealsSub:'সীমিত সময়ের বিশেষ মূল্যছাড়',catsHead:'ক্যাটাগরি অনুযায়ী কেনাকাটা',catalogHead:'জনপ্রিয় ও বাছাইকৃত পণ্য',discAll:'সব কালেকশন',discDeals:'মূল্যছাড় (Offers)',discTop:'টপ রেটেড',discStock:'স্টকে আছে',brandLbl:'ব্র্যান্ড',minLbl:'সর্বনিম্ন দাম (৳)',maxLbl:'সর্বোচ্চ দাম (৳)',sortLbl:'সাজান',applyBtn:'ফিল্টার করুন',resetBtn:'রিসেট',brandsHead:'পার্টনার ব্র্যান্ডসমূহ',sellerTitle:'HAAT-এ আপনার অনলাইন স্টোর খুলুন',sellerDesc:'নিবন্ধন করুন, পণ্য ও ভ্যারিয়েন্ট আপলোড করুন, কুরিয়ার শিপমেন্ট পরিচালনা করুন এবং স্বচ্ছ কমিশন রিপোর্ট দেখুন।',sellerCta:'Seller Workspace খুলুন →',cartTitle:'আপনার কার্ট ও চেকআউট',subLbl:'সাবটোটাল',shipLbl:'ডেলিভারি চার্জ',discLbl:'কুপন ছাড়',totLbl:'সর্বমোট',delivHead:'ডেলিভারি ঠিকানা (বাংলাদেশ)'},
-  en:{topNotice:'Bangladesh Curated Multi-Vendor Marketplace · Use code HAAT10 for 10% off orders ৳1,000+',searchBtn:'Search',navCatalog:'Catalog',navSeller:'Seller Center',navAccount:'My Account',cartLabel:'Cart',heroTitle:'Curated Craft,<br>One Marketplace.',heroSub:'Shop verified Bangladeshi artisans and modern brands in a single cart—transparent shipping, multi-vendor fulfillment, and live tracking.',shopNow:'Explore Collection →',sellOnHaat:'Become a Seller',heroCap:'Curated Essentials · Dhaka & Nationwide',tr1t:'Verified Sellers',tr1s:'Every store & product is admin-approved',tr2t:'Transparent Shipping',tr2s:'Inside Dhaka ৳60 · Nationwide ৳120',tr3t:'Multi-Vendor Cart',tr3s:'Combine multiple shops in one checkout',tr4t:'COD & Sandbox Gateways',tr4s:'COD, bKash, Nagad, Rocket & SSLCOMMERZ',dealsHead:'Flash Deals',dealsSub:'Limited-time curated markdowns',catsHead:'Shop by Category',catalogHead:'Curated Products',discAll:'All Collection',discDeals:'Offers & Markdowns',discTop:'Top Rated',discStock:'In Stock',brandLbl:'Brand',minLbl:'Min Price (৳)',maxLbl:'Max Price (৳)',sortLbl:'Sort By',applyBtn:'Apply',resetBtn:'Reset',brandsHead:'Featured Brands',sellerTitle:'Launch Your Store on HAAT',sellerDesc:'Register your storefront, manage variants and stock movements, book couriers, and track net payouts.',sellerCta:'Open Seller Workspace →',cartTitle:'Your Cart & Checkout',subLbl:'Subtotal',shipLbl:'Shipping',discLbl:'Coupon Discount',totLbl:'Total',delivHead:'Delivery Address (Bangladesh)'}
+  bn:{topNotice:'বাংলাদেশজুড়ে কিউরেটেড মাল্টি-ভেন্ডর মার্কেটপ্লেস · প্রথম অর্ডারে ১০% ছাড় কোড: HAAT10',delivTo:'ডেলিভারি:',searchBtn:'খুঁজুন',navCatalog:'ক্যাটালগ',navSeller:'সেলার সেন্টার',navAccount:'আমার অ্যাকাউন্ট',cartLabel:'কার্ট',heroTitle:'বাছাইকৃত কারিগরি,<br>এক মার্কেটপ্লেসে।',heroSub:'যাচাইকৃত বাংলাদেশি বিক্রেতা ও আধুনিক ব্র্যান্ডের সেরা পণ্য—এক কার্টে মাল্টি-ভেন্ডর অর্ডার, স্বচ্ছ ডেলিভারি চার্জ ও রিয়েল-টাইম অর্ডার ট্র্যাকিং।',shopNow:'কালেকশন দেখুন →',sellOnHaat:'বিক্রেতা হিসেবে যোগ দিন',heroCap:'কিউরেটেড এসেনশিয়ালস · ঢাকা ও সারাদেশে',tr1t:'যাচাইকৃত বিক্রেতা',tr1s:'প্রতিটি স্টোর ও পণ্য অ্যাডমিন রিভিউ-যুক্ত',tr2t:'স্বচ্ছ ডেলিভারি চার্জ',tr2s:'ঢাকা ৳৬০ · ঢাকার বাইরে ৳১২০',tr3t:'মাল্টি-ভেন্ডর কার্ট',tr3s:'এক অর্ডারে একাধিক বিক্রেতার পণ্য',tr4t:'ক্যাশ অন ডেলিভারি ও গেটওয়ে',tr4s:'COD, bKash, Nagad, Rocket ও SSLCOMMERZ',dealsHead:'ফ্ল্যাশ ডিলস',dealsSub:'সীমিত সময়ের বিশেষ মূল্যছাড়',trendHead:'ট্রেন্ডিং ও সেরা বাছাই',trendSub:'উচ্চ রেটিং ও স্টকে থাকা জনপ্রিয় পণ্য',catsHead:'ক্যাটাগরি অনুযায়ী কেনাকাটা',catalogHead:'জনপ্রিয় ও বাছাইকৃত পণ্য',discAll:'সব কালেকশন',discDeals:'মূল্যছাড় (Offers)',discTop:'টপ রেটেড',discStock:'স্টকে আছে',brandLbl:'ব্র্যান্ড',minLbl:'সর্বনিম্ন দাম (৳)',maxLbl:'সর্বোচ্চ দাম (৳)',sortLbl:'সাজান',applyBtn:'ফিল্টার করুন',resetBtn:'রিসেট',brandsHead:'পার্টনার ব্র্যান্ডসমূহ',sellerTitle:'HAAT-এ আপনার অনলাইন স্টোর খুলুন',sellerDesc:'নিবন্ধন করুন, পণ্য ও ভ্যারিয়েন্ট আপলোড করুন, কুরিয়ার শিপমেন্ট পরিচালনা করুন এবং স্বচ্ছ কমিশন রিপোর্ট দেখুন।',sellerCta:'Seller Workspace খুলুন →',footAbout:'বাংলাদেশের জন্য নির্মিত প্রিমিয়াম মাল্টি-ভেন্ডর ই-কমার্স মার্কেটপ্লেস। ক্রেতা, বিক্রেতা ও অপারেশন একত্রে সংযুক্ত।',cartTitle:'আপনার কার্ট ও চেকআউট',subLbl:'সাবটোটাল',shipLbl:'ডেলিভারি চার্জ',discLbl:'কুপন ছাড়',totLbl:'সর্বমোট',delivHead:'ডেলিভারি ঠিকানা (বাংলাদেশ)'},
+  en:{topNotice:'Bangladesh Curated Multi-Vendor Marketplace · Use code HAAT10 for 10% off orders ৳1,000+',delivTo:'Deliver to:',searchBtn:'Search',navCatalog:'Catalog',navSeller:'Seller Center',navAccount:'My Account',cartLabel:'Cart',heroTitle:'Curated Craft,<br>One Marketplace.',heroSub:'Shop verified Bangladeshi artisans and modern brands in a single cart—transparent shipping, multi-vendor fulfillment, and live tracking.',shopNow:'Explore Collection →',sellOnHaat:'Become a Seller',heroCap:'Curated Essentials · Dhaka & Nationwide',tr1t:'Verified Sellers',tr1s:'Every store & product is admin-approved',tr2t:'Transparent Shipping',tr2s:'Inside Dhaka ৳60 · Nationwide ৳120',tr3t:'Multi-Vendor Cart',tr3s:'Combine multiple shops in one checkout',tr4t:'COD & Sandbox Gateways',tr4s:'COD, bKash, Nagad, Rocket & SSLCOMMERZ',dealsHead:'Flash Deals',dealsSub:'Limited-time curated markdowns',trendHead:'Trending & Featured Picks',trendSub:'Top-rated and ready-to-ship favorites',catsHead:'Shop by Category',catalogHead:'Curated Products',discAll:'All Collection',discDeals:'Offers & Markdowns',discTop:'Top Rated',discStock:'In Stock',brandLbl:'Brand',minLbl:'Min Price (৳)',maxLbl:'Max Price (৳)',sortLbl:'Sort By',applyBtn:'Apply',resetBtn:'Reset',brandsHead:'Featured Brands',sellerTitle:'Launch Your Store on HAAT',sellerDesc:'Register your storefront, manage variants and stock movements, book couriers, and track net payouts.',sellerCta:'Open Seller Workspace →',footAbout:'Premium multi-vendor e-commerce marketplace built for Bangladesh—connecting customers, verified sellers, and operations.',cartTitle:'Your Cart & Checkout',subLbl:'Subtotal',shipLbl:'Shipping',discLbl:'Coupon Discount',totLbl:'Total',delivHead:'Delivery Address (Bangladesh)'}
 };
+function applyStorefrontConfig(cfg){
+  if(!cfg||typeof cfg!=='object')return;
+  storeConfig={...storeConfig,...cfg};
+  if(cfg.promo_banner_bn)I18N.bn.topNotice=cfg.promo_banner_bn;
+  if(cfg.promo_banner_en)I18N.en.topNotice=cfg.promo_banner_en;
+  if(cfg.hero_title_bn)I18N.bn.heroTitle=escHtml(cfg.hero_title_bn).replace(/\n/g,'<br>');
+  if(cfg.hero_title_en)I18N.en.heroTitle=escHtml(cfg.hero_title_en).replace(/\n/g,'<br>');
+  if(cfg.hero_subtitle_bn)I18N.bn.heroSub=cfg.hero_subtitle_bn;
+  if(cfg.hero_subtitle_en)I18N.en.heroSub=cfg.hero_subtitle_en;
+  if(cfg.hero_eyebrow)$('#heroEyebrow').textContent=cfg.hero_eyebrow;
+  if(cfg.hero_image_url)$('#heroImg').src=cfg.hero_image_url;
+  const dhaka=Number(cfg.dhaka_shipping_bdt??60),out=Number(cfg.outside_shipping_bdt??120),free=Number(cfg.free_shipping_over_bdt||0);
+  I18N.bn.tr2s='ঢাকা ৳'+dhaka+' · ঢাকার বাইরে ৳'+out+(free>0?' · ৳'+free+'+ ফ্রি':'');
+  I18N.en.tr2s='Inside Dhaka ৳'+dhaka+' · Nationwide ৳'+out+(free>0?' · Free '+free+'+':'');
+  $('#footDeliveryRates').innerHTML='Dhaka Metro: ৳'+dhaka+'<br>Outside Dhaka: ৳'+out+(free>0?'<br>Free shipping ৳'+free+'+':'')+'<br>Pathao · RedX · Steadfast (Sandbox)';
+  applyLang();
+}
 function applyLang(){
   const d=I18N[lang]||I18N.bn;
   document.documentElement.lang=lang;
-  document.querySelectorAll('[data-i18n]').forEach(el=>{const k=el.dataset.i18n;if(d[k])el.innerHTML=d[k]});
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const k=el.dataset.i18n;
+    if(!d[k])return;
+    if(k==='heroTitle')el.innerHTML=d[k];
+    else el.textContent=d[k];
+  });
   $('#langToggle').textContent=lang==='bn'?'EN':'বাংলা';
 }
 $('#langToggle').onclick=()=>{lang=lang==='bn'?'en':'bn';localStorage.setItem('haat_lang',lang);applyLang()};
 $('#closeTopStrip').onclick=()=>$('#topStrip').classList.add('hidden');
 $('#shopNowBtn').onclick=()=>document.querySelector('#products').scrollIntoView({behavior:'smooth'});
+$('#topDeliveryArea').value=selectedDeliveryArea;
+if($('#divisionSelect'))$('#divisionSelect').value=selectedDeliveryArea;
+if($('#areaInput'))$('#areaInput').value=selectedDeliveryArea;
+$('#topDeliveryArea').onchange=()=>{
+  selectedDeliveryArea=$('#topDeliveryArea').value;
+  localStorage.setItem('haat_delivery_area',selectedDeliveryArea);
+  $('#divisionSelect').value=selectedDeliveryArea;
+  $('#areaInput').value=selectedDeliveryArea;
+  refreshShipping();
+  toast('ডেলিভারি এলাকা: '+selectedDeliveryArea);
+};
 
 function toast(t){$('#toast').textContent=t;$('#toast').classList.add('show');setTimeout(()=>$('#toast').classList.remove('show'),2400)}
 
@@ -565,11 +624,20 @@ function drawBrands(){
 
 function drawDeals(){
   const deals=products.filter(p=>p.origPrice>p.price).slice(0,2);
-  if(!deals.length){$('#dealsSection').classList.add('hidden');return}
-  $('#dealsSection').classList.remove('hidden');
-  $('#dealStrip').innerHTML=deals.map(p=>{
-    const pct=Math.round((1-p.price/p.origPrice)*100);
-    return '<article class="dealcard"><div class="dealimg" data-open="'+escHtml(p.id)+'" style="cursor:pointer">'+(p.image?'<img src="'+escHtml(p.image)+'" alt="'+escHtml(p.bn)+'" loading="lazy" referrerpolicy="no-referrer">':p.icon)+'</div><div><span class="tag sale">-'+pct+'% OFF</span><h3 style="margin:6px 0 2px;font-size:16px;cursor:pointer" data-open="'+escHtml(p.id)+'">'+escHtml(p.bn)+'</h3><div class="muted">'+escHtml(p.en)+'</div><div class="pricerow"><span class="price">'+money(p.price)+'</span><span class="oldprice">'+money(p.origPrice)+'</span></div><button type="button" class="add" data-add="'+escHtml(p.id)+'" style="margin-top:6px">+ কার্টে যোগ</button></div></article>';
+  if(!deals.length){$('#dealsSection').classList.add('hidden');}
+  else{
+    $('#dealsSection').classList.remove('hidden');
+    $('#dealStrip').innerHTML=deals.map(p=>{
+      const pct=Math.round((1-p.price/p.origPrice)*100);
+      return '<article class="dealcard"><div class="dealimg" data-open="'+escHtml(p.id)+'" style="cursor:pointer">'+(p.image?'<img src="'+escHtml(p.image)+'" alt="'+escHtml(p.bn)+'" loading="lazy" referrerpolicy="no-referrer">':p.icon)+'</div><div><span class="tag sale">-'+pct+'% OFF</span><h3 style="margin:6px 0 2px;font-size:16px;cursor:pointer" data-open="'+escHtml(p.id)+'">'+escHtml(p.bn)+'</h3><div class="muted">'+escHtml(p.en)+'</div><div class="pricerow"><span class="price">'+money(p.price)+'</span><span class="oldprice">'+money(p.origPrice)+'</span></div><button type="button" class="add" data-add="'+escHtml(p.id)+'" style="margin-top:6px">+ কার্টে যোগ</button></div></article>';
+    }).join('');
+  }
+  const trending=[...products].filter(p=>p.stock>0).sort((a,b)=>(Number(b.rating||0)-Number(a.rating||0))||(Number(b.reviewCount||0)-Number(a.reviewCount||0))).slice(0,2);
+  if(!trending.length){$('#trendingSection').classList.add('hidden');return}
+  $('#trendingSection').classList.remove('hidden');
+  $('#trendingStrip').innerHTML=trending.map(p=>{
+    const ratingTxt=p.reviewCount>0?('★ '+Number(p.rating).toFixed(1)+' ('+p.reviewCount+')'):'জনপ্রিয় পছন্দ';
+    return '<article class="dealcard"><div class="dealimg" data-open="'+escHtml(p.id)+'" style="cursor:pointer">'+(p.image?'<img src="'+escHtml(p.image)+'" alt="'+escHtml(p.bn)+'" loading="lazy" referrerpolicy="no-referrer">':p.icon)+'</div><div><span class="tag">'+escHtml(ratingTxt)+'</span><h3 style="margin:6px 0 2px;font-size:16px;cursor:pointer" data-open="'+escHtml(p.id)+'">'+escHtml(p.bn)+'</h3><div class="muted">'+escHtml(p.en)+'</div><div class="pricerow"><span class="price">'+money(p.price)+'</span></div><button type="button" class="add" data-add="'+escHtml(p.id)+'" style="margin-top:6px">+ কার্টে যোগ</button></div></article>';
   }).join('');
 }
 
@@ -608,7 +676,7 @@ function drawProducts(){
     const stockLabel=p.stock<=0?'স্টক শেষ':(p.stock<=5?'মাত্র '+Number(p.stock)+'টি বাকি':'স্টক: '+Number(p.stock||0));
     const wished=wishlistIds.has(p.id);
     const ratingHtml=p.reviewCount>0?' · ★ '+Number(p.rating).toFixed(1)+' ('+Number(p.reviewCount)+')':'';
-    return '<article class="card"><div class="visual" data-open="'+escHtml(p.id)+'">'+(p.image?'<img class="product-image" src="'+escHtml(p.image)+'" alt="'+escHtml(p.bn)+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'">':p.icon)+(hasDisc?'<span class="badge">-'+pct+'%</span>':'')+'<button type="button" class="wishbtn '+(wished?'saved':'')+'" data-wish="'+escHtml(p.id)+'" title="Wishlist">'+(wished?'♥':'♡')+'</button></div><div class="cardbody"><div class="cardmeta"><span>'+escHtml(p.brand||p.cat)+'</span><span>'+escHtml(p.shop||'HAAT Seller')+'</span></div><h3 data-open="'+escHtml(p.id)+'">'+escHtml(p.bn)+'</h3><div class="muted">'+escHtml(p.en)+ratingHtml+'</div><div class="pricerow"><span class="price">'+money(p.price)+'</span>'+(hasDisc?'<span class="oldprice">'+money(p.origPrice)+'</span>':'')+'</div><div class="cardfoot"><span class="stock '+stockClass+'">'+stockLabel+'</span><div class="cardactions"><button type="button" class="viewbtn" data-open="'+escHtml(p.id)+'">বিস্তারিত</button><button type="button" class="add" data-add="'+escHtml(p.id)+'" '+(p.stock<=0?'disabled':'')+'>+ কার্টে</button></div></div></div></article>';
+    return '<article class="card"><div class="visual" data-open="'+escHtml(p.id)+'">'+(p.image?'<img class="product-image" src="'+escHtml(p.image)+'" alt="'+escHtml(p.bn)+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'">':p.icon)+(hasDisc?'<span class="badge">-'+pct+'%</span>':'')+'<button type="button" class="wishbtn '+(wished?'saved':'')+'" data-wish="'+escHtml(p.id)+'" title="Wishlist" aria-label="উইশলিস্ট — '+escHtml(p.bn)+'">'+(wished?'♥':'♡')+'</button></div><div class="cardbody"><div class="cardmeta"><span>'+escHtml(p.brand||p.cat)+'</span><span>'+escHtml(p.shop||'HAAT Seller')+'</span></div><h3 data-open="'+escHtml(p.id)+'">'+escHtml(p.bn)+'</h3><div class="muted">'+escHtml(p.en)+ratingHtml+'</div><div class="pricerow"><span class="price">'+money(p.price)+'</span>'+(hasDisc?'<span class="oldprice">'+money(p.origPrice)+'</span>':'')+'</div><div class="cardfoot"><span class="stock '+stockClass+'">'+stockLabel+'</span><div class="cardactions"><button type="button" class="viewbtn" data-open="'+escHtml(p.id)+'" aria-label="বিস্তারিত — '+escHtml(p.bn)+'">বিস্তারিত</button><button type="button" class="add" data-add="'+escHtml(p.id)+'" aria-label="কার্টে যোগ — '+escHtml(p.bn)+'" '+(p.stock<=0?'disabled':'')+'>+ কার্টে</button></div></div></div></article>';
   }).join('')||'<p class="empty">'+(apiReady?'এই ফিল্টারে কোনো অনুমোদিত পণ্য পাওয়া যায়নি।':'লাইভ পণ্য দেখতে সার্ভার সংযোগ প্রয়োজন।')+'</p>';
 }
 
@@ -627,8 +695,12 @@ async function syncCartItemToServer(productId,quantity){
 
 async function refreshShipping(){
   const subtotal=calcSubtotal();
-  const area=$('#areaInput')?.value||'Dhaka';
-  if(!apiReady||subtotal<=0){shippingBdt=subtotal<=0?0:(/dhaka|ঢাকা/i.test(area)?60:120);drawTotals(subtotal);return}
+  const area=$('#areaInput')?.value||selectedDeliveryArea||'Dhaka';
+  if(!apiReady||subtotal<=0){
+    const freeOver=Number(storeConfig.free_shipping_over_bdt||0);
+    shippingBdt=subtotal<=0?0:(freeOver>0&&subtotal>=freeOver?0:(/dhaka|ঢাকা/i.test(area)?Number(storeConfig.dhaka_shipping_bdt??60):Number(storeConfig.outside_shipping_bdt??120)));
+    drawTotals(subtotal);return;
+  }
   try{
     const r=await fetch(apiUrl('/api/v1/shipping/quote?area='+encodeURIComponent(area)+'&subtotal_bdt='+encodeURIComponent(subtotal)));
     const d=await r.json();
@@ -688,7 +760,8 @@ async function openProductModal(productId){
       $('#modalOldPrice').textContent=money(p.price_bdt);$('#modalOldPrice').classList.remove('hidden');
       $('#modalDiscountTag').textContent='-'+Math.round((1-sale/p.price_bdt)*100)+'%';$('#modalDiscountTag').classList.remove('hidden');
     }else{$('#modalOldPrice').classList.add('hidden');$('#modalDiscountTag').classList.add('hidden')}
-    $('#modalMeta').textContent='স্টক: '+p.stock+' · ঢাকা ৳৬০ · সারাদেশ ৳১২০';
+    const dhakaFee=Number(storeConfig.dhaka_shipping_bdt??60),outFee=Number(storeConfig.outside_shipping_bdt??120),freeOver=Number(storeConfig.free_shipping_over_bdt||0);
+    $('#modalMeta').textContent='স্টক: '+p.stock+' · ঢাকা ৳'+dhakaFee+' · সারাদেশ ৳'+outFee+(freeOver>0?' · ৳'+freeOver+'+ ফ্রি ডেলিভারি':'');
     $('#modalDesc').textContent=p.description||'যাচাইকৃত বিক্রেতার আসল পণ্য।';
     const vars=Array.isArray(p.variants)?p.variants:[];
     selectedVariant=vars[0]?.label||'';
@@ -705,16 +778,23 @@ async function openProductModal(productId){
     $('#modalReviewList').innerHTML=revs.map(r=>'<div class="revitem"><b>'+escHtml(r.name)+'</b> · <span class="num">'+'★'.repeat(r.rating)+'</span><p style="margin:4px 0 0">'+escHtml(r.comment||'')+'</p></div>').join('')||'<p class="note" style="margin-top:6px">এখনো কোনো রিভিউ নেই।</p>';
     $('#modalReviewForm').classList.toggle('hidden',!customerToken);
     $('#modalRevMsg').textContent='';
-    $('#productModal').classList.add('open');
+    openProductDialog();
   }catch(e){toast(e.message||'পণ্য লোড করা যায়নি')}
 }
 
+let lastFocusEl=null;
+function openProductDialog(){lastFocusEl=document.activeElement;$('#productModal').classList.add('open');$('#productModal').setAttribute('aria-hidden','false');$('#closeModal').focus()}
+function closeProductDialog(){$('#productModal').classList.remove('open');$('#productModal').setAttribute('aria-hidden','true');if(lastFocusEl&&typeof lastFocusEl.focus==='function'){lastFocusEl.focus();lastFocusEl=null}}
+function openCartDrawer(){lastFocusEl=document.activeElement;$('#drawer').classList.add('open');$('#drawer').setAttribute('aria-hidden','false');refreshShipping();$('#closeCart').focus()}
+function closeCartDrawer(){$('#drawer').classList.remove('open');$('#drawer').setAttribute('aria-hidden','true');if(lastFocusEl&&typeof lastFocusEl.focus==='function'){lastFocusEl.focus();lastFocusEl=null}}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if($('#drawer').classList.contains('open'))closeCartDrawer();else if($('#productModal').classList.contains('open'))closeProductDialog()}});
+
 $('#modalThumbs').onclick=e=>{const t=e.target.closest('[data-thumb]');if(t)$('#modalMainImg').innerHTML='<img src="'+escHtml(t.dataset.thumb)+'" alt="" referrerpolicy="no-referrer">'};
 $('#modalVariants').onclick=e=>{const b=e.target.closest('[data-var]');if(!b)return;selectedVariant=b.dataset.var;$('#modalVariants').querySelectorAll('.varbtn').forEach(x=>x.classList.toggle('active',x===b))};
-$('#closeModal').onclick=()=>$('#productModal').classList.remove('open');
-$('#productModal').onclick=e=>{if(e.target.id==='productModal')$('#productModal').classList.remove('open')};
+$('#closeModal').onclick=closeProductDialog;
+$('#productModal').onclick=e=>{if(e.target.id==='productModal')closeProductDialog()};
 $('#modalAddBtn').onclick=()=>{if(!currentModalProduct)return;const pid=currentModalProduct.id;if(!addToCartClamped(pid,1))return;if(selectedVariant)cartVariants[pid]=selectedVariant;save();syncCartItemToServer(pid,cart[pid]);toast('কার্টে যোগ হয়েছে ✓')};
-$('#modalBuyBtn').onclick=()=>{if(!currentModalProduct)return;const pid=currentModalProduct.id;if(!addToCartClamped(pid,1))return;if(selectedVariant)cartVariants[pid]=selectedVariant;save();syncCartItemToServer(pid,cart[pid]);$('#productModal').classList.remove('open');$('#drawer').classList.add('open');refreshShipping()};
+$('#modalBuyBtn').onclick=()=>{if(!currentModalProduct)return;const pid=currentModalProduct.id;if(!addToCartClamped(pid,1))return;if(selectedVariant)cartVariants[pid]=selectedVariant;save();syncCartItemToServer(pid,cart[pid]);closeProductDialog();openCartDrawer()};
 $('#modalWishBtn').onclick=()=>{if(currentModalProduct)toggleWishlist(currentModalProduct.id)};
 $('#modalReviewForm').onsubmit=async e=>{
   e.preventDefault();if(!currentModalProduct||!customerToken)return;
@@ -756,6 +836,7 @@ function handleProductGridClick(e){
 }
 $('#grid').onclick=handleProductGridClick;
 $('#dealStrip').onclick=handleProductGridClick;
+$('#trendingStrip').onclick=handleProductGridClick;
 
 $('#cartLines').onclick=e=>{
   const inc=e.target.closest('[data-inc]'),dec=e.target.closest('[data-dec]');
@@ -783,9 +864,9 @@ $('#search').oninput=()=>{
 $('#suggestBox').onclick=e=>{const b=e.target.closest('[data-sug-id]');if(b){$('#suggestBox').classList.add('hidden');openProductModal(b.dataset.sugId)}};
 document.addEventListener('click',e=>{if(!e.target.closest('.searchbox'))$('#suggestBox').classList.add('hidden')});
 $('#searchBtn').onclick=()=>{drawProducts();$('#suggestBox').classList.add('hidden')};
-$('#openCart').onclick=()=>{$('#drawer').classList.add('open');refreshShipping()};
-$('#closeCart').onclick=()=>$('#drawer').classList.remove('open');
-$('#drawer').onclick=e=>{if(e.target.id==='drawer')$('#drawer').classList.remove('open')};
+$('#openCart').onclick=openCartDrawer;
+$('#closeCart').onclick=closeCartDrawer;
+$('#drawer').onclick=e=>{if(e.target.id==='drawer')closeCartDrawer()};
 $('#divisionSelect').onchange=()=>{$('#areaInput').value=$('#divisionSelect').value;refreshShipping()};
 $('#areaInput').oninput=()=>refreshShipping();
 $('#drawerPayMethod').onchange=()=>{
@@ -923,17 +1004,20 @@ async function connectCatalog(){
     if(!health.ok)throw Error('API health check failed ('+health.status+')');
     const healthData=await health.json();
     if(!healthData.ok||healthData.db!=='ok')throw Error('ডেটাবেস প্রস্তুত নয়');
-    const [productResponse,categoryResponse,brandResponse]=await Promise.all([
+    const [productResponse,categoryResponse,brandResponse,cfgResponse]=await Promise.all([
       fetch(apiUrl('/api/v1/products'),{headers:{accept:'application/json'},signal:AbortSignal.timeout(10000)}),
       fetch(apiUrl('/api/v1/categories'),{headers:{accept:'application/json'},signal:AbortSignal.timeout(10000)}),
-      fetch(apiUrl('/api/v1/brands'),{headers:{accept:'application/json'},signal:AbortSignal.timeout(10000)})
+      fetch(apiUrl('/api/v1/brands'),{headers:{accept:'application/json'},signal:AbortSignal.timeout(10000)}),
+      fetch(apiUrl('/api/v1/storefront/config'),{headers:{accept:'application/json'},signal:AbortSignal.timeout(10000)}).catch(()=>({ok:false}))
     ]);
     if(!productResponse.ok||!categoryResponse.ok)throw Error('ক্যাটালগ লোড করা যায়নি');
-    const [payload,categoryPayload,brandPayload]=await Promise.all([
+    const [payload,categoryPayload,brandPayload,cfgPayload]=await Promise.all([
       productResponse.json(),
       categoryResponse.json(),
-      brandResponse.ok?brandResponse.json():Promise.resolve({data:[]})
+      brandResponse.ok?brandResponse.json():Promise.resolve({data:[]}),
+      cfgResponse.ok?cfgResponse.json():Promise.resolve({data:null})
     ]);
+    if(cfgPayload&&cfgPayload.data)applyStorefrontConfig(cfgPayload.data);
     if(!Array.isArray(payload.data)||!Array.isArray(categoryPayload.data))throw Error('সার্ভারের ডেটা ফরম্যাট সঠিক নয়');
     const icons={electronics:'🎧',fashion:'🛍️',home:'🏠',beauty:'✨',grocery:'🧺',kids:'🧸',sports:'⚽',books:'📚'};
     products=payload.data.map(p=>({
@@ -959,7 +1043,7 @@ async function connectCatalog(){
     cart=Object.fromEntries(Object.entries(cart).filter(([id])=>valid.has(id)));
     save();
     noticeText.textContent='লাইভ সার্ভার সংযুক্ত · ডেটাবেস ঠিক আছে';
-    notice.style.borderColor='#8eb79a';
+    notice.classList.add('hidden');
     catalog.textContent='সার্ভার থেকে পাওয়া অনুমোদিত পণ্য';
     $('#checkout').textContent='COD অর্ডার কনফার্ম';
     drawCats();drawBrands();drawDeals();drawProducts();drawCart();
@@ -968,6 +1052,7 @@ async function connectCatalog(){
     apiReady=false;products=[];cats=[['all','সব পণ্য']];brands=[];active='all';activeBrand='';
     noticeText.textContent='এখনো লাইভ সার্ভার সংযুক্ত হয়নি। বর্তমানে এটি শুধু ডিজাইন প্রিভিউ; পণ্য, লগইন ও অর্ডার চালু করতে API deployment প্রয়োজন।';
     notice.style.borderColor='#d5a06b';
+    notice.classList.remove('hidden');
     catalog.textContent='লাইভ ক্যাটালগ অফলাইন · Demo পণ্য দেখানো হচ্ছে না';
     $('#checkout').textContent='সার্ভার সংযোগ প্রয়োজন';
     drawCats();drawBrands();drawDeals();drawProducts();drawCart();

@@ -27,6 +27,7 @@ import { registerPostgresCustomerAccountRoutes } from './postgres-customer-accou
 import { createPostgresInventoryRepository } from './postgres-inventory.mjs';
 import { registerPostgresOperationsRoutes } from './postgres-operations-routes.mjs';
 import { runPostgresMigrations } from './postgres-migrations.mjs';
+import { computeDynamicShippingPaisa, mergeStorefrontConfig } from './storefront-config.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const migrationDirectory = resolve(here, '../migrations/postgres');
@@ -128,9 +129,18 @@ export function createPostgresApiServer({ database, catalogRepository, authRepos
     gatewayInitiate: initiateGateway,
     methods: PAYMENT_METHODS
   });
+  const dynamicShippingFor = async (area, subtotalPaisa) => {
+    try {
+      const rows = await database.q('SELECT key,value FROM platform_settings').all();
+      if (Array.isArray(rows) && rows.length > 0) {
+        return computeDynamicShippingPaisa(area, subtotalPaisa, mergeStorefrontConfig(rows));
+      }
+    } catch {}
+    return shippingFor(area, subtotalPaisa);
+  };
   const commerce = registerPostgresCommerceRoutes(registerDomainRoute, response, {
     database,
-    shippingFor,
+    shippingFor: dynamicShippingFor,
     paymentMethods: PAYMENT_METHODS,
     paymentRepository,
     inventoryRepository: createPostgresInventoryRepository(database)
@@ -277,6 +287,7 @@ export function createPostgresApiServer({ database, catalogRepository, authRepos
 
       const knownPath = path === '/health' ||
         ['/api/v1/categories', '/api/v1/brands', '/api/v1/products', '/api/v1/products/suggest',
+          '/api/v1/storefront/config', '/api/v1/shipping/quote',
           '/api/v1/auth/register', '/api/v1/auth/register-seller', '/api/v1/auth/login',
           '/api/v1/auth/logout', '/api/v1/auth/me', '/api/v1/auth/forgot-password',
           '/api/v1/auth/reset-password', '/api/v1/auth/change-password',
