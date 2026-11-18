@@ -66,7 +66,16 @@ button{cursor:pointer;background:var(--surface);font-weight:600}
 .summaryline{display:flex;justify-content:space-between;font-size:14px;padding:2px 0}
 .timeline{display:grid;gap:6px;margin:10px 0;padding:10px;background:var(--canvas);border:1px solid var(--line);border-radius:4px;font-size:13px}
 .verifybar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 12px;background:var(--canvas);border:1px solid var(--line);border-radius:4px;margin-bottom:14px;font-size:13px}
-@media(max-width:720px){main{padding:0 12px}.panel{padding:16px}.grid,.cards{grid-template-columns:1fr}.brand{font-size:22px}}
+.tracker-card{background:var(--surface);border:1px solid var(--line-strong);border-radius:6px;padding:18px;margin:12px 0;display:grid;gap:14px}
+.stepper{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.step{border:1px solid var(--line);background:var(--canvas);border-radius:4px;padding:10px;font-size:12px;text-align:center;color:var(--muted)}
+.step.done{border-color:var(--success);background:#ECF4EE;color:var(--success);font-weight:600}
+.step.current{border-color:var(--ink);background:var(--ink);color:#F8F6F1;font-weight:700}
+.suborder-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.suborder-card{border:1px solid var(--line);background:var(--canvas);border-radius:4px;padding:12px;font-size:13px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media(max-width:720px){main{padding:0 12px}.panel{padding:16px}.grid,.cards,.suborder-grid{grid-template-columns:1fr}.stepper{grid-template-columns:repeat(2,minmax(0,1fr))}.brand{font-size:22px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 </style>
 </head>
 <body>
@@ -147,6 +156,7 @@ button{cursor:pointer;background:var(--surface);font-weight:600}
       <div class="verifybar">
         <span id="verifyStatusText">ভেরিফিকেশন অবস্থা লোড হচ্ছে…</span>
         <button type="button" id="sendPhoneOtpBtn" class="soft">ফোন OTP পাঠান</button>
+        <button type="button" id="sendEmailOtpBtn" class="soft">ইমেইল OTP পাঠান</button>
         <form id="verifyOtpForm" class="hidden" style="display:flex;gap:6px;align-items:center">
           <input name="code" placeholder="6-digit OTP" style="width:130px;padding:6px 8px" required>
           <button type="submit" class="primary" style="padding:6px 12px">যাচাই</button>
@@ -257,7 +267,8 @@ button{cursor:pointer;background:var(--surface);font-weight:600}
         <h2 data-i18n="secOrders">আমার অর্ডার ও ট্র্যাকিং</h2>
         <button type="button" id="refreshOrdersBtn" class="soft" data-i18n="btnRefresh">রিফ্রেশ</button>
       </div>
-      <div id="orderDetail" class="notice hidden"></div>
+      <div id="orderDetail" class="notice hidden" role="status" aria-live="polite"></div>
+      <div id="orderTrackingCard" class="tracker-card hidden" data-testid="order-tracking-card"></div>
       <div id="paymentActions" class="notice hidden" role="status" aria-live="polite">
         <div><b>Sandbox payment</b><div id="paymentMessage" class="muted">এটি বাস্তব অর্থ লেনদেন নয়।</div></div>
         <div class="payment-actions">
@@ -276,6 +287,18 @@ button{cursor:pointer;background:var(--surface);font-weight:600}
           <div class="actions wide" style="margin:0">
             <button type="submit" class="primary">রিভিউ জমা দিন</button>
             <button type="button" id="cancelReviewBtn">বন্ধ করুন</button>
+          </div>
+        </form>
+      </div>
+      <div id="orderRefundBox" class="checkoutbox hidden">
+        <div class="toolbar"><b>রিটার্ন / রিফান্ড অনুরোধ <span id="refundOrderLabel" class="num"></span></b></div>
+        <form id="orderRefundForm" class="grid">
+          <input type="hidden" name="order_id">
+          <label class="field">রিফান্ড পরিমাণ (৳)<input name="amount_bdt" type="number" min="1" step="0.01" required></label>
+          <label class="field">কারণ<input name="reason" maxlength="300" required placeholder="যেমন: পণ্য ক্ষতিগ্রস্ত বা ভুল আইটেম"></label>
+          <div class="actions wide" style="margin:0">
+            <button type="submit" class="primary">রিফান্ড অনুরোধ পাঠান</button>
+            <button type="button" id="cancelRefundBtn">বন্ধ করুন</button>
           </div>
         </form>
       </div>
@@ -388,20 +411,25 @@ $('#resetForm').onsubmit=async e=>{
 };
 $('#logout').onclick=async()=>{try{await request('/auth/logout',{method:'POST'})}catch{}showAuth()};
 
-$('#sendPhoneOtpBtn').onclick=async()=>{
+let activeOtpPurpose='PHONE';
+async function triggerVerificationOtp(purpose){
   try{
-    const r=await request('/auth/send-verification',{method:'POST',body:JSON.stringify({purpose:'PHONE'})});
+    activeOtpPurpose=purpose;
+    const r=await request('/auth/send-verification',{method:'POST',body:JSON.stringify({purpose})});
     $('#verifyOtpForm').classList.remove('hidden');
-    message($('#profileMsg'),'OTP পাঠানো হয়েছে।'+(r.data.dev_code?' ডেভেলপমেন্ট কোড: '+r.data.dev_code:''),'success');
+    field($('#verifyOtpForm'),'code').placeholder=(purpose==='EMAIL'?'Email':'Phone')+' 6-digit OTP';
+    message($('#profileMsg'),(purpose==='EMAIL'?'ইমেইল':'ফোন')+' OTP পাঠানো হয়েছে।'+(r.data.dev_code?' ডেভেলপমেন্ট কোড: '+r.data.dev_code:''),'success');
   }catch(err){message($('#profileMsg'),err.message,'error')}
-};
+}
+$('#sendPhoneOtpBtn').onclick=()=>triggerVerificationOtp('PHONE');
+$('#sendEmailOtpBtn').onclick=()=>triggerVerificationOtp('EMAIL');
 $('#verifyOtpForm').onsubmit=async e=>{
   e.preventDefault();
   try{
     const code=field(e.target,'code').value;
-    await request('/auth/verify',{method:'POST',body:JSON.stringify({purpose:'PHONE',code})});
-    $('#verifyOtpForm').classList.add('hidden');
-    message($('#profileMsg'),'মোবাইল নম্বর ভেরিফায়েড হয়েছে ✓','success');
+    await request('/auth/verify',{method:'POST',body:JSON.stringify({purpose:activeOtpPurpose,code})});
+    $('#verifyOtpForm').classList.add('hidden');e.target.reset();
+    message($('#profileMsg'),(activeOtpPurpose==='EMAIL'?'ইমেইল':'মোবাইল নম্বর')+' ভেরিফায়েড হয়েছে ✓','success');
     await enter();
   }catch(err){message($('#profileMsg'),err.message,'error')}
 };
@@ -584,33 +612,69 @@ async function loadOrders(){
   $('#orderList').innerHTML=r.data.map(o=>{
     const paymentStatus=o.payment?.status||'';
     const retry=o.status==='AWAITING_PAYMENT'&&paymentStatus!=='PAID'?'<button type="button" class="goldbtn" data-retry-payment="'+esc(o.id)+'">পেমেন্ট পুনরায় শুরু</button>':'';
+    const canRefund=o.status==='DELIVERED'&&['PAID','PARTIALLY_REFUNDED'].includes(paymentStatus);
+    const refundBtn=canRefund?'<button type="button" class="soft" data-order-refund="'+esc(o.id)+'" data-order-max="'+Number(o.total_bdt)+'" data-order-no="'+esc(o.orderNumber)+'">রিফান্ড অনুরোধ</button>':'';
     const itemsHtml=(o.items||[]).map(i=>'<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span>'+esc(i.name_bn)+' × '+Number(i.quantity)+'</span>'+(o.status==='DELIVERED'?'<button type="button" class="soft" style="padding:2px 8px;font-size:11px" data-review-pid="'+esc(i.product_id)+'">রিভিউ</button>':'')+'</div>').join('');
     return '<article class="item"><div class="toolbar"><b class="num">'+esc(o.orderNumber)+'</b><span class="status">'+esc(o.status)+'</span></div>'+
       '<p class="num" style="margin:8px 0 4px">মোট: <b>'+money(o.total_bdt)+'</b> · '+esc(o.created_at.slice(0,16).replace('T',' '))+'</p>'+
       '<p class="muted" style="margin:0 0 8px">পেমেন্ট: '+esc(o.payment?.method||'—')+' · '+esc(paymentStatus||'—')+'</p>'+
       '<div style="border-top:1px solid var(--line);padding-top:6px">'+itemsHtml+'</div>'+
-      '<div class="actions"><button type="button" data-order-detail="'+esc(o.id)+'">বিস্তারিত / ট্র্যাকিং</button>'+retry+
+      '<div class="actions"><button type="button" data-order-detail="'+esc(o.id)+'">বিস্তারিত / ট্র্যাকিং</button>'+retry+refundBtn+
       (['CONFIRMED','AWAITING_PAYMENT'].includes(o.status)?'<button type="button" class="danger" data-order-cancel="'+esc(o.id)+'">বাতিল</button>':'')+
       '</div></article>';
   }).join('')||'<p class="empty wide">এখনো কোনো অর্ডার নেই।</p>';
 }
 $('#refreshOrdersBtn').onclick=()=>loadOrders();
 
+function renderOrderTrackingCard(value,trackingData){
+  const steps=[['CONFIRMED','নিশ্চিত'],['PROCESSING','প্রস্তুতি'],['SHIPPED','পথে আছে'],['DELIVERED','ডেলিভারি সম্পন্ন']];
+  const idx=steps.findIndex(([k])=>k===value.status);
+  const stepperHtml=value.status==='CANCELLED'||value.status==='AWAITING_PAYMENT'
+    ?'<div class="notice '+(value.status==='CANCELLED'?'error':'')+'" style="margin:0">বর্তমান অবস্থা: <b>'+esc(value.status)+'</b></div>'
+    :'<div class="stepper">'+steps.map(([k,lbl],i)=>'<div class="step '+(i<idx?'done':(i===idx?'current':''))+'">'+(i<=idx?'✓ ':'')+esc(lbl)+'<div style="font-size:10px;opacity:.85">'+esc(k)+'</div></div>').join('')+'</div>';
+  const suborders=(value.suborders||[]).map(s=>'<div class="suborder-card"><div class="toolbar"><b>'+esc(s.shop||'বিক্রেতা')+'</b><span class="status">'+esc(s.status)+'</span></div><div class="num" style="margin-top:4px">সাবটোটাল: <b>'+money(s.subtotal_bdt)+'</b></div>'+(s.shipment?'<div class="muted" style="margin-top:4px">কুরিয়ার: <b>'+esc(s.shipment.provider)+'</b> · ট্র্যাকিং: <span class="num">'+esc(s.shipment.tracking_id)+'</span> ('+esc(s.shipment.status)+')</div>':'<div class="muted" style="margin-top:4px">কুরিয়ার শিপমেন্ট এখনো বুক হয়নি।</div>')+'</div>').join('')||'<div class="muted">বিক্রেতা বিভাজন পাওয়া যায়নি।</div>';
+  const events=(trackingData?.events||[]).map(ev=>'<div style="display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid var(--line)"><span><b>'+esc(ev.status)+'</b>'+(ev.note?' — '+esc(ev.note):'')+'</span><span class="muted num">'+esc((ev.created_at||'').slice(0,16).replace('T',' '))+'</span></div>').join('')||'<div class="muted">কোনো ইভেন্ট রেকর্ড নেই।</div>';
+  const del=value.delivery||{};
+  const invRows=(value.items||[]).map(i=>'<tr><td style="padding:6px 8px;border-bottom:1px solid var(--line)">'+esc(i.name_bn)+(i.variant?' <small class="muted">('+esc(i.variant)+')</small>':'')+'</td><td class="num" style="padding:6px 8px;border-bottom:1px solid var(--line)">'+Number(i.quantity)+'</td><td class="num" style="padding:6px 8px;border-bottom:1px solid var(--line)">'+money(i.unit_price_bdt)+'</td><td class="num" style="padding:6px 8px;border-bottom:1px solid var(--line)">'+money(Number(i.unit_price_bdt)*Number(i.quantity))+'</td></tr>').join('')||'<tr><td colspan="4" style="padding:6px">—</td></tr>';
+  const invBoxHtml='<div id="customerInvoiceBox" class="suborder-card hidden" style="background:#fff;border-color:var(--accent);padding:14px">'+
+    '<div class="toolbar"><div><b style="font-size:15px">HAAT · অর্ডার রসিদ / INVOICE</b><div class="muted num">Order #'+esc(value.orderNumber)+' · '+esc((value.created_at||'').slice(0,16).replace('T',' '))+'</div></div>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="soft" id="dlCustomerInvBtn" style="padding:5px 10px;font-size:12px">রসিদ ডাউনলোড (.html)</button><button type="button" class="primary" id="printCustomerInvBtn" style="padding:5px 10px;font-size:12px">প্রিন্ট</button></div></div>'+
+    '<div style="overflow-x:auto;margin-top:8px"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="text-align:left;background:var(--cream)"><th style="padding:6px 8px">পণ্য</th><th style="padding:6px 8px">পরিমাণ</th><th style="padding:6px 8px">একক মূল্য</th><th style="padding:6px 8px">মোট</th></tr></thead><tbody>'+invRows+'</tbody></table></div>'+
+    '<div style="margin-top:8px;text-align:right;font-size:13px">সাবটোটাল: <b class="num">'+money(value.subtotal_bdt)+'</b> · ডেলিভারি: <b class="num">'+money(value.shipping_bdt)+'</b>'+(Number(value.discount_bdt||0)>0?' · ছাড়: <b class="num">-'+money(value.discount_bdt)+'</b>':'')+' · <b>সর্বমোট: <span class="num">'+money(value.total_bdt)+'</span></b> ('+esc(value.payment?.method||'—')+' · '+esc(value.payment?.status||'—')+')</div></div>';
+  const card=$('#orderTrackingCard');
+  card.innerHTML='<div class="toolbar"><div><b class="num" style="font-size:17px">অর্ডার '+esc(value.orderNumber)+'</b> · <span class="status">'+esc(value.status)+'</span></div><div style="display:flex;gap:6px"><button type="button" class="soft" id="toggleCustomerInvBtn" style="padding:5px 10px">ইনভয়েস / রসিদ</button><button type="button" class="soft" id="closeTrackingCardBtn" style="padding:5px 10px">বন্ধ</button></div></div>'+
+    invBoxHtml+
+    stepperHtml+
+    '<div class="grid" style="font-size:13px"><div class="suborder-card"><b>ডেলিভারি ঠিকানা</b><div>'+esc(del.name||'')+' · '+esc(del.phone||'')+'</div><div class="muted">'+esc(del.area||'')+' — '+esc(del.address||'')+'</div></div>'+
+    '<div class="suborder-card"><b>মূল্য ও পেমেন্ট</b><div class="summaryline"><span>সাবটোটাল</span><span class="num">'+money(value.subtotal_bdt)+'</span></div><div class="summaryline"><span>ডেলিভারি</span><span class="num">'+money(value.shipping_bdt)+'</span></div>'+(Number(value.discount_bdt||0)>0?'<div class="summaryline"><span>ছাড়</span><span class="num">-'+money(value.discount_bdt)+'</span></div>':'')+'<div class="summaryline" style="font-weight:700;border-top:1px solid var(--line);margin-top:4px;padding-top:4px"><span>সর্বমোট</span><span class="num">'+money(value.total_bdt)+'</span></div><div class="muted">'+esc(value.payment?.method||'—')+' · '+esc(value.payment?.status||'—')+'</div></div></div>'+
+    '<div><b style="font-size:13px">বিক্রেতা ও কুরিয়ার ট্র্যাকিং</b><div class="suborder-grid" style="margin-top:8px">'+suborders+'</div></div>'+
+    '<div class="timeline" style="margin:0"><b style="font-size:13px">অর্ডার টাইমলাইন</b>'+events+'</div>';
+  card.classList.remove('hidden');
+  $('#closeTrackingCardBtn').onclick=()=>card.classList.add('hidden');
+  $('#toggleCustomerInvBtn').onclick=()=>$('#customerInvoiceBox').classList.toggle('hidden');
+  $('#printCustomerInvBtn').onclick=()=>window.print();
+  $('#dlCustomerInvBtn').onclick=()=>{
+    const docHtml='<!doctype html><html lang="bn"><head><meta charset="utf-8"><title>HAAT Receipt '+esc(value.orderNumber)+'</title><style>body{font-family:sans-serif;max-width:720px;margin:24px auto;color:#141311}table{width:100%;border-collapse:collapse;margin:14px 0}th,td{border-bottom:1px solid #ddd;padding:8px;text-align:left}</style></head><body><h2>HAAT Marketplace — Order Receipt</h2><p><b>Order:</b> '+esc(value.orderNumber)+' | <b>Date:</b> '+esc((value.created_at||'').slice(0,16).replace('T',' '))+' | <b>Status:</b> '+esc(value.status)+'</p><p><b>Recipient:</b> '+esc(del.name||'')+' ('+esc(del.phone||'')+')<br><b>Delivery:</b> '+esc(del.area||'')+' — '+esc(del.address||'')+'</p><table><thead><tr><th>Item</th><th>Qty</th><th>Unit</th><th>Total</th></tr></thead><tbody>'+invRows+'</tbody></table><p><b>Subtotal:</b> '+money(value.subtotal_bdt)+' | <b>Shipping:</b> '+money(value.shipping_bdt)+' | <b>Discount:</b> '+money(value.discount_bdt)+' | <b>Grand Total:</b> '+money(value.total_bdt)+'</p><p><b>Payment:</b> '+esc(value.payment?.method||'—')+' ('+esc(value.payment?.status||'—')+')</p></body></html>';
+    const blob=new Blob([docHtml],{type:'text/html;charset=utf-8'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='haat-receipt-'+String(value.orderNumber||value.id).replace(/[^a-zA-Z0-9_-]/g,'')+'.html';a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+  };
+  card.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
 $('#orderList').onclick=async e=>{
   const detail=e.target.closest('[data-order-detail]');
   const cancel=e.target.closest('[data-order-cancel]');
   const retry=e.target.closest('[data-retry-payment]');
   const rev=e.target.closest('[data-review-pid]');
+  const ref=e.target.closest('[data-order-refund]');
   try{
     if(detail){
       const [order,tracking]=await Promise.all([
         request('/customer/orders/'+encodeURIComponent(detail.dataset.orderDetail)),
         request('/customer/orders/'+encodeURIComponent(detail.dataset.orderDetail)+'/tracking')
       ]);
-      const value=order.data;
-      const shipmentText=(value.suborders||[]).map(item=>(item.shop||'বিক্রেতা')+': '+item.status+(item.shipment?' · ট্র্যাকিং '+(item.shipment.tracking_id||''):'')).join(' · ');
-      const eventText=(tracking.data.events||[]).map(item=>item.status+' ('+(item.created_at||'').slice(0,16).replace('T',' ')+')').join(' → ');
-      message($('#orderDetail'),'অর্ডার '+value.orderNumber+' · '+value.status+' · '+money(value.total_bdt)+' · '+shipmentText+' · '+eventText,'success');
+      renderOrderTrackingCard(order.data,tracking.data);
     }
     if(retry){
       const result=await request('/customer/orders/'+encodeURIComponent(retry.dataset.retryPayment)+'/pay',{method:'POST',body:JSON.stringify({method:$('#paymentMethod').value})});
@@ -630,6 +694,17 @@ $('#orderList').onclick=async e=>{
       field($('#orderReviewForm'),'product_id').value=rev.dataset.reviewPid;
       $('#orderReviewBox').classList.remove('hidden');
     }
+    if(ref){
+      const rf=$('#orderRefundForm');
+      field(rf,'order_id').value=ref.dataset.orderRefund;
+      const maxAmt=Number(ref.dataset.orderMax||0);
+      field(rf,'amount_bdt').max=maxAmt;
+      field(rf,'amount_bdt').value=maxAmt;
+      field(rf,'reason').value='';
+      $('#refundOrderLabel').textContent='('+(ref.dataset.orderNo||'')+')';
+      $('#orderRefundBox').classList.remove('hidden');
+      $('#orderRefundBox').scrollIntoView({behavior:'smooth',block:'nearest'});
+    }
   }catch(err){
     message($('#orderDetail'),err.message,'error');
   }
@@ -645,6 +720,18 @@ $('#orderReviewForm').onsubmit=async e=>{
   }catch(err){message($('#orderDetail'),err.message,'error')}
 };
 $('#cancelReviewBtn').onclick=()=>$('#orderReviewBox').classList.add('hidden');
+
+$('#orderRefundForm').onsubmit=async e=>{
+  e.preventDefault();
+  const f=Object.fromEntries(new FormData(e.target));
+  try{
+    await request('/customer/orders/'+encodeURIComponent(f.order_id)+'/refund-request',{method:'POST',body:JSON.stringify({amount_bdt:Number(f.amount_bdt),reason:f.reason})});
+    $('#orderRefundBox').classList.add('hidden');e.target.reset();
+    message($('#orderDetail'),'আপনার রিফান্ড অনুরোধ জমা হয়েছে; অ্যাডমিন যাচাই করে সিদ্ধান্ত নেবেন ✓','success');
+    await loadOrders();
+  }catch(err){message($('#orderDetail'),err.message,'error')}
+};
+$('#cancelRefundBtn').onclick=()=>$('#orderRefundBox').classList.add('hidden');
 
 async function loadNotifications(){
   const r=await request('/notifications');

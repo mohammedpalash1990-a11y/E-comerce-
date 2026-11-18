@@ -65,6 +65,7 @@ export function createSqliteCatalogRepository() {
       const args = ['%' + term + '%', '%' + term + '%'];
       if (get('category')) { where.push('c.slug=?'); args.push(String(get('category'))); }
       if (get('brand')) { where.push('b.slug=?'); args.push(String(get('brand'))); }
+      if (get('seller_id')) { where.push('p.seller_id=?'); args.push(String(get('seller_id')).slice(0, 120)); }
       const eff = 'CASE WHEN p.discount_paisa IS NOT NULL AND p.discount_paisa>0 AND p.discount_paisa<p.price_paisa THEN p.discount_paisa ELSE p.price_paisa END';
       if (get('min_price') !== null && Number(get('min_price')) >= 0) { where.push(eff + '>=?'); args.push(Math.round(Number(get('min_price')) * 100)); }
       if (get('max_price') !== null && Number(get('max_price')) > 0) { where.push(eff + '<=?'); args.push(Math.round(Number(get('max_price')) * 100)); }
@@ -104,6 +105,44 @@ export function createSqliteCatalogRepository() {
     },
     async listReviews(productId) {
       return q('SELECT r.rating,r.comment,r.created_at,u.name FROM reviews r JOIN users u ON u.id=r.user_id WHERE r.product_id=? ORDER BY r.created_at DESC LIMIT 50').all(String(productId));
+    },
+    async listStores() {
+      const rows = q(`SELECT sp.user_id AS id,sp.shop_name,sp.shop_address,sp.business_info,
+        (SELECT COUNT(*) FROM products p WHERE p.seller_id=sp.user_id AND p.active=1 AND p.status='ACTIVE') AS product_count,
+        (SELECT ROUND(COALESCE(AVG(r.rating),0),1) FROM reviews r JOIN products p ON p.id=r.product_id WHERE p.seller_id=sp.user_id AND p.active=1 AND p.status='ACTIVE') AS average_rating,
+        (SELECT COUNT(*) FROM reviews r JOIN products p ON p.id=r.product_id WHERE p.seller_id=sp.user_id AND p.active=1 AND p.status='ACTIVE') AS review_count
+        FROM seller_profiles sp JOIN users u ON u.id=sp.user_id
+        WHERE sp.status='APPROVED' AND u.status='ACTIVE'
+        ORDER BY product_count DESC,sp.shop_name ASC LIMIT 100`).all();
+      return rows.map(s => ({
+        id: s.id,
+        shop_name: s.shop_name,
+        shop_address: s.shop_address,
+        business_info: s.business_info,
+        product_count: Number(s.product_count || 0),
+        average_rating: Math.round(Number(s.average_rating || 0) * 10) / 10,
+        review_count: Number(s.review_count || 0)
+      }));
+    },
+    async getStore(storeId) {
+      const s = q(`SELECT sp.user_id AS id,sp.shop_name,sp.shop_address,sp.business_info,
+        (SELECT COUNT(*) FROM products p WHERE p.seller_id=sp.user_id AND p.active=1 AND p.status='ACTIVE') AS product_count,
+        (SELECT ROUND(COALESCE(AVG(r.rating),0),1) FROM reviews r JOIN products p ON p.id=r.product_id WHERE p.seller_id=sp.user_id AND p.active=1 AND p.status='ACTIVE') AS average_rating,
+        (SELECT COUNT(*) FROM reviews r JOIN products p ON p.id=r.product_id WHERE p.seller_id=sp.user_id AND p.active=1 AND p.status='ACTIVE') AS review_count
+        FROM seller_profiles sp JOIN users u ON u.id=sp.user_id
+        WHERE sp.user_id=? AND sp.status='APPROVED' AND u.status='ACTIVE'`).get(String(storeId));
+      if (!s) return null;
+      const storeProducts = await this.listProducts(new URLSearchParams({ seller_id: s.id, limit: '100' }));
+      return {
+        id: s.id,
+        shop_name: s.shop_name,
+        shop_address: s.shop_address,
+        business_info: s.business_info,
+        product_count: Number(s.product_count || 0),
+        average_rating: Math.round(Number(s.average_rating || 0) * 10) / 10,
+        review_count: Number(s.review_count || 0),
+        products: storeProducts
+      };
     }
   });
 }
@@ -255,6 +294,12 @@ export default function register(route, ok, { catalogRepository, authRepository 
   });
   route('GET', '/api/v1/products/:id/reviews', null, async ({ params }) =>
     ok(await catalog.listReviews(params[0])));
+  route('GET', '/api/v1/stores', null, async () => ok(await catalog.listStores()));
+  route('GET', '/api/v1/stores/:id', null, async ({ params }) => {
+    const store = await catalog.getStore(params[0]);
+    if (!store) throw new HttpError(404, 'Store not found');
+    return ok(store);
+  });
   route('GET', '/api/v1/storefront/config', null, () => ok(loadStorefrontConfig()));
   route('GET', '/api/v1/shipping/quote', null, ({ url }) => {
     const sub = Math.round(Number(url.searchParams.get('subtotal_bdt') || 0) * 100);

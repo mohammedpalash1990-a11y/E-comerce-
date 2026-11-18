@@ -73,6 +73,11 @@ export function createPostgresCatalogRepository(database) {
       where.push('b.slug=?');
       values.push(String(brand));
     }
+    const sellerId = readParam(params, 'seller_id');
+    if (sellerId) {
+      where.push('p.seller_id=?');
+      values.push(String(sellerId).slice(0, 120));
+    }
     priceFilter(params, 'min_price', '>=', where, values);
     priceFilter(params, 'max_price', '<=', where, values, { positiveOnly: true });
 
@@ -148,12 +153,54 @@ export function createPostgresCatalogRepository(database) {
     return rows.map(row => ({ ...row, rating: Number(row.rating) }));
   }
 
+  async function listStores() {
+    const rows = await query(`SELECT sp.user_id AS id,sp.shop_name,sp.shop_address,sp.business_info,
+      (SELECT COUNT(*) FROM products p WHERE p.seller_id=sp.user_id AND p.active=1 AND p.status='ACTIVE') AS product_count,
+      (SELECT ROUND(COALESCE(AVG(r.rating),0),1) FROM reviews r JOIN products p ON p.id=r.product_id WHERE p.seller_id=sp.user_id AND p.active=1 AND p.status='ACTIVE') AS average_rating,
+      (SELECT COUNT(*) FROM reviews r JOIN products p ON p.id=r.product_id WHERE p.seller_id=sp.user_id AND p.active=1 AND p.status='ACTIVE') AS review_count
+      FROM seller_profiles sp JOIN users u ON u.id=sp.user_id
+      WHERE sp.status='APPROVED' AND u.status='ACTIVE'
+      ORDER BY product_count DESC,sp.shop_name ASC LIMIT 100`).all();
+    return rows.map(row => ({
+      id: row.id,
+      shop_name: row.shop_name,
+      shop_address: row.shop_address,
+      business_info: row.business_info,
+      product_count: safeInteger(row.product_count || 0, 'product_count'),
+      average_rating: Math.round(Number(row.average_rating || 0) * 10) / 10,
+      review_count: safeInteger(row.review_count || 0, 'review_count')
+    }));
+  }
+
+  async function getStore(storeId) {
+    const row = await query(`SELECT sp.user_id AS id,sp.shop_name,sp.shop_address,sp.business_info,
+      (SELECT COUNT(*) FROM products p WHERE p.seller_id=sp.user_id AND p.active=1 AND p.status='ACTIVE') AS product_count,
+      (SELECT ROUND(COALESCE(AVG(r.rating),0),1) FROM reviews r JOIN products p ON p.id=r.product_id WHERE p.seller_id=sp.user_id AND p.active=1 AND p.status='ACTIVE') AS average_rating,
+      (SELECT COUNT(*) FROM reviews r JOIN products p ON p.id=r.product_id WHERE p.seller_id=sp.user_id AND p.active=1 AND p.status='ACTIVE') AS review_count
+      FROM seller_profiles sp JOIN users u ON u.id=sp.user_id
+      WHERE sp.user_id=? AND sp.status='APPROVED' AND u.status='ACTIVE'`).get(String(storeId));
+    if (!row) return null;
+    const products = await listProducts(new URLSearchParams({ seller_id: row.id, limit: '100' }));
+    return {
+      id: row.id,
+      shop_name: row.shop_name,
+      shop_address: row.shop_address,
+      business_info: row.business_info,
+      product_count: safeInteger(row.product_count || 0, 'product_count'),
+      average_rating: Math.round(Number(row.average_rating || 0) * 10) / 10,
+      review_count: safeInteger(row.review_count || 0, 'review_count'),
+      products
+    };
+  }
+
   return Object.freeze({
     listCategories,
     listBrands,
     listProducts,
     suggestProducts,
     getProduct,
-    listReviews
+    listReviews,
+    listStores,
+    getStore
   });
 }

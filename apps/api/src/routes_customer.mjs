@@ -1,4 +1,4 @@
-import { q, tx, id, now, audit, notify, text, bad, HttpError, normPhone, validPhone, bdt, orderNo } from './core.mjs';
+import { q, tx, id, now, audit, notify, text, bad, money, HttpError, normPhone, validPhone, bdt, orderNo } from './core.mjs';
 import { PAYMENT_METHODS, initiateGateway } from './gateways.mjs';
 import { applyParentStatus, orderView, addEvent } from './orders.mjs';
 import { productView, LIVE, loadStorefrontConfig } from './routes_public.mjs';
@@ -154,6 +154,27 @@ export default function register(route, ok) {
     const method = String(body.method || o.payment_method).toUpperCase();
     if (!PAYMENT_METHODS.includes(method) || method === 'COD') throw bad('অনলাইন পেমেন্ট পদ্ধতি দিন');
     return ok(tx(() => startPayment(o, method)));
+  });
+  route('POST', '/api/v1/customer/orders/:id/refund-request', C, ({ user, params, body }) => {
+    const reason = text(body.reason, 300, 'রিফান্ডের কারণ');
+    const reqAmt = body.amount_bdt !== undefined && body.amount_bdt !== '' && body.amount_bdt !== null
+      ? money(body.amount_bdt, 'রিফান্ড পরিমাণ') : null;
+    const result = tx(() => {
+      const o = mine(params[0], user.id);
+      if (o.status !== 'DELIVERED') throw new HttpError(409, 'শুধু ডেলিভারি সম্পন্ন অর্ডারের জন্য রিফান্ড অনুরোধ করা যায়');
+      if (!['PAID', 'PARTIALLY_REFUNDED'].includes(o.payment_status)) throw new HttpError(409, 'পেমেন্ট সম্পন্ন না হলে রিফান্ড অনুরোধ করা যায় না');
+      const done = q("SELECT COALESCE(SUM(amount_paisa),0) s FROM refunds WHERE order_id=? AND status<>'REJECTED'").get(o.id).s;
+      const remaining = o.total_paisa - done;
+      if (remaining <= 0) throw new HttpError(409, 'এই অর্ডারের জন্য আগেই সম্পূর্ণ রিফান্ড অনুরোধ করা হয়েছে');
+      const amt = reqAmt === null ? remaining : reqAmt;
+      if (amt > remaining) throw new HttpError(409, 'রিফান্ড পরিমাণ অবশিষ্ট পরিশোধিত অংশের বেশি');
+      const rid = id();
+      q('INSERT INTO refunds VALUES(?,?,?,?,?,?,NULL)').run(rid, o.id, amt, reason, 'REQUESTED', now());
+      audit(user.id, 'REFUND_REQUEST', 'refund', rid, { order_id: o.id, amount_paisa: amt });
+      for (const a of q("SELECT id FROM users WHERE role='ADMIN' AND status='ACTIVE'").all()) notify(a.id, 'নতুন রিফান্ড অনুরোধ', orderNo(o.id) + ': ' + bdt(amt) + ' টাকা');
+      return { id: rid, order_id: o.id, orderNumber: orderNo(o.id), amount_bdt: bdt(amt), status: 'REQUESTED', reason };
+    });
+    return ok(result, 201);
   });
 
   // ----- reviews -----

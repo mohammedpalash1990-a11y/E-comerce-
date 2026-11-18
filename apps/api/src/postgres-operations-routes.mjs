@@ -215,6 +215,19 @@ export function registerPostgresOperationsRoutes(route, ok, { database, orderLif
   });
 
   // ---------- Products extended admin edits ----------
+  route('GET', '/api/v1/admin/products/:id', ['ADMIN'], async ({ params }) => {
+    const p = await q(`SELECT p.*,c.slug AS category_slug,b.slug AS brand_slug,b.name AS brand,COALESCE(sp.shop_name,u.name) AS seller_name
+      FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id
+      LEFT JOIN seller_profiles sp ON sp.user_id=p.seller_id LEFT JOIN users u ON u.id=p.seller_id
+      WHERE p.id=? AND p.status<>'ARCHIVED'`).get(params[0]);
+    if (!p) throw new HttpError(404, 'Product not found');
+    let variants = [];
+    try { const parsed = JSON.parse(p.variants || '[]'); if (Array.isArray(parsed)) variants = parsed; } catch {}
+    const imgRows = await q('SELECT url FROM product_images WHERE product_id=? ORDER BY position').all(p.id);
+    const images = imgRows.map(i => i.url);
+    return ok({ ...productView(p), variants, images, image: images[0] || null });
+  });
+
   route('PUT', '/api/v1/admin/products/:id', ['ADMIN'], async ({ user, params, body }) => {
     const exists = await q("SELECT id FROM products WHERE id=? AND status<>'ARCHIVED'").get(params[0]);
     if (!exists) throw new HttpError(404, 'Product not found');
@@ -301,6 +314,27 @@ export function registerPostgresOperationsRoutes(route, ok, { database, orderLif
       await audit(user.id, 'BRAND_DELETE', 'brand', params[0]);
     });
     return ok({ deleted: true });
+  });
+
+  // ---------- Reviews moderation ----------
+  route('GET', '/api/v1/admin/reviews', ['ADMIN'], async ({ url }) => {
+    const term = '%' + String(url?.searchParams?.get('q') || '').trim().slice(0, 60) + '%';
+    const rows = await q(`SELECT r.id,r.product_id,r.user_id,r.rating,r.comment,r.created_at,
+      p.name_bn AS product_name_bn,p.name_en AS product_name_en,u.name AS customer_name,u.phone AS customer_phone
+      FROM reviews r JOIN products p ON p.id=r.product_id JOIN users u ON u.id=r.user_id
+      WHERE (p.name_bn ILIKE ? OR p.name_en ILIKE ? OR u.name ILIKE ? OR COALESCE(r.comment,'') ILIKE ?)
+      ORDER BY r.created_at DESC,r.id DESC LIMIT ?`).all(term, term, term, term, lim(url, 100));
+    return ok(rows.map(r => ({ ...r, rating: Number(r.rating) })));
+  });
+
+  route('DELETE', '/api/v1/admin/reviews/:id', ['ADMIN'], async ({ user, params }) => {
+    const rev = await q('SELECT id,product_id,user_id,rating FROM reviews WHERE id=?').get(params[0]);
+    if (!rev) throw new HttpError(404, 'Review not found');
+    await database.tx(async () => {
+      await q('DELETE FROM reviews WHERE id=?').run(rev.id);
+      await audit(user.id, 'REVIEW_DELETE', 'review', rev.id, { product_id: rev.product_id, rating: Number(rev.rating) });
+    });
+    return ok({ id: rev.id, deleted: true });
   });
 
   // ---------- Refunds ----------

@@ -287,13 +287,14 @@ export function createPostgresApiServer({ database, catalogRepository, authRepos
 
       const knownPath = path === '/health' ||
         ['/api/v1/categories', '/api/v1/brands', '/api/v1/products', '/api/v1/products/suggest',
-          '/api/v1/storefront/config', '/api/v1/shipping/quote',
+          '/api/v1/stores', '/api/v1/storefront/config', '/api/v1/shipping/quote',
           '/api/v1/auth/register', '/api/v1/auth/register-seller', '/api/v1/auth/login',
           '/api/v1/auth/logout', '/api/v1/auth/me', '/api/v1/auth/forgot-password',
           '/api/v1/auth/reset-password', '/api/v1/auth/change-password',
           '/api/v1/auth/send-verification', '/api/v1/auth/verify',
           '/api/v1/notifications', '/api/v1/notifications/read', '/api/v1/me'].includes(path) ||
-        /^\/api\/v1\/products\/[^/]+(?:\/reviews)?$/.test(path);
+        /^\/api\/v1\/products\/[^/]+(?:\/reviews)?$/.test(path) ||
+        /^\/api\/v1\/stores\/[^/]+$/.test(path);
       return json(res, knownPath ? 405 : 404, { error: knownPath ? 'Method not allowed' : 'Not found' }, headers);
     } catch (error) { return routeError(error, res, headers); }
   });

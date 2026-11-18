@@ -130,3 +130,42 @@ test('seller order list returns buyer, delivery, purchased items and current cou
   });
   assert.ok(h.calls.some(call => call.sql.includes('LEFT JOIN LATERAL') && call.sql.includes('FROM shipments')));
 });
+
+test('customer refund request enforces ownership, DELIVERED + PAID state, and remaining balance', async () => {
+  const routes = [], calls = [];
+  let orderRow = { id: 'ord-1', status: 'DELIVERED', payment_status: 'PAID', total_paisa: 150000 };
+  let existingRefund = 0;
+  const database = {
+    q(sql) {
+      return {
+        async get(...args) {
+          calls.push({ sql, args });
+          if (sql.includes('FROM orders WHERE id=? AND user_id=? FOR UPDATE')) return orderRow;
+          if (sql.includes('FROM refunds WHERE order_id=?')) return { s: existingRefund };
+          return undefined;
+        },
+        async all() { return [{ id: 'admin-1' }]; },
+        async run(...args) { calls.push({ sql, args }); return { changes: 1, rows: [] }; }
+      };
+    },
+    async tx(fn) { return fn(); }
+  };
+  registerPostgresCommerceRoutes((method, path, roles, handler) => routes.push({ method, path, roles, handler }), (data, status = 200) => ({ status, body: { data } }), { database });
+  const r = routes.find(x => x.method === 'POST' && x.path === '/api/v1/customer/orders/:id/refund-request');
+  assert.deepEqual(r.roles, ['CUSTOMER']);
+
+  const okRes = await r.handler({ user: { id: 'c1' }, params: ['ord-1'], body: { amount_bdt: 500, reason: 'Defective item' } });
+  assert.equal(okRes.status, 201);
+  assert.equal(okRes.body.data.status, 'REQUESTED');
+  assert.equal(okRes.body.data.amount_bdt, 500);
+
+  existingRefund = 150000;
+  await assert.rejects(r.handler({ user: { id: 'c1' }, params: ['ord-1'], body: { reason: 'Duplicate' } }), err => err.status === 409);
+
+  orderRow = { id: 'ord-1', status: 'SHIPPED', payment_status: 'PAID', total_paisa: 150000 };
+  await assert.rejects(r.handler({ user: { id: 'c1' }, params: ['ord-1'], body: { reason: 'Too early' } }), err => err.status === 409);
+
+  orderRow = null;
+  await assert.rejects(r.handler({ user: { id: 'c1' }, params: ['foreign'], body: { reason: 'Not mine' } }), err => err.status === 404);
+});
+

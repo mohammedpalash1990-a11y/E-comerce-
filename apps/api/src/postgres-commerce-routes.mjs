@@ -83,6 +83,38 @@ export function registerPostgresCommerceRoutes(route, ok, options = {}) {
     return ok({ id: order.id, status });
   });
 
+  route('POST', '/api/v1/customer/orders/:id/refund-request', ['CUSTOMER'], async ({ user, params, body }) => {
+    const reason = text(body.reason, 300, 'রিফান্ডের কারণ');
+    const requestedAmount = body.amount_bdt !== undefined && body.amount_bdt !== '' && body.amount_bdt !== null
+      ? (() => {
+          const n = Number(body.amount_bdt);
+          if (!Number.isFinite(n) || n <= 0 || n > 100_000_000) throw new HttpError(400, 'রিফান্ড পরিমাণ সঠিক নয়');
+          const p = Math.round(n * 100);
+          if (!Number.isSafeInteger(p) || p <= 0) throw new HttpError(400, 'রিফান্ড পরিমাণ সঠিক নয়');
+          return p;
+        })()
+      : null;
+    const result = await database.tx(async () => {
+      const order = await database.q('SELECT id,status,payment_status,total_paisa FROM orders WHERE id=? AND user_id=? FOR UPDATE').get(params[0], user.id);
+      if (!order) throw new HttpError(404, 'Order not found');
+      if (order.status !== 'DELIVERED') throw new HttpError(409, 'শুধু ডেলিভারি সম্পন্ন অর্ডারের জন্য রিফান্ড অনুরোধ করা যায়');
+      if (!['PAID', 'PARTIALLY_REFUNDED'].includes(order.payment_status)) throw new HttpError(409, 'পেমেন্ট সম্পন্ন না হলে রিফান্ড অনুরোধ করা যায় না');
+      const doneRow = await database.q("SELECT COALESCE(SUM(amount_paisa),0) AS s FROM refunds WHERE order_id=? AND status<>'REJECTED'").get(order.id);
+      const remaining = Number(order.total_paisa) - Number(doneRow?.s || 0);
+      if (remaining <= 0) throw new HttpError(409, 'এই অর্ডারের জন্য আগেই সম্পূর্ণ রিফান্ড অনুরোধ করা হয়েছে');
+      const amt = requestedAmount === null ? remaining : requestedAmount;
+      if (amt > remaining) throw new HttpError(409, 'রিফান্ড পরিমাণ অবশিষ্ট পরিশোধিত অংশের বেশি');
+      const rid = id(), ts = now();
+      await database.q("INSERT INTO refunds(id,order_id,amount_paisa,reason,status,created_at,decided_at) VALUES(?,?,?,?,'REQUESTED',?,NULL)")
+        .run(rid, order.id, amt, reason, ts);
+      await writeAudit(database, user.id, 'REFUND_REQUEST', 'refund', rid, { order_id: order.id, amount_paisa: amt });
+      const admins = await database.q("SELECT id FROM users WHERE role='ADMIN' AND status='ACTIVE'").all();
+      for (const a of admins) await notify(database, a.id, 'নতুন রিফান্ড অনুরোধ', orderNumber(order.id) + ': ' + money(amt) + ' টাকা');
+      return { id: rid, order_id: order.id, orderNumber: orderNumber(order.id), amount_bdt: money(amt), status: 'REQUESTED', reason };
+    });
+    return ok(result, 201);
+  });
+
   route('GET', '/api/v1/seller/orders', ['SELLER'], async ({ user, url }) => {
     const status = url.searchParams.get('status');
     const rows = await database.q(`SELECT so.id,so.order_id,so.status,so.subtotal_paisa,so.commission_paisa,so.net_paisa,so.created_at,

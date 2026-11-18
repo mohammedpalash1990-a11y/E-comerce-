@@ -41,6 +41,9 @@ export function registerPostgresCatalogRoutes(route, ok, options = {}) {
     const brand = params.get('brand');
     if (brand) sanitizedParams.set('brand', brand.slice(0, 100));
 
+    const sellerId = params.get('seller_id');
+    if (sellerId) sanitizedParams.set('seller_id', sellerId.slice(0, 120));
+
     const minPrice = params.get('min_price');
     if (minPrice !== null && minPrice !== '') {
       const n = Number(minPrice);
@@ -89,6 +92,20 @@ export function registerPostgresCatalogRoutes(route, ok, options = {}) {
     const productId = params?.[0];
     if (!productId) throw new HttpError(400, 'Product id is required');
     return ok(await catalog.listReviews(productId));
+  });
+
+  route('GET', '/api/v1/stores', null, async () => {
+    if (typeof catalog.listStores !== 'function') return ok([]);
+    return ok(await catalog.listStores());
+  });
+
+  route('GET', '/api/v1/stores/:id', null, async ({ params }) => {
+    const storeId = params?.[0];
+    if (!storeId) throw new HttpError(400, 'Store id is required');
+    if (typeof catalog.getStore !== 'function') throw new HttpError(404, 'Store not found');
+    const store = await catalog.getStore(storeId);
+    if (!store) throw new HttpError(404, 'Store not found');
+    return ok(store);
   });
 
   return Object.freeze({ catalog });

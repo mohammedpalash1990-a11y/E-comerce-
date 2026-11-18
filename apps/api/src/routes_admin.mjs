@@ -96,6 +96,17 @@ export default function register(route, ok) {
     return ok({ id: p.id, status: toStatus });
   });
   moderate('approve', 'ACTIVE', ['PENDING_REVIEW']); moderate('reject', 'REJECTED', ['PENDING_REVIEW']); moderate('suspend', 'SUSPENDED', ['ACTIVE']); moderate('unsuspend', 'ACTIVE', ['SUSPENDED']);
+  route('GET', '/api/v1/admin/products/:id', A, ({ params }) => {
+    const p = q(`SELECT p.*,c.slug category_slug,b.slug brand_slug,b.name brand,COALESCE(sp.shop_name,u.name) seller_name
+      FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id
+      LEFT JOIN seller_profiles sp ON sp.user_id=p.seller_id LEFT JOIN users u ON u.id=p.seller_id
+      WHERE p.id=? AND p.status<>'ARCHIVED'`).get(params[0]);
+    if (!p) throw new HttpError(404, 'Product not found');
+    let variants = [];
+    try { const parsed = JSON.parse(p.variants || '[]'); if (Array.isArray(parsed)) variants = parsed; } catch {}
+    const images = q('SELECT url FROM product_images WHERE product_id=? ORDER BY position').all(p.id).map(i => i.url);
+    return ok({ ...productView(p), variants, images, image: images[0] || null });
+  });
   route('PUT', '/api/v1/admin/products/:id', A, ({ user, params, body }) => {
     if (!q("SELECT 1 FROM products WHERE id=? AND status<>'ARCHIVED'").get(params[0])) throw new HttpError(404, 'Product not found');
     const f = productFields(body, { partial: true }), imgs = parseImages(body.images), keys = Object.keys(f);
@@ -116,6 +127,25 @@ export default function register(route, ok) {
   route('DELETE', '/api/v1/admin/categories/:slug', A, ({ user, params }) => { if (q('SELECT 1 FROM products p JOIN categories c ON c.id=p.category_id WHERE c.slug=? LIMIT 1').get(params[0])) throw new HttpError(409, 'ক্যাটাগরিতে পণ্য আছে'); q('DELETE FROM categories WHERE slug=?').run(params[0]); audit(user.id, 'CATEGORY_DELETE', 'category', params[0]); return ok({ deleted: true }); });
   route('POST', '/api/v1/admin/brands', A, ({ user, body }) => { const name = text(body.name, 80, 'ব্র্যান্ড নাম'), bid = id(); q('INSERT INTO brands VALUES(?,?,?)').run(bid, slugify(name), name); audit(user.id, 'BRAND_CREATE', 'brand', bid); return ok({ id: bid, slug: slugify(name) }, 201); });
   route('DELETE', '/api/v1/admin/brands/:slug', A, ({ user, params }) => { q('UPDATE products SET brand_id=NULL WHERE brand_id=(SELECT id FROM brands WHERE slug=?)').run(params[0]); q('DELETE FROM brands WHERE slug=?').run(params[0]); audit(user.id, 'BRAND_DELETE', 'brand', params[0]); return ok({ deleted: true }); });
+
+  // ----- reviews moderation -----
+  route('GET', '/api/v1/admin/reviews', A, ({ url }) => {
+    const term = '%' + String(url.searchParams.get('q') || '').trim().slice(0, 60) + '%';
+    return ok(q(`SELECT r.id,r.product_id,r.user_id,r.rating,r.comment,r.created_at,
+      p.name_bn AS product_name_bn,p.name_en AS product_name_en,u.name AS customer_name,u.phone AS customer_phone
+      FROM reviews r JOIN products p ON p.id=r.product_id JOIN users u ON u.id=r.user_id
+      WHERE (p.name_bn LIKE ? OR p.name_en LIKE ? OR u.name LIKE ? OR COALESCE(r.comment,'') LIKE ?)
+      ORDER BY r.created_at DESC,r.id DESC LIMIT ?`).all(term, term, term, term, lim(url, 100)));
+  });
+  route('DELETE', '/api/v1/admin/reviews/:id', A, ({ user, params }) => {
+    const rev = q('SELECT id,product_id,user_id,rating FROM reviews WHERE id=?').get(params[0]);
+    if (!rev) throw new HttpError(404, 'Review not found');
+    tx(() => {
+      q('DELETE FROM reviews WHERE id=?').run(rev.id);
+      audit(user.id, 'REVIEW_DELETE', 'review', rev.id, { product_id: rev.product_id, rating: rev.rating });
+    });
+    return ok({ id: rev.id, deleted: true });
+  });
 
   // ----- orders -----
   const adminOrder = o => ({ ...orderView(o), admin_note: o.admin_note, customer: q('SELECT name,phone,email FROM users WHERE id=?').get(o.user_id),
