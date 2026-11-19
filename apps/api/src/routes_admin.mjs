@@ -193,14 +193,23 @@ export default function register(route, ok) {
   // ----- payouts -----
   route('GET', '/api/v1/admin/payouts', A, ({ url }) => { const st = url.searchParams.get('status');
     return ok(q('SELECT p.*,sp.shop_name FROM payouts p LEFT JOIN seller_profiles sp ON sp.user_id=p.seller_id' + (st ? ' WHERE p.status=?' : '') + ' ORDER BY p.created_at DESC LIMIT 200').all(...(st ? [st] : [])).map(p => ({ id: p.id, seller_id: p.seller_id, shop: p.shop_name, amount_bdt: bdt(p.amount_paisa), method: p.method, account: p.account, status: p.status, note: p.note, created_at: p.created_at, decided_at: p.decided_at }))); });
-  route('POST', '/api/v1/admin/payouts/:id/approve', A, ({ user, params, body }) => ok(tx(() => {
-    const p = q("SELECT * FROM payouts WHERE id=? AND status='REQUESTED'").get(params[0]); if (!p) throw new HttpError(404, 'Payout request not found');
-    q("UPDATE payouts SET status='APPROVED',decided_at=?,note=? WHERE id=?").run(now(), text(body.note, 300, 'নোট', { required: false }), p.id);
+  const approvePayout = (user, payoutId, note) => tx(() => {
+    const p = q("SELECT * FROM payouts WHERE id=? AND status='REQUESTED'").get(payoutId); if (!p) throw new HttpError(404, 'Payout request not found');
+    q("UPDATE payouts SET status='APPROVED',decided_at=?,note=? WHERE id=?").run(now(), text(note, 300, 'নোট', { required: false }), p.id);
     q('INSERT INTO transactions VALUES(?,?,?,?,?,?,?,?)').run(id(), 'PAYOUT', null, null, p.seller_id, -p.amount_paisa, p.id, now());
-    audit(user.id, 'PAYOUT_APPROVED', 'payout', p.id, { amount: p.amount_paisa }); notify(p.seller_id, 'পেআউট অনুমোদিত', bdt(p.amount_paisa) + ' টাকা'); return { id: p.id, status: 'APPROVED' }; })));
-  route('POST', '/api/v1/admin/payouts/:id/reject', A, ({ user, params, body }) => {
-    const p = q("SELECT * FROM payouts WHERE id=? AND status='REQUESTED'").get(params[0]); if (!p) throw new HttpError(404, 'Payout request not found');
-    q("UPDATE payouts SET status='REJECTED',decided_at=?,note=? WHERE id=?").run(now(), text(body.note, 300, 'কারণ', { required: false }), p.id); audit(user.id, 'PAYOUT_REJECTED', 'payout', p.id); notify(p.seller_id, 'পেআউট প্রত্যাখ্যাত'); return ok({ id: p.id, status: 'REJECTED' });
+    audit(user.id, 'PAYOUT_APPROVED', 'payout', p.id, { amount: p.amount_paisa }); notify(p.seller_id, 'পেআউট অনুমোদিত', bdt(p.amount_paisa) + ' টাকা'); return { id: p.id, status: 'APPROVED' };
+  });
+  const rejectPayout = (user, payoutId, note) => {
+    const p = q("SELECT * FROM payouts WHERE id=? AND status='REQUESTED'").get(payoutId); if (!p) throw new HttpError(404, 'Payout request not found');
+    q("UPDATE payouts SET status='REJECTED',decided_at=?,note=? WHERE id=?").run(now(), text(note, 300, 'কারণ', { required: false }), p.id); audit(user.id, 'PAYOUT_REJECTED', 'payout', p.id); notify(p.seller_id, 'পেআউট প্রত্যাখ্যাত'); return { id: p.id, status: 'REJECTED' };
+  };
+  route('POST', '/api/v1/admin/payouts/:id/approve', A, ({ user, params, body }) => ok(approvePayout(user, params[0], body.note)));
+  route('POST', '/api/v1/admin/payouts/:id/reject', A, ({ user, params, body }) => ok(rejectPayout(user, params[0], body.note)));
+  route('POST', '/api/v1/admin/payouts/:id/decision', A, ({ user, params, body }) => {
+    const dec = String(body.decision || '').toUpperCase();
+    if (dec === 'APPROVE') return ok(approvePayout(user, params[0], body.note));
+    if (dec === 'REJECT') return ok(rejectPayout(user, params[0], body.note));
+    throw new HttpError(400, 'সিদ্ধান্ত APPROVE অথবা REJECT হতে হবে');
   });
 
   // ----- finance -----

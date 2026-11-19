@@ -87,11 +87,11 @@ export function registerPostgresPayoutRoutes(route, ok, { database, id = randomU
     return ok(rows.map(row => ({ ...row, amount_paisa: Number(row.amount_paisa), amount_bdt: bdt(row.amount_paisa) })));
   });
 
-  route('POST', '/api/v1/admin/payouts/:id/decision', ['ADMIN'], async ({ user, params, body }) => {
-    const decision = String(body.decision || '').toUpperCase();
-    if (!['APPROVE','REJECT'].includes(decision)) throw new HttpError(400, 'সিদ্ধান্ত APPROVE অথবা REJECT হতে হবে');
-    const note = text(body.note, 300, 'নোট', { required: false });
-    const status = decision === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+  const processPayoutDecision = async ({ user, params, decision, noteRaw }) => {
+    const dec = String(decision || '').toUpperCase();
+    if (!['APPROVE','REJECT'].includes(dec)) throw new HttpError(400, 'সিদ্ধান্ত APPROVE অথবা REJECT হতে হবে');
+    const note = text(noteRaw, 300, 'নোট', { required: false });
+    const status = dec === 'APPROVE' ? 'APPROVED' : 'REJECTED';
     return database.tx(async () => {
       const candidate = await q('SELECT seller_id FROM payouts WHERE id=?').get(params[0]);
       if (!candidate) throw new HttpError(404, 'পেআউট অনুরোধ পাওয়া যায়নি');
@@ -101,8 +101,7 @@ export function registerPostgresPayoutRoutes(route, ok, { database, id = randomU
       const payout = await q('SELECT id,seller_id,amount_paisa,status FROM payouts WHERE id=? FOR UPDATE').get(params[0]);
       if (!payout || payout.seller_id !== candidate.seller_id) throw new HttpError(404, 'পেআউট অনুরোধ পাওয়া যায়নি');
       if (payout.status !== 'REQUESTED') throw new HttpError(409, 'এই পেআউটের সিদ্ধান্ত আগেই দেওয়া হয়েছে');
-
-      if (decision === 'APPROVE') {
+      if (dec === 'APPROVE') {
         const totals = await q(`SELECT
           COALESCE((SELECT SUM(amount_paisa) FROM payouts WHERE seller_id=? AND status IN ('REQUESTED','APPROVED')),0) AS reserved,
           COALESCE((SELECT SUM(amount_paisa) FROM transactions WHERE seller_id=? AND kind IN ('SELLER_EARNING','SELLER_REVERSAL')),0) AS earned
@@ -114,7 +113,6 @@ export function registerPostgresPayoutRoutes(route, ok, { database, id = randomU
           throw new HttpError(409, 'বিক্রেতার বর্তমান earned balance দিয়ে সব payout reservation সমর্থিত নয়');
         }
       }
-
       const timestamp = now();
       const changed = await q("UPDATE payouts SET status=?,note=?,decided_at=? WHERE id=? AND status='REQUESTED'")
         .run(status,note,timestamp,payout.id);
@@ -126,5 +124,14 @@ export function registerPostgresPayoutRoutes(route, ok, { database, id = randomU
           note || (status === 'APPROVED' ? 'আপনার পেআউট অনুমোদিত হয়েছে' : 'আপনার পেআউট অনুরোধটি গ্রহণ করা হয়নি'),timestamp);
       return ok({ id:payout.id,status,decided_at:timestamp });
     });
+  };
+  route('POST', '/api/v1/admin/payouts/:id/decision', ['ADMIN'], async ({ user, params, body = {} }) => {
+    return processPayoutDecision({ user, params, decision: body.decision, noteRaw: body.note });
+  });
+  route('POST', '/api/v1/admin/payouts/:id/approve', ['ADMIN'], async ({ user, params, body = {} }) => {
+    return processPayoutDecision({ user, params, decision: 'APPROVE', noteRaw: body.note });
+  });
+  route('POST', '/api/v1/admin/payouts/:id/reject', ['ADMIN'], async ({ user, params, body = {} }) => {
+    return processPayoutDecision({ user, params, decision: 'REJECT', noteRaw: body.note });
   });
 }

@@ -257,7 +257,10 @@ button{cursor:pointer;background:var(--surface);font-weight:600}
     </section>
 
     <section class="panel view hidden" id="view-wishlist">
-      <h2 data-i18n="secWish">পছন্দের পণ্য</h2>
+      <div class="toolbar">
+        <h2 data-i18n="secWish" style="margin:0">পছন্দের পণ্য</h2>
+        <button type="button" id="addAllWishBtn" class="primary hidden" style="padding:6px 12px;font-size:12px">সব কার্টে নিন</button>
+      </div>
       <div id="wishlistMsg" class="notice hidden"></div>
       <div id="wishlistList" class="cards"></div>
     </section>
@@ -347,17 +350,25 @@ function authTab(tab){
 }
 document.querySelectorAll('[data-auth-tab]').forEach(b=>b.onclick=()=>authTab(b.dataset.authTab));
 
+const VALID_VIEWS=['profile','addresses','cart','wishlist','orders','notifications'];
 function view(name){
-  document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===name));
-  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('hidden',v.id!=='view-'+name));
-  if(name==='addresses')loadAddresses();
-  if(name==='cart')loadCart();
-  if(name==='wishlist')loadWishlist();
-  if(name==='orders')loadOrders();
-  if(name==='notifications')loadNotifications();
+  const target=VALID_VIEWS.includes(name)?name:'profile';
+  document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===target));
+  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('hidden',v.id!=='view-'+target));
+  if(location.hash!=='#'+target){
+    try{history.replaceState(null,'','#'+target)}catch{}
+  }
+  if(target==='addresses')loadAddresses();
+  if(target==='cart')loadCart();
+  if(target==='wishlist')loadWishlist();
+  if(target==='orders')loadOrders();
+  if(target==='notifications')loadNotifications();
 }
+window.addEventListener('hashchange',()=>{
+  const hashView=String(location.hash||'').replace(/^#/,'');
+  if(VALID_VIEWS.includes(hashView))view(hashView);
+});
 $('#accountTabs').onclick=e=>{const b=e.target.closest('[data-view]');if(b)view(b.dataset.view)};
-
 async function enter(){
   const r=await request('/auth/me');
   me=r.data;
@@ -369,7 +380,8 @@ async function enter(){
   field(f,'name').value=me.name||'';
   field(f,'phone').value=me.phone||'';
   field(f,'email').value=me.email||'';
-  view('profile');
+  const hashView=String(location.hash||'').replace(/^#/,'');
+  view(VALID_VIEWS.includes(hashView)?hashView:'profile');
 }
 function showAuth(){
   token='';me=null;localStorage.removeItem('haat_customer_token');
@@ -591,10 +603,28 @@ async function simulateSandboxPayment(outcome){
 $('#simulatePaymentSuccess').onclick=()=>simulateSandboxPayment('success');
 $('#simulatePaymentFail').onclick=()=>simulateSandboxPayment('fail');
 
+let wishlistItemsCache=[];
 async function loadWishlist(){
   const r=await request('/customer/wishlist');
-  $('#wishlistList').innerHTML=r.data.map(p=>'<article class="item"><div class="cartrow">'+(p.image?'<img class="thumb" src="'+esc(p.image)+'" alt="">':'')+'<div><h3>'+esc(p.name_bn)+'</h3><p class="num" style="margin:0">'+money(p.sale_price_bdt??p.price_bdt)+'</p></div></div><div class="actions"><button type="button" class="primary" data-wish-cart="'+esc(p.id)+'">কার্টে নিন</button><button type="button" class="danger" data-remove-wish="'+esc(p.id)+'">সরিয়ে দিন</button></div></article>').join('')||'<p class="empty wide">পছন্দের তালিকা খালি।</p>';
+  wishlistItemsCache=r.data||[];
+  const btn=$('#addAllWishBtn');
+  if(btn)btn.classList.toggle('hidden',!wishlistItemsCache.length);
+  $('#wishlistList').innerHTML=wishlistItemsCache.map(p=>'<article class="item"><div class="cartrow">'+(p.image?'<img class="thumb" src="'+esc(p.image)+'" alt="">':'')+'<div><h3>'+esc(p.name_bn)+'</h3><p class="num" style="margin:0">'+money(p.sale_price_bdt??p.price_bdt)+'</p></div></div><div class="actions"><button type="button" class="primary" data-wish-cart="'+esc(p.id)+'">কার্টে নিন</button><button type="button" class="danger" data-remove-wish="'+esc(p.id)+'">সরিয়ে দিন</button></div></article>').join('')||'<p class="empty wide">পছন্দের তালিকা খালি।</p>';
 }
+$('#addAllWishBtn').onclick=async()=>{
+  if(!wishlistItemsCache.length)return;
+  $('#addAllWishBtn').disabled=true;
+  try{
+    for(const item of wishlistItemsCache){
+      await request('/customer/cart',{method:'PUT',body:JSON.stringify({productId:item.id,quantity:1})});
+    }
+    message($('#wishlistMsg'),'সব পছন্দের পণ্য কার্টে যোগ করা হয়েছে ✓ ('+wishlistItemsCache.length+'টি পণ্য)','success');
+  }catch(err){
+    message($('#wishlistMsg'),err.message,'error');
+  }finally{
+    $('#addAllWishBtn').disabled=false;
+  }
+};
 $('#wishlistList').onclick=async e=>{
   const rem=e.target.closest('[data-remove-wish]'),add=e.target.closest('[data-wish-cart]');
   if(rem){

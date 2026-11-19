@@ -538,6 +538,18 @@ function renderSellerOrders(){
       :(o.status==='SHIPPED'
         ?'<div class="notice"><div class="toolbar"><label>কুরিয়ার <select data-courier-provider><option value="PATHAO">Pathao</option><option value="REDX">RedX</option><option value="STEADFAST">Steadfast</option></select></label><button class="btn" type="button" data-book-courier="'+esc(o.id)+'">Sandbox কুরিয়ার বুক করুন</button></div><div class="muted hidden" data-quote-confirm="'+esc(o.id)+'" style="margin-top:8px"></div><small class="muted">এটি পরীক্ষামূলক courier booking; বাস্তব pickup request নয়।</small></div>'
         :'');
+    const packSlipHtml='<div id="packSlipBox-'+esc(o.id)+'" class="notice hidden" style="background:#fff;border-color:var(--accent);margin-top:10px;padding:12px;font-size:13px">'+
+      '<div class="toolbar"><div><b>HAAT SELLER CENTER · PACKING SLIP & LABEL</b><div class="muted num">Order #'+esc(o.orderNumber)+' · Suborder: '+esc(o.id)+'</div></div>'+
+      '<div style="display:flex;gap:6px"><button type="button" class="soft" data-dl-pack="'+esc(o.id)+'" style="padding:4px 8px;font-size:11px">লেবেল ডাউনলোড (.html)</button><button type="button" class="btn" data-print-pack="'+esc(o.id)+'" style="padding:4px 8px;font-size:11px">প্রিন্ট</button></div></div>'+
+      '<div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:10px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:8px 0">'+
+        '<div><b style="font-size:11px;text-transform:uppercase" class="muted">গ্রাহক / CUSTOMER</b><div><b>'+esc(o.delivery?.name||o.customer?.name||'')+'</b></div><div>মোবাইল: <span class="num">'+esc(o.delivery?.phone||o.customer?.phone||'')+'</span></div><div class="muted">'+esc(o.delivery?.area||'')+' — '+esc(o.delivery?.address||'')+'</div>'+(o.delivery?.note?'<div style="font-size:12px;color:var(--accent)">নোট: '+esc(o.delivery.note)+'</div>':'')+'</div>'+
+        '<div><b style="font-size:11px;text-transform:uppercase" class="muted">লজিস্টিকস ও কুরিয়ার / SHIPMENT</b><div>কুরিয়ার: <b>'+esc(shipment?.provider||'Pending Booking')+'</b></div><div>ট্র্যাকিং: <span class="num">'+esc(shipment?.tracking_id||'Not Assigned')+'</span></div><div>স্ট্যাটাস: <b>'+esc(o.status)+'</b></div></div>'+
+      '</div>'+
+      '<div style="margin-top:8px"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="text-align:left;background:var(--cream)"><th style="padding:4px 6px">পণ্য (Items)</th><th style="padding:4px 6px">পরিমাণ</th><th style="padding:4px 6px">মূল্য</th><th style="padding:4px 6px">প্যাকিং যাচাই</th></tr></thead><tbody>'+
+      (o.items||[]).map(i=>'<tr><td style="padding:4px 6px;border-bottom:1px solid var(--line)">'+esc(i.name_bn)+(i.variant?' <small class="muted">('+esc(i.variant)+')</small>':'')+'</td><td class="num" style="padding:4px 6px;border-bottom:1px solid var(--line)">'+Number(i.quantity)+'</td><td class="num" style="padding:4px 6px;border-bottom:1px solid var(--line)">'+money(Number(i.unit_price_bdt)*Number(i.quantity))+'</td><td style="padding:4px 6px;border-bottom:1px solid var(--line)"><label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox"> প্যাকড</label></td></tr>').join('')+
+      '</tbody></table></div>'+
+      '<div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;font-size:12px"><span class="muted">HAAT Verified Merchant Package</span><b>সাবটোটাল: <span class="num">'+money(o.subtotal_bdt)+'</span></b></div>'+
+    '</div>';
     return '<article class="ordercard" data-order-card="'+esc(o.id)+'" data-area="'+esc(o.delivery?.area||'')+'">'+
       '<div class="toolbar"><b class="num">'+esc(o.orderNumber)+'</b><span class="status">'+
       esc(({CONFIRMED:'নতুন অর্ডার',PROCESSING:'প্রসেসিং',SHIPPED:'পাঠানো হয়েছে',DELIVERED:'ডেলিভারি সম্পন্ন',CANCELLED:'বাতিল'}[o.status]||o.status))+'</span></div>'+
@@ -547,9 +559,10 @@ function renderSellerOrders(){
       (o.delivery?.note?'<p style="margin:4px 0"><b>নোট:</b> '+esc(o.delivery.note)+'</p>':'')+
       '<ul style="margin:8px 0">'+(o.items||[]).map(i=>'<li>'+esc(i.name_bn)+(i.variant?' ('+esc(i.variant)+')':'')+' × '+Number(i.quantity)+' — <span class="num">'+money(i.unit_price_bdt)+'</span></li>').join('')+'</ul>'+
       '<p class="num"><b>আপনার সাব-অর্ডার:</b> '+money(o.subtotal_bdt)+' · কমিশন: '+money(o.commission_bdt)+' · নেট: '+money(o.net_bdt)+'</p>'+
-      (actions.length?'<div class="toolbar" style="justify-content:flex-start">'+actions.map(a=>
-        '<button class="btn" type="button" data-order="'+esc(o.id)+'" data-status="'+a[0]+'">'+a[1]+'</button>'
-      ).join('')+'</div>':'')+shipmentHtml+'</article>';
+      '<div class="toolbar" style="justify-content:flex-start;gap:6px;flex-wrap:wrap">'+
+      (actions.length?actions.map(a=>'<button class="btn" type="button" data-order="'+esc(o.id)+'" data-status="'+a[0]+'">'+a[1]+'</button>').join(''):'')+
+      '<button type="button" class="soft" data-toggle-pack="'+esc(o.id)+'">প্যাকিং স্লিপ / লেবেল</button>'+
+      '</div>'+shipmentHtml+packSlipHtml+'</article>';
   }).join('')||'<p class="muted">'+(sellerOrdersCache.length?'এই অনুসন্ধানে কোনো অর্ডার পাওয়া যায়নি।':'এখনো আপনার কোনো অর্ডার নেই।')+'</p>';
 }
 async function loadOrders(){
@@ -568,8 +581,29 @@ $('#exportSellerOrdersCsv').onclick=()=>{
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='haat-seller-orders.csv';a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),1500);
 };
-
 $('#orderCards').onclick=async e=>{
+  const packToggle=e.target.closest('[data-toggle-pack]');
+  if(packToggle){
+    const box=$('#packSlipBox-'+packToggle.dataset.togglePack);
+    if(box)box.classList.toggle('hidden');
+    return;
+  }
+  const packPrint=e.target.closest('[data-print-pack]');
+  if(packPrint){
+    window.print();
+    return;
+  }
+  const packDl=e.target.closest('[data-dl-pack]');
+  if(packDl){
+    const order=sellerOrdersCache.find(x=>x.id===packDl.dataset.dlPack);
+    if(!order)return;
+    const itemRows=(order.items||[]).map(i=>'<tr><td style="padding:6px;border:1px solid #ddd">'+esc(i.name_bn)+(i.variant?' ('+esc(i.variant)+')':'')+'</td><td style="padding:6px;border:1px solid #ddd;text-align:center">'+Number(i.quantity)+'</td><td style="padding:6px;border:1px solid #ddd;text-align:right">'+money(Number(i.unit_price_bdt)*Number(i.quantity))+'</td></tr>').join('');
+    const doc='<!DOCTYPE html><html lang="bn"><head><meta charset="utf-8"><title>Packing-Slip-'+esc(order.orderNumber)+'</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:24px;max-width:700px;margin:auto;color:#1c1917}table{width:100%;border-collapse:collapse;margin:14px 0}th{background:#f5f3ef;padding:6px;border:1px solid #ddd;text-align:left}</style></head><body><h2>HAAT SELLER CENTER · PACKING SLIP</h2><p><b>Order #:</b> '+esc(order.orderNumber)+'<br><b>Suborder ID:</b> '+esc(order.id)+'<br><b>Customer:</b> '+esc(order.delivery?.name||order.customer?.name||'')+' ('+esc(order.delivery?.phone||order.customer?.phone||'')+')<br><b>Address:</b> '+esc(order.delivery?.area||'')+' — '+esc(order.delivery?.address||'')+'<br><b>Courier:</b> '+esc(order.shipment?.provider||'Pending Booking')+' (Tracking: '+esc(order.shipment?.tracking_id||'Not Assigned')+')</p><table><thead><tr><th>Item</th><th>Qty</th><th>Subtotal</th></tr></thead><tbody>'+itemRows+'</tbody></table><p style="text-align:right"><b>Subtotal: '+money(order.subtotal_bdt)+'</b></p></body></html>';
+    const blob=new Blob([doc],{type:'text/html;charset=utf-8'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='packing-slip-'+order.orderNumber+'.html';a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+    return;
+  }
   const statusButton=e.target.closest('[data-order][data-status]');
   const bookButton=e.target.closest('[data-book-courier]');
   const confirmBookButton=e.target.closest('[data-confirm-courier]');
